@@ -1,0 +1,16 @@
+{
+  "_file_version": "poc_config.json ver 6",
+  "selected_sim": "nolimits2",
+  "selected_platform": "platform_v2",
+  "sim_host_service": {
+    "enabled": true,
+    "address": "192.168.0.4",
+    "port": 10040,
+    "heartbeat_interval_s": 1.0,
+    "heartbeat_timeout_s": 3.0
+  },
+  "digital_twin": {
+    "address": "-",
+    "port": 10020
+  }
+}

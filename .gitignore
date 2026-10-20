@@ -1,0 +1,44 @@
+# Python bytecode and interpreter caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Local environments, IDEs and operating-system files
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Generated build artifacts and handover archives
+build/
+dist/
+*.egg-info/
+*.zip
+PACKAGE_CONTENTS_SHA256.txt
+
+# Runtime logs, session data and diagnostic captures
+logs/
+captures/
+*.log
+*.tmp
+*.bak
+*.swp
+*.orig
+*_telemetry_????????_??????.csv
+
+# Preserve versioned calibration / reference CSVs, INI files, UI files,
+# Raspberry Pi image assets and simulator artwork in the repository.

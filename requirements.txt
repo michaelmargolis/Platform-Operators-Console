@@ -1,0 +1,5 @@
+#requirements.txt  ver 3
+PyQt5>=5.15
+numpy>=1.23
+pyqtgraph>=0.13
+pyserial>=3.5
