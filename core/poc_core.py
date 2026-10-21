@@ -1,4 +1,4 @@
-#poc_core.py  ver 47
+#poc_core.py  ver 48
 from __future__ import annotations
 
 import logging
@@ -80,11 +80,20 @@ class PocCore(QtCore.QObject):
         self._ride_dispatched = False
         self._ride_has_run = False
         self._estop_running_pause_sent = False
-        # Activation control always starts in physical-switch mode. A physical
-        # OFF observation arms exactly one subsequent OFF-to-ON activation.
-        self.activation_control_mode = ActivationControlMode.SWITCH
+        # Windows defaults to the touch controls; Linux retains the switch
+        # default. A physical OFF observation arms an OFF-to-ON activation
+        # only when switch mode has been selected.
+        self.activation_control_mode = (
+            ActivationControlMode.TOUCH
+            if sys.platform == "win32"
+            else ActivationControlMode.SWITCH
+        )
         self._activation_switch_armed = False
-        self._activation_request_result = "waiting for physical switch state"
+        self._activation_request_result = (
+            "Touch UI control selected; physical switch ignored"
+            if self.activation_control_mode is ActivationControlMode.TOUCH
+            else "waiting for physical switch state"
+        )
         self._last_sample = SimSample()
         self.intensity_level = 2
         self.intensity_percent = 100

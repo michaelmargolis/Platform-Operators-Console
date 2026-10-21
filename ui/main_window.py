@@ -1,4 +1,4 @@
-#main_window.py  ver 64
+#main_window.py  ver 66
 from __future__ import annotations
 
 import csv
@@ -159,7 +159,27 @@ class MainWindow(QtWidgets.QMainWindow):
         self.activation_control_group.setExclusive(True)
         self.activation_control_group.addButton(self.rb_activation_switch)
         self.activation_control_group.addButton(self.rb_activation_touch)
-        self.rb_activation_switch.setChecked(True)
+        self.rb_activation_switch.setChecked(
+            self.core.activation_control_mode is ActivationControlMode.SWITCH
+        )
+        self.rb_activation_touch.setChecked(
+            self.core.activation_control_mode is ActivationControlMode.TOUCH
+        )
+        if os.name == "nt":
+            # Windows desktop: compact Debug controls without changing Pi layout.
+            font = self.txt_debug_state.font()
+            font.setPointSize(12)
+            self.txt_debug_state.setFont(font)
+            for button in (self.rb_activation_switch, self.rb_activation_touch):
+                font = button.font()
+                font.setPointSize(8)
+                button.setFont(font)
+            self.grp_debug_controls.setMinimumWidth(160)
+            self.grp_debug_controls.setMaximumWidth(160)
+            margins = self.activationControlLayout.contentsMargins()
+            self.activationControlLayout.setContentsMargins(
+                2, margins.top(), 2, margins.bottom()
+            )
         self.btn_exit_desktop.clicked.connect(self._confirm_exit_to_desktop)
 
     def _confirm_exit_to_desktop(self):
