@@ -1,4 +1,4 @@
-<!-- poc_main.ui ver 13 -->
+<!-- poc_main.ui ver 14 -->
 <ui version="4.0">
  <class>MainWindow</class>
  <widget class="QMainWindow" name="MainWindow">
@@ -278,107 +278,29 @@ Data</string>
             <property name="title">
              <string>Transform Levels Out</string>
             </property>
-            <layout class="QGridLayout" name="transformGrid">
-             <item row="0" column="0">
-              <widget class="QLabel" name="labelRange">
-               <property name="text">
-                <string>-100                                      100</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="0">
-              <widget class="QProgressBar" name="bar_x">
-               <property name="minimum">
-                <number>-100</number>
-               </property>
-               <property name="maximum">
-                <number>100</number>
-               </property>
-               <property name="value">
-                <number>0</number>
-               </property>
-               <property name="format">
-                <string>X    %v</string>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="0">
-              <widget class="QProgressBar" name="bar_y">
-               <property name="minimum">
-                <number>-100</number>
-               </property>
-               <property name="maximum">
-                <number>100</number>
-               </property>
-               <property name="value">
-                <number>0</number>
-               </property>
-               <property name="format">
-                <string>Y    %v</string>
-               </property>
-              </widget>
-             </item>
-             <item row="3" column="0">
-              <widget class="QProgressBar" name="bar_z">
-               <property name="minimum">
-                <number>-100</number>
-               </property>
-               <property name="maximum">
-                <number>100</number>
-               </property>
-               <property name="value">
-                <number>0</number>
-               </property>
-               <property name="format">
-                <string>Z    %v</string>
-               </property>
-              </widget>
-             </item>
-             <item row="4" column="0">
-              <widget class="QProgressBar" name="bar_roll">
-               <property name="minimum">
-                <number>-100</number>
-               </property>
-               <property name="maximum">
-                <number>100</number>
-               </property>
-               <property name="value">
-                <number>0</number>
-               </property>
-               <property name="format">
-                <string>Roll    %v</string>
-               </property>
-              </widget>
-             </item>
-             <item row="5" column="0">
-              <widget class="QProgressBar" name="bar_pitch">
-               <property name="minimum">
-                <number>-100</number>
-               </property>
-               <property name="maximum">
-                <number>100</number>
-               </property>
-               <property name="value">
-                <number>0</number>
-               </property>
-               <property name="format">
-                <string>Pitch    %v</string>
-               </property>
-              </widget>
-             </item>
-             <item row="6" column="0">
-              <widget class="QProgressBar" name="bar_yaw">
-               <property name="minimum">
-                <number>-100</number>
-               </property>
-               <property name="maximum">
-                <number>100</number>
-               </property>
-               <property name="value">
-                <number>0</number>
-               </property>
-               <property name="format">
-                <string>Yaw    %v</string>
+            <layout class="QVBoxLayout" name="transformBarsLayout">
+             <property name="spacing">
+              <number>0</number>
+             </property>
+             <property name="leftMargin">
+              <number>3</number>
+             </property>
+             <property name="topMargin">
+              <number>2</number>
+             </property>
+             <property name="rightMargin">
+              <number>3</number>
+             </property>
+             <property name="bottomMargin">
+              <number>2</number>
+             </property>
+             <item>
+              <widget class="QWidget" name="transformBarsPlaceholder">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
                </property>
               </widget>
              </item>

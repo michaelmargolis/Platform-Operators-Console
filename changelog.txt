@@ -1,10 +1,63 @@
-# changelog.txt ver 1
+# changelog.txt ver 3
 Platform Operators Console - consolidated release history
 =======================================================
 Latest release first. All available numbered POC release notes from
 README_v150.txt through README_v158.txt have been incorporated below.
 The original release-note text is retained unchanged within each entry;
 historical installation instructions are not current deployment guidance.
+
+POC v160 | Heave bar polarity and Debug-tab paint isolation
+------------------------------------------------------------------
+The QPainter transform display now reverses the sign of Heave (third DOF)
+when passing values to the widget. Other five DOFs are unchanged. The raw
+sample remains unchanged for telemetry, controls, CSV capture, diagnostics,
+and the transform viewer.
+
+A source-level UPDATE_TRANSFORM_BARS_ON_DEBUG_TAB switch in ui/main_window.py
+controls whether transform bar values are fed to QPainter while the Debug tab
+is selected. Default False skips bar updates on Debug for profiling processing
+utilisation and jitter. True enables updates on Debug at the existing 20 Hz
+sample rate. Outside Debug, the widget behaves normally. No extra timer.
+
+Files changed:
+- ui/main_window.py v69 -> v70: display mapping and Debug-tab switch.
+- tests/test_transform_bars_v160.py v1: new regression tests.
+- changelog.txt v2 -> v3: record this release.
+- file_versions.txt v155 -> v156: update tracked versions.
+
+==========================================================================
+
+POC v159 | 20 Hz QPainter transform-level display
+------------------------------------------------------------------
+Replaces the six independent QProgressBar controls in grp_transform_levels
+with one compact TransformBarsWidget drawn using QPainter. The single widget
+shows Surge, Sway, Heave, Roll, Pitch and Yaw. Values from -100 to +100
+fill left/right from a centre zero line; both directions use green.
+Percentages at the right are enabled by SHOW_TRANSFORM_BAR_VALUES in
+ui/main_window.py; they can be disabled without altering the UI files.
+If horizontal space is extremely limited the percentage captions hide
+automatically to preserve useful bar width.
+
+Input follows sampleUpdated at the unchanged 20 Hz rate. No timer or
+throttling is introduced. The painter requests a repaint only when displayed
+integer values change and the widget is visible. Both standard and compact
+800x480 .ui layouts use the same scalable widget; the compact layout now
+shows the transform group, previously hidden.
+
+Files changed:
+- ui/ui_widgets.py v6 -> v7: add TransformBarsWidget.
+- ui/main_window.py v68 -> v69: install widget; replace progress updates.
+- ui/poc_main.ui v13 -> v14: replace progress-bar grid with placeholder.
+- ui/poc_main_800x480.ui v16 -> v17: same, enable compact display.
+- tests/test_transform_bars_v159.py v1: widget and UI regression tests.
+- create_poc_handover_zip.py v20 -> v21: include .gitignore when present.
+- changelog.txt v1 -> v2: add this release.
+- file_versions.txt v154 -> v155: update tracked versions.
+
+The full-frame processing metrics exclude GUI painting; compare observed
+frame jitter and CPU use on the actual operator PC/Pi when assessing impact.
+
+==========================================================================
 
 POC v158 | Historical source: README_v158.txt
 ------------------------------------------------------------------

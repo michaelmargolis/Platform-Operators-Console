@@ -1,4 +1,4 @@
-# create_poc_handover_zip.py ver 20
+# create_poc_handover_zip.py ver 21
 """Create a complete, reviewable POC handover archive.
 
 Run this script from any location. The project root is the directory containing
@@ -30,7 +30,7 @@ INCLUDED_SUFFIXES = {
     ".service", ".sh", ".svg", ".toml", ".txt", ".ui", ".webp",
     ".xml", ".yaml", ".yml",
 }
-INCLUDED_EXTENSIONLESS_NAMES = {"LICENSE", "COPYING"}
+INCLUDED_EXTENSIONLESS_NAMES = {"LICENSE", "COPYING", ".gitignore"}
 
 EXCLUDED_DIR_NAMES = {
     ".git", ".idea", ".mypy_cache", ".pytest_cache", ".ruff_cache",

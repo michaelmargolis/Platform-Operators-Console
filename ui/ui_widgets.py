@@ -1,7 +1,109 @@
-#ui_widgets.py  ver 6
+#ui_widgets.py  ver 7
 import re
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+
+
+class TransformBarsWidget(QtWidgets.QWidget):
+    """Single low-overhead QPainter view of the six normalized output DOFs.
+
+    Receives the normal 20 Hz sample stream: no additional timer or thread.
+    A single paint replaces six QProgressBar controls. Dimensions are derived
+    from the current widget size, including the compact 800x480 layout.
+    """
+
+    LABELS = ("Surge", "Sway", "Heave", "Roll", "Pitch", "Yaw")
+    GREEN = QtGui.QColor(31, 145, 65)
+    TRACK = QtGui.QColor(231, 235, 237)
+    ZERO = QtGui.QColor(95, 105, 113)
+
+    def __init__(self, parent=None, show_values=True):
+        super().__init__(parent)
+        self._values = (0,) * 6
+        self._show_values = bool(show_values)
+        self.setMinimumSize(115, 72)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        self.setAccessibleName("Output transform levels")
+
+    def sizeHint(self):
+        return QtCore.QSize(300, 150)
+
+    @property
+    def values(self):
+        return self._values
+
+    def set_values(self, values):
+        """Convert normalized transforms to integer percent; avoid stale repaints."""
+        if len(values) != 6:
+            raise ValueError("Expected 6 transform values")
+        displayed = tuple(max(-100, min(100, int(float(value) * 100))) for value in values)
+        if displayed != self._values:
+            self._values = displayed
+            if self.isVisible():
+                self.update()
+
+    def set_show_values(self, enabled):
+        """Optional numeric captions: disable to minimise text rendering."""
+        enabled = bool(enabled)
+        if enabled != self._show_values:
+            self._show_values = enabled
+            self.update()
+
+    def paintEvent(self, event):
+        painter = QtGui.QPainter(self)
+        # Simple rects and straight lines; antialiasing is intentionally off.
+        height, width = self.height(), self.width()
+        if height < 24 or width < 80:
+            return
+
+        margin = 3 if width < 240 else 5
+        row_height = max(1, (height - 18) // 6)
+        font = QtGui.QFont(self.font())
+        font.setPixelSize(min(14, max(9, row_height - 3)))
+        painter.setFont(font)
+        metrics = QtGui.QFontMetrics(font)
+        text_color = self.palette().color(QtGui.QPalette.WindowText)
+        label_width = max(metrics.horizontalAdvance(label) for label in self.LABELS)
+        value_width = metrics.horizontalAdvance("-100") + 4 if self._show_values else 0
+        bar_left = margin + label_width + 6
+        bar_right = width - margin - value_width - (5 if value_width else 0)
+        # For a narrow compact layout, hide numeric captions before shrinking
+        # the graphical bars below a useful width.
+        if value_width and bar_right - bar_left < 56:
+            value_width = 0
+            bar_right = width - margin
+        bar_width = max(1, bar_right - bar_left)
+        zero = bar_left + bar_width // 2
+        axis_height = min(15, max(10, height - 6 * row_height))
+        painter.setPen(self.ZERO)
+        painter.drawText(QtCore.QRect(bar_left, 0, bar_width, axis_height),
+                         QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, "-100")
+        painter.drawText(QtCore.QRect(bar_left, 0, bar_width, axis_height),
+                         QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter, "0")
+        painter.drawText(QtCore.QRect(bar_left, 0, bar_width, axis_height),
+                         QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter, "+100")
+
+        for index, (label, value) in enumerate(zip(self.LABELS, self._values)):
+            top = axis_height + index * row_height
+            bar_h = max(3, min(18, row_height - 4))
+            bar_y = top + max(0, (row_height - bar_h) // 2)
+            painter.setPen(text_color)
+            painter.drawText(QtCore.QRect(margin, top, label_width, row_height),
+                             QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, label)
+            painter.fillRect(bar_left, bar_y, bar_width, bar_h, self.TRACK)
+            # A green bar extends left for negative, right for positive DOFs.
+            if value:
+                travel = zero - bar_left if value < 0 else bar_right - zero
+                fill_width = (travel * abs(value) + 50) // 100
+                if fill_width:
+                    fill_x = zero - fill_width if value < 0 else zero
+                    painter.fillRect(fill_x, bar_y, fill_width, bar_h, self.GREEN)
+            painter.setPen(self.ZERO)
+            painter.drawLine(zero, bar_y, zero, bar_y + bar_h - 1)
+            if value_width:
+                painter.setPen(text_color)
+                painter.drawText(QtCore.QRect(bar_right + 5, top, value_width, row_height),
+                                 QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter, str(value))
 
 
 class TouchComboItemDelegate(QtWidgets.QStyledItemDelegate):

@@ -1,4 +1,4 @@
-#main_window.py  ver 68
+#main_window.py  ver 70
 from __future__ import annotations
 
 import csv
@@ -17,6 +17,7 @@ from core.types import ActivationControlMode, ExperienceState, PlatformState, Pl
 from ui.sim_tabs import SimTabManager
 from ui.ui_widgets import (
     ActivationButton,
+    TransformBarsWidget,
     VerticalTextButton,
     configure_touch_combo_popup,
 )
@@ -31,7 +32,19 @@ SIM_GUIDE_IMAGE_COLOR = QtGui.QColor(220, 0, 0)
 # Set True only when selecting/copying live Debug text must freeze its refresh.
 # False keeps diagnostics live even if a touch or mouse action selects text.
 FREEZE_DEBUG_WHILE_TEXT_SELECTED = False
+# Disable the optional percentage captions if GUI measurements justify it.
+SHOW_TRANSFORM_BAR_VALUES = True
+# Source-level option: keep drawing transform bars while the Debug tab is active.
+# Default False avoids this GUI workload during processing/jitter measurements.
+UPDATE_TRANSFORM_BARS_ON_DEBUG_TAB = False
 log = logging.getLogger(__name__)
+
+
+def transform_bar_values(values):
+    """Map six raw sample DOFs to display values (invert heave only)."""
+    if len(values) != 6:
+        raise ValueError("Expected six transform values")
+    return (values[0], values[1], -values[2], values[3], values[4], values[5])
 
 
 def readiness_indicator_key(platform_state, experience_state, sim_status, parking_state=None):
@@ -103,6 +116,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.transform_viewer = None
         self._replace_activation_button()
         self._replace_load_buttons()
+        self._setup_transform_bars()
         self._setup_debug_controls()
 
         self._setup_style()
@@ -222,6 +236,16 @@ class MainWindow(QtWidgets.QMainWindow):
         old.deleteLater()
         self.btn_activate = button
 
+
+    def _setup_transform_bars(self):
+        """Install one lightweight six-DOF display in either Designer layout."""
+        placeholder = self.transformBarsPlaceholder
+        self.transform_bars = TransformBarsWidget(
+            self.grp_transform_levels, show_values=SHOW_TRANSFORM_BAR_VALUES
+        )
+        self.transform_bars.setObjectName("transformBars")
+        self.transformBarsLayout.replaceWidget(placeholder, self.transform_bars)
+        placeholder.deleteLater()
 
     def _replace_load_buttons(self):
         for attr in ("btn_normal_load", "btn_full_load"):
@@ -1013,13 +1037,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_debug()
 
     def _on_sample(self, sample):
-        bars = (self.bar_x, self.bar_y, self.bar_z, self.bar_roll, self.bar_pitch, self.bar_yaw)
-        values = []
-        for bar, value in zip(bars, sample.transform):
-            percent = int(max(-1.0, min(1.0, float(value))) * 100)
-            bar.setValue(percent)
-            values.append(float(value))
+        values = tuple(float(value) for value in sample.transform)
         current_tab = self.tabWidget.currentWidget()
+        # Keep raw telemetry unchanged; only the heave bar uses inverted sign.
+        # The Debug-tab switch isolates the painter overhead at the full 20 Hz.
+        if UPDATE_TRANSFORM_BARS_ON_DEBUG_TAB or current_tab is not self.tab_debug:
+            self.transform_bars.set_values(transform_bar_values(values))
         if current_tab is self.tab_output:
             self.lbl_transform_from_sim.setText(
                 "x={: .2f}  y={: .2f}  z={: .2f}  roll={: .2f}  pitch={: .2f}  yaw={: .2f}".format(*values)
