@@ -1,4 +1,4 @@
-#nl2_protocol.py  ver 17
+#nl2_protocol.py  ver 18
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -150,6 +150,13 @@ class NL2Protocol:
         self._stop_event = threading.Event()
         self._send_lock = threading.Lock()
         self._start_time = time.monotonic()
+        # Millisecond timestamps are not unique: LOAD_PARK and the subsequent
+        # telemetry/station polls can be sent within the same millisecond.
+        # A telemetry ERROR could then be mistaken for the LOAD_PARK result.
+        # Seed a sequential 32-bit request counter once and never reuse an ID
+        # within the same session, even for back-to-back requests.
+        self._request_id_lock = threading.Lock()
+        self._request_id_counter = int(self._start_time * 1000) & 0xFFFFFFFF
 
     def connect(self) -> bool:
         """Open the NL2 TCP socket and start the receiver.
@@ -292,7 +299,9 @@ class NL2Protocol:
         return now - self.last_response_at <= float(max_age_s)
 
     def _request_id(self) -> int:
-        return int((time.monotonic() - self._start_time) * 1000.0) & 0xFFFFFFFF
+        with self._request_id_lock:
+            self._request_id_counter = (self._request_id_counter + 1) & 0xFFFFFFFF
+            return self._request_id_counter
 
     def _simple_message(self, msg_id: int) -> bytes:
         return struct.pack(">cHIHc", b"N", msg_id, self._request_id(), 0, b"L")

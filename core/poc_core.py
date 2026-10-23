@@ -1,4 +1,4 @@
-#poc_core.py  ver 48
+#poc_core.py  ver 49
 from __future__ import annotations
 
 import logging
@@ -657,18 +657,36 @@ class PocCore(QtCore.QObject):
         log.info("Payload level -> %d", level)
         self.payloadChanged.emit(self.payload_level)
 
-    def set_nl2_legacy_heave(self, enabled: bool) -> None:
-        """Select the temporary NL2 heave comparison without persisting it."""
-        setter = getattr(self.sim, "set_legacy_heave_enabled", None)
-        if not callable(setter) or self.telemetry_config is None:
-            return
-        legacy_enabled = bool(enabled)
-        setter(legacy_enabled)
-        self.telemetry_config.set_temporary_classical_z(not legacy_enabled)
+    def set_nl2_heave_mode(self, mode: str) -> bool:
+        """Choose one NL2 heave source while deactivated; session-only."""
+        if (self.sim_key != "nolimits2" or self.telemetry_config is None
+                or self.platform.state is not PlatformState.DEACTIVATED):
+            self.message.emit("Deactivate the platform before changing NL2 heave mode")
+            return False
+        setter = getattr(self.sim, "set_heave_mode", None)
+        if not callable(setter):
+            return False
+        try:
+            setter(mode)
+        except ValueError as exc:
+            self.message.emit(str(exc))
+            return False
+        # Vertical G alone uses the temporary classical high-pass Z filter.
+        # Normalized and Legacy Height preserve sustained lift movement.
+        from sims.nolimits2 import config as nl2_config
+        self.telemetry_config.set_temporary_classical_z(
+            mode == nl2_config.HEAVE_MODE_VERTICAL_G
+        )
         self._motion_transform = (0.0,) * 6
-        log.info(
-            "NL2 heave mode -> %s",
-            "legacy ride height" if legacy_enabled else "SOC vertical-G with classical washout",
+        log.info("NL2 heave mode -> %s", mode)
+        return True
+
+    def set_nl2_legacy_heave(self, enabled: bool) -> None:
+        """Compatibility with the former two-mode checkbox interface."""
+        from sims.nolimits2 import config as nl2_config
+        self.set_nl2_heave_mode(
+            nl2_config.HEAVE_MODE_LEGACY_HEIGHT if enabled
+            else nl2_config.HEAVE_MODE_VERTICAL_G
         )
 
     def get_output_snapshot(self) -> dict:
@@ -769,12 +787,16 @@ class PocCore(QtCore.QObject):
         if self.platform.state is not PlatformState.DEACTIVATED or not self.platform.parked:
             self.message.emit("Deactivate and park the platform before changing ride/flight")
             return False
+        previous_heave_mode = getattr(self.sim, "heave_mode", None)
         try:
             self.sim.select_experience(index)
         except Exception as exc:
             log.exception("Unable to select ride/flight")
             self.message.emit(str(exc))
             return False
+        if (previous_heave_mode is not None
+                and getattr(self.sim, "heave_mode", None) != previous_heave_mode):
+            self.message.emit("Normalized Height unavailable for this ride; using Legacy Height")
         experiences = list(self.sim.get_experiences())
         self.experiencesChanged.emit(experiences, index)
         self._set_experience_state(self.sim.state)

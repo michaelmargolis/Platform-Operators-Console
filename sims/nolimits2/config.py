@@ -1,4 +1,4 @@
-#config.py  ver 13
+#config.py  ver 14
 # Simple NoLimits2 prototype configuration.
 
 PORT = 15151
@@ -28,14 +28,32 @@ FAN_CONFIG = {
 INITIAL_LIFT_HEIGHT_M = 32.0
 TELEMETRY_INTENSITY_FACTOR = 0.4
 
-# NL2 starts with the established lift-height cue. A temporary session-only UI
-# control can select the conventional vertical acceleration cue used by SOC.
-HEAVE_MODE = "legacy_height"
+# Session-only NL2 heave choices. Keep the established legacy cue as the
+# startup default; the operator can also choose Vertical G or Normalized Height.
 HEAVE_MODE_LEGACY_HEIGHT = "legacy_height"
 HEAVE_MODE_VERTICAL_G = "vertical_g"
+HEAVE_MODE_NORMALIZED_HEIGHT = "normalized_height"
+HEAVE_MODE = HEAVE_MODE_NORMALIZED_HEIGHT
 
-# Temporary operator comparison of the established absolute-height lift cue
-# against SOC-style vertical-G heave. Values are normalized platform Z commands.
+# Calibrated from completed NL2 ride-study captures (October 2026). Minima
+# and maxima are rounded slightly OUTWARD so repeated runs remain in range.
+# Amplitude is a fraction of normalized heave, BEFORE POC gains and intensity.
+# These are initial MDX-platform test settings, not validated dynamic limits.
+# Leave incomplete/unrecorded rides out: do not guess their track heights.
+NORMALIZED_HEIGHT_DEFAULT_AMPLITUDE = 0.80
+NORMALIZED_HEIGHT_PROFILES = {
+    "Mdx Logo Coaster": {"min_height_m": 3.2, "max_height_m": 32.7, "amplitude": 0.80},
+    "Blackbird": {"min_height_m": 5.9, "max_height_m": 41.0, "amplitude": 0.90},
+    "Fenrir": {"min_height_m": 2.7, "max_height_m": 45.6, "amplitude": 0.70},
+    "Forest Mountain Park": {"min_height_m": 4.6, "max_height_m": 48.1, "amplitude": 0.90},
+    "GrandNational": {"min_height_m": 2.5, "max_height_m": 21.2, "amplitude": 0.90},
+    "Hybris": {"min_height_m": -3.9, "max_height_m": 87.8, "amplitude": 0.90},
+    "Wilderness Park": {"min_height_m": -20.5, "max_height_m": 72.1, "amplitude": 0.90},
+    "Scenic Run": {"min_height_m": 2.8, "max_height_m": 99.8, "amplitude": 0.90},
+    }
+
+# Established absolute-height lift cue retained unchanged alongside Vertical G
+# and Normalized Height. Values are normalized platform Z commands.
 # The Mdx Logo Coaster heights come from the 2026-09-10 captured run. The Z
 # range is shifted for the provisional 1094 mm chair geometry while
 # retaining the tested 0.32 normalized lift span. This minimizes balanced

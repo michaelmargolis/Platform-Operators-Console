@@ -1,22 +1,22 @@
-<!-- README.md ver 10 -->
+<!-- README.md ver 11 -->
 # Platform Operators Console
 
-POC is the Raspberry Pi operator console for the Middlesex motion platforms. It
-coordinates physical controls, simulator state, telemetry processing, platform
-kinematics, Festo pressure output and the Windows Sim Host Service (SHS).
+The Platform Operators Console (POC) is the Raspberry Pi operator console for
+the Middlesex motion platforms. It coordinates physical controls, simulator state,
+telemetry processing, platform kinematics, Festo pressure output and
+ the Windows Sim Host Service (SHS).
 
 The live Raspberry Pi installation is `/home/poc/Runtime` and starts as a
 desktop-autostart application. It is not installed as a system service.
 
 ## Supported simulators
 
-- **NoLimits 2:** live TCP telemetry and ride control. A temporary session-only
-  checkbox compares the established ride-height Z cue with SOC-style vertical-G
-  heave. Mdx Logo Coaster has a configured height profile.
+- **NoLimits 2:** live TCP telemetry and ride control. The curent version
+  supports seven rides, selection is only permitted while deactivated.
+  ride configuration is provided on the Input Control tab and in
+  `sims/nolimits2/config.py`.
 - **SpaceCoaster:** Unity UDP state/control with recorded motion-cue CSV
-  playback. Fan speed is derived from live Unity wagon position, filtered over
-  approximately one second and scaled before applying the fan curve. Motion CSV
-  playback deliberately bypasses washout.
+  playback.  Motion CSV  playback deliberately bypasses washout.
 - **X-Plane development adapter:** UDP plugin telemetry, situation loading and
   pause/run control are retained for future testing, but X-Plane is currently
   hidden from the deployed operator simulator selector.
@@ -39,19 +39,19 @@ kinematics -> contraction-to-pressure mapping -> Festo UDP
 ```
 
 The physical platform and simulator state domains remain separate.
-Deactivation always has priority over simulator recovery. There is no software
-`virtual_output` gate, so make the platform physically safe before development
-or maintenance runs.
+Deactivation always has priority over simulator recovery.
+
+Make sure the platform physically safe before development or maintenance runs.
 
 ## Operator controls
 
 - Start, Pause and Reset VR are available in the UI and through the configured
-  Raspberry Pi GPIO controls. Activation uses one exclusive source: every POC
-  start defaults to the physical Switch, while the Debug tab can select Touch
-  UI as a temporary fallback.
+  Raspberry Pi GPIO controls. Activation uses one exclusive source: Linux
+  defaults to the physical Switch, while Windows defaults to Touch UI. The
+  Debug tab can change the activation source for the session.
 - The encoder browses experiences while deactivated; holding Dispatch while
-  turning it browses simulators. While activated it changes intensity in
-  0, 10, ... 100% steps.
+  turning it browses simulators. While activated, the encoder changes intensity
+  in 0, 10, ... 100% steps.
 - Simulator selection is permitted only while the platform is deactivated.
 - Physical-platform selection is saved while deactivated and takes effect after
   restarting POC.
@@ -88,7 +88,7 @@ is retained for saved-config compatibility but maps to this same chair config;
 there is no separate 1094 geometry file. Chair coordinates remain provisional
 until the forthcoming CAD update.
 
-The twin protocol includes platform/simulator state, the processed normalized
+The digital twin protocol includes platform/simulator state, the processed normalized
 transform, fractional D-to-P load per muscle, muscle lengths, contractions,
 commanded pressures and piston state. See
 `docs/digital_twin/POC_DIGITAL_TWIN_UDP_HANDOVER_v1.md` for the wire schema and

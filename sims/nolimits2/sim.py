@@ -1,4 +1,4 @@
-#sim.py  ver 30
+#sim.py  ver 32
 from __future__ import annotations
 
 import logging
@@ -47,7 +47,8 @@ class Sim(SimInterface):
     TRAIN_IN_STATION_MASK = 0x0800
     CURRENT_RIDE_TRAIN_MASK = 0x1000
 
-    def __init__(self, address="127.0.0.1", client: Optional[NL2Protocol] = None):
+    def __init__(self, address="127.0.0.1", client: Optional[NL2Protocol] = None,
+                 startup_ride_index: Optional[int] = None):
         self.address = address
         self.client = client or NL2Protocol(
             address,
@@ -57,6 +58,11 @@ class Sim(SimInterface):
         self.state = ExperienceState.DISCONNECTED
         self._selected = int(getattr(config, "DEFAULT_RIDE_INDEX", 0))
         self._rides = self._discover_rides()
+        # Optional initial selection for standalone study tools; normal POC
+        # still loads config.DEFAULT_RIDE_INDEX when no override is supplied.
+        if startup_ride_index is not None and not 0 <= startup_ride_index < len(self._rides):
+            raise IndexError(startup_ride_index)
+        self._startup_ride_index = startup_ride_index
         self._experiences = tuple(name for name, _path in self._rides)
         self._last_transform = (0.0,) * 6
         self._pause_target = None
@@ -73,9 +79,7 @@ class Sim(SimInterface):
         self._filtered_yaw_rate = 0.0
         self._last_telemetry_frame = None
         self._lift_height = float(config.INITIAL_LIFT_HEIGHT_M)
-        self._legacy_heave_enabled = (
-            config.HEAVE_MODE == config.HEAVE_MODE_LEGACY_HEIGHT
-        )
+        self._heave_mode = config.HEAVE_MODE
         self._connected_sync_started = False
         self._data_connected = False
         self._heartbeat_connected = False
@@ -109,12 +113,15 @@ class Sim(SimInterface):
         if self._connected_sync_started:
             return
         self._connected_sync_started = True
-        # Startup is deterministic: always command the configured default park.
-        # NL2 may have been left running any other park.  LOAD_PARK is requested
-        # even when DEFAULT_RIDE_INDEX is zero and even when that same park is
-        # already loaded.  Completion is based on NL2's request response, not on
-        # a play-mode transition (there may be none for an already-loaded park).
-        self._selected = int(getattr(config, "DEFAULT_RIDE_INDEX", 0))
+        # Startup is deterministic: normal POC loads the configured default.
+        # A standalone recorder may explicitly select its first study ride so
+        # it need not load the default and then immediately switch parks.
+        # Subsequent rides still use the usual select_experience() path.
+        # Completion is based on NL2's request response, not a play transition.
+        self._selected = int(
+            self._startup_ride_index if self._startup_ride_index is not None
+            else getattr(config, "DEFAULT_RIDE_INDEX", 0)
+        )
         if not 0 <= self._selected < len(self._rides):
             self._selected = 0
         self._initial_sync = False
@@ -365,6 +372,14 @@ class Sim(SimInterface):
             raise RuntimeError("No NL2 park path configured for this ride")
 
         self._selected = index
+        if (self._heave_mode == config.HEAVE_MODE_NORMALIZED_HEIGHT
+                and not self.has_normalized_height_profile(index)):
+            # An uncalibrated ride must never use an invented height range.
+            # Both height modes use the saved Z washout setting (no temporary
+            # classical Z override), so the core's filtering remains valid.
+            self._heave_mode = config.HEAVE_MODE_LEGACY_HEIGHT
+            log.warning("NL2 Normalized Height unavailable for %s; using Legacy Height",
+                        self._experiences[index])
         self._pause_target = None
         self._dispatch_pending = False
         self._leaving_station = False
@@ -823,8 +838,8 @@ class Sim(SimInterface):
     def _transform_from_telemetry(self, tm: NL2Telemetry):
         # Convert NL2 telemetry to the same semantic inputs used by SOC:
         # accelerations for translation, attitude for roll/pitch, and angular
-        # velocity for yaw. The established lift-height heave cue remains a
-        # static configuration option for coaster operation.
+        # velocity for yaw. Heave is a session-selected cue; only calibrated
+        # rides may use the track-relative Normalized Height option.
         quaternion = self._normalize_quaternion(
             tm.quat_x, tm.quat_y, tm.quat_z, tm.quat_w
         )
@@ -835,8 +850,10 @@ class Sim(SimInterface):
         yaw_rate = self._yaw_rate_from_quaternion(quaternion, tm.received_at)
         yaw_rate *= float(config.YAW_RATE_GAIN)
 
-        if self._legacy_heave_enabled:
+        if self._heave_mode == config.HEAVE_MODE_LEGACY_HEIGHT:
             heave = self._legacy_height_z(float(tm.pos_y))
+        elif self._heave_mode == config.HEAVE_MODE_NORMALIZED_HEIGHT:
+            heave = self._normalized_height_z(float(tm.pos_y))
         else:
             heave = max(
                 -1.0,
@@ -857,9 +874,55 @@ class Sim(SimInterface):
         transform[2] = heave
         return tuple(transform)
 
+    @property
+    def heave_mode(self) -> str:
+        return self._heave_mode
+
+    @property
+    def _legacy_heave_enabled(self) -> bool:
+        """Compatibility for the v156 NL2 ride-study recorder."""
+        return self._heave_mode == config.HEAVE_MODE_LEGACY_HEIGHT
+
+    def has_normalized_height_profile(self, index: int | None = None) -> bool:
+        """Whether this ride has calibrated track-height bounds."""
+        if index is None:
+            index = self._selected
+        if not 0 <= index < len(self._experiences):
+            return False
+        profile = config.NORMALIZED_HEIGHT_PROFILES.get(self._experiences[index])
+        if not profile:
+            return False
+        try:
+            low, high = float(profile["min_height_m"]), float(profile["max_height_m"])
+            amplitude = float(profile.get("amplitude", config.NORMALIZED_HEIGHT_DEFAULT_AMPLITUDE))
+        except (TypeError, ValueError, KeyError):
+            return False
+        return all(math.isfinite(x) for x in (low, high, amplitude)) and high > low and 0 <= amplitude <= 1
+
+    def set_heave_mode(self, mode: str) -> None:
+        """Select a session-only heave source without changing saved telemetry settings."""
+        if mode not in (config.HEAVE_MODE_LEGACY_HEIGHT,
+                        config.HEAVE_MODE_VERTICAL_G,
+                        config.HEAVE_MODE_NORMALIZED_HEIGHT):
+            raise ValueError(f"Unknown NL2 heave mode: {mode}")
+        if mode == config.HEAVE_MODE_NORMALIZED_HEIGHT and not self.has_normalized_height_profile():
+            raise ValueError(f"No calibrated height profile for {self._experiences[self._selected]}")
+        self._heave_mode = mode
+
     def set_legacy_heave_enabled(self, enabled: bool) -> None:
-        """Select the temporary NL2 heave comparison mode for this session."""
-        self._legacy_heave_enabled = bool(enabled)
+        """Backward-compatible two-mode selector for existing clients/tests."""
+        self.set_heave_mode(config.HEAVE_MODE_LEGACY_HEIGHT if enabled
+                            else config.HEAVE_MODE_VERTICAL_G)
+
+    def _normalized_height_z(self, height_m: float) -> float:
+        """Invert ride-height fraction for the suspended-platform Z convention."""
+        if not self.has_normalized_height_profile():
+            raise ValueError(f"No calibrated height profile for {self._experiences[self._selected]}")
+        profile = config.NORMALIZED_HEIGHT_PROFILES[self._experiences[self._selected]]
+        low, high = float(profile["min_height_m"]), float(profile["max_height_m"])
+        amplitude = float(profile.get("amplitude", config.NORMALIZED_HEIGHT_DEFAULT_AMPLITUDE))
+        fraction = max(0.0, min(1.0, (height_m - low) / (high - low)))
+        return max(-1.0, min(1.0, amplitude * (1.0 - 2.0 * fraction)))
 
     def _legacy_height_z(self, height_m: float) -> float:
         ride_name = self._experiences[self._selected]

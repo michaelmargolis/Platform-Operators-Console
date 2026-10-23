@@ -1,4 +1,4 @@
-#test_nolimits2_adapter.py  ver 28
+#test_nolimits2_adapter.py  ver 29
 from __future__ import annotations
 
 import logging
@@ -348,6 +348,29 @@ def test_startup_always_loads_configured_default_even_if_station_ready():
     sim.read()
     assert sim.state is ExperienceState.READY
     assert not any(cmd[0] == "reset" for cmd in client.commands)
+
+
+def test_recorder_initial_ride_override_still_uses_normal_park_load():
+    client = FakeNL2Client()
+    sim = Sim(client=client, startup_ride_index=1)
+    sim.connect()
+    sim.service()
+    loads = [cmd for cmd in client.commands if cmd[0] == "load_park"]
+    assert loads == [("load_park", sim._rides[1][1], True)]
+    assert sim._selected == 1
+    # Once the first study park loads, the standard selection path still
+    # supports moving to a later park in an unattended multi-ride study.
+    client.complete_request(sim._ride_load_request_id, ok=True)
+    sim.read()
+    sim.select_experience(2)
+    assert sim._selected == 2
+    assert ("load_park", sim._rides[2][1], True) in client.commands
+
+
+def test_recorder_invalid_initial_ride_index_is_rejected():
+    import pytest
+    with pytest.raises(IndexError):
+        Sim(client=FakeNL2Client(), startup_ride_index=999)
 
 
 def test_activation_recovery_resets_if_train_not_in_station():

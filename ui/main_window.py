@@ -1,4 +1,4 @@
-#main_window.py  ver 66
+#main_window.py  ver 67
 from __future__ import annotations
 
 import csv
@@ -767,16 +767,27 @@ class MainWindow(QtWidgets.QMainWindow):
         self.washout_checks = [getattr(self, f"chk_washout_{i}") for i in range(6)]
         self.washout_spins = [getattr(self, f"spin_washout_{i}") for i in range(6)]
 
-        self.chk_nl2_legacy_heave = QtWidgets.QCheckBox("Legacy lift-height Z")
-        self.chk_nl2_legacy_heave.setObjectName("chk_nl2_legacy_heave")
-        self.chk_nl2_legacy_heave.setChecked(True)
-        self.chk_nl2_legacy_heave.setToolTip(
-            "Checked: configured ride-height lift cue. "
-            "Unchecked: SOC vertical-G heave with temporary classical Z washout."
+        # Built at runtime so both normal and compact .ui layouts use one
+        # session-only NL2 control; unrelated simulator tabs remain unchanged.
+        from sims.nolimits2 import config as nl2_config
+        self.lbl_nl2_heave_mode = QtWidgets.QLabel("NL2 Heave:")
+        self.combo_nl2_heave_mode = QtWidgets.QComboBox()
+        self.combo_nl2_heave_mode.setObjectName("combo_nl2_heave_mode")
+        for caption, mode in (
+            ("Legacy Height", nl2_config.HEAVE_MODE_LEGACY_HEIGHT),
+            ("Vertical G", nl2_config.HEAVE_MODE_VERTICAL_G),
+            ("Normalized Height", nl2_config.HEAVE_MODE_NORMALIZED_HEIGHT),
+        ):
+            self.combo_nl2_heave_mode.addItem(caption, mode)
+        self.combo_nl2_heave_mode.setToolTip(
+            "Normalized Height uses calibrated min/max track heights and per-ride amplitude. "
+            "Only calibrated rides offer this mode. Choose while deactivated."
         )
-        self.telemetryButtonsLayout.insertWidget(0, self.chk_nl2_legacy_heave)
-        self.chk_nl2_legacy_heave.hide()
-        self.chk_nl2_legacy_heave.toggled.connect(self.core.set_nl2_legacy_heave)
+        self.telemetryButtonsLayout.insertWidget(0, self.lbl_nl2_heave_mode)
+        self.telemetryButtonsLayout.insertWidget(1, self.combo_nl2_heave_mode)
+        self.lbl_nl2_heave_mode.hide()
+        self.combo_nl2_heave_mode.hide()
+        self.combo_nl2_heave_mode.currentIndexChanged.connect(self._nl2_heave_mode_changed)
 
         for slider in self.gain_sliders + [self.sld_gain_master]:
             slider.valueChanged.connect(self._telemetry_controls_changed)
@@ -787,6 +798,38 @@ class MainWindow(QtWidgets.QMainWindow):
         self.combo_washout_type.currentIndexChanged.connect(self._washout_type_changed)
         self.btn_telemetry_save.clicked.connect(self._save_telemetry_controls)
         self.btn_telemetry_cancel.clicked.connect(self._cancel_telemetry_controls)
+
+    def _sync_nl2_heave_mode(self):
+        """Reflect the adapter's actual mode and current ride calibration."""
+        active = self.core.sim_key == "nolimits2"
+        self.lbl_nl2_heave_mode.setVisible(active)
+        self.combo_nl2_heave_mode.setVisible(active)
+        if not active:
+            return
+        from sims.nolimits2 import config as nl2_config
+        sim = self.core.sim
+        calibrated = bool(getattr(sim, "has_normalized_height_profile", lambda: False)())
+        normalized_index = self.combo_nl2_heave_mode.findData(
+            nl2_config.HEAVE_MODE_NORMALIZED_HEIGHT
+        )
+        item = self.combo_nl2_heave_mode.model().item(normalized_index)
+        if item is not None:
+            item.setEnabled(calibrated)
+        mode = getattr(sim, "heave_mode", nl2_config.HEAVE_MODE_LEGACY_HEIGHT)
+        index = self.combo_nl2_heave_mode.findData(mode)
+        self.combo_nl2_heave_mode.blockSignals(True)
+        self.combo_nl2_heave_mode.setCurrentIndex(max(0, index))
+        self.combo_nl2_heave_mode.blockSignals(False)
+        self.combo_nl2_heave_mode.setEnabled(
+            self.core.platform.state is PlatformState.DEACTIVATED
+        )
+
+    def _nl2_heave_mode_changed(self, index):
+        if index < 0 or self.core.sim_key != "nolimits2":
+            return
+        mode = self.combo_nl2_heave_mode.itemData(index)
+        if not self.core.set_nl2_heave_mode(mode):
+            self._sync_nl2_heave_mode()
 
     def _load_telemetry_controls(self, values=None):
         values = values or self.core.get_telemetry_config()
@@ -918,13 +961,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._load_busy_spinner()
         self._load_ride_image()
         self._load_telemetry_controls()
-        self.chk_nl2_legacy_heave.blockSignals(True)
-        self.chk_nl2_legacy_heave.setChecked(True)
-        self.chk_nl2_legacy_heave.blockSignals(False)
-        self.chk_nl2_legacy_heave.setVisible(key == "nolimits2")
-        self.chk_nl2_legacy_heave.setEnabled(
-            key == "nolimits2" and self.core.platform.state is PlatformState.DEACTIVATED
-        )
+        self._sync_nl2_heave_mode()
         self._show_message(f"{self.core.sim.name} loaded at {self.core.sim.address}")
 
     def _on_experiences_changed(self, experiences, selected_index):
@@ -941,6 +978,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._confirmed_experience_index = -1
         self._updating_experience_combo = False
         self._load_ride_image()
+        self._sync_nl2_heave_mode()
 
     def _on_sim_status(self, status):
         self._set_status_icon(self.lbl_pc_indicator, "ok" if status.pc_connected else "nogo")
@@ -1369,7 +1407,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_debug()
 
     def _on_platform_state(self, state):
-        self.chk_nl2_legacy_heave.setEnabled(
+        self.combo_nl2_heave_mode.setEnabled(
             self.core.sim_key == "nolimits2" and state is PlatformState.DEACTIVATED
         )
         if state is not PlatformState.DEACTIVATED and self._simulator_browse_active:

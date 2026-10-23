@@ -1,4 +1,4 @@
-#file_versions.txt  ver 147
+#file_versions.txt  ver 152
 # Application baseline: v150 (initial GitHub repository cleanup; no runtime-code changes)
 # Relative path | expected version
 config/platforms.py|5
@@ -9,7 +9,7 @@ controls/rotary_encoder.py|1
 controls/physical_controls.py|7
 core/config_store.py|7
 core/digital_twin.py|2
-core/poc_core.py|48
+core/poc_core.py|49
 core/platform_controller.py|14
 kinematics/cfg_SuspendedPlatformMdx.py|2
 kinematics/cfg_SuspendedChairFalcon.py|1
@@ -39,9 +39,9 @@ sim_host_service/windows/README.md|6
 sim_host_service/windows/configure_shs_firewall.ps1|1
 sim_host_service/windows/install_shs_startup.ps1|3
 sim_host_service/windows/start_shs.cmd|3
-sims/nolimits2/config.py|13
-sims/nolimits2/nl2_protocol.py|17
-sims/nolimits2/sim.py|30
+sims/nolimits2/config.py|14
+sims/nolimits2/nl2_protocol.py|18
+sims/nolimits2/sim.py|32
 sims/spacecoaster/config.py|13
 sims/spacecoaster/control.py|4
 sims/spacecoaster/sim.py|19
@@ -64,7 +64,7 @@ tests/test_xplane_adapter.py|7
 tests/test_fan_control.py|4
 tests/test_fan_serial.py|1
 tests/smoke_sim_interface.py|1
-tests/test_nolimits2_adapter.py|28
+tests/test_nolimits2_adapter.py|29
 tests/test_platform_controller.py|11
 tests/test_d_to_p.py|1
 core/telemetry_config.py|4
@@ -75,7 +75,7 @@ tests/test_telemetry_config.py|4
 tests/test_operator_status.py|4
 tests/test_ui_layout.py|11
 tests/test_sim_registry.py|1
-ui/main_window.py|66
+ui/main_window.py|67
 ui/poc_main.ui|13
 ui/poc_main_800x480.ui|16
 ui/ui_widgets.py|6
@@ -109,11 +109,20 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|3
 create_poc_handover_zip.py|19
-README.md|10
-file_versions.txt|147
+README.md|11
+file_versions.txt|152
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
 docs/PARKING_OPERATION_V149.md|1
 docs/Project Ideas.md|2
 README_v151.txt|1
+tools/capture_nl2_rides.py|4
+tests/test_capture_nl2_rides_v153.py|4
+README_v153.txt|1
+README_v154.txt|1
+README_v155.txt|1
+tests/test_nl2_request_ids_v156.py|1
+README_v156.txt|1
+tests/test_nl2_normalized_height_v157.py|1
+README_v157.txt|1
