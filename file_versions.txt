@@ -1,4 +1,4 @@
-#file_versions.txt  ver 152
+#file_versions.txt  ver 153
 # Application baseline: v150 (initial GitHub repository cleanup; no runtime-code changes)
 # Relative path | expected version
 config/platforms.py|5
@@ -9,7 +9,7 @@ controls/rotary_encoder.py|1
 controls/physical_controls.py|7
 core/config_store.py|7
 core/digital_twin.py|2
-core/poc_core.py|49
+core/poc_core.py|50
 core/platform_controller.py|14
 kinematics/cfg_SuspendedPlatformMdx.py|2
 kinematics/cfg_SuspendedChairFalcon.py|1
@@ -75,7 +75,7 @@ tests/test_telemetry_config.py|4
 tests/test_operator_status.py|4
 tests/test_ui_layout.py|11
 tests/test_sim_registry.py|1
-ui/main_window.py|67
+ui/main_window.py|68
 ui/poc_main.ui|13
 ui/poc_main_800x480.ui|16
 ui/ui_widgets.py|6
@@ -110,7 +110,7 @@ tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|3
 create_poc_handover_zip.py|19
 README.md|11
-file_versions.txt|152
+file_versions.txt|153
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -126,3 +126,5 @@ tests/test_nl2_request_ids_v156.py|1
 README_v156.txt|1
 tests/test_nl2_normalized_height_v157.py|1
 README_v157.txt|1
+tests/test_poc_performance_v158.py|1
+README_v158.txt|1

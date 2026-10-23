@@ -1,10 +1,11 @@
-#poc_core.py  ver 49
+#poc_core.py  ver 50
 from __future__ import annotations
 
 import logging
 import math
 import sys
 import time
+from collections import deque
 from dataclasses import replace
 from pathlib import Path
 from PyQt5 import QtCore
@@ -53,6 +54,7 @@ class PocCore(QtCore.QObject):
     activationControlModeChanged = QtCore.pyqtSignal(object)
 
     DATA_PERIOD_MS = 50
+    PERFORMANCE_WINDOW_FRAMES = 200  # 10 seconds at 20 Hz
     FAN_SEND_PERIOD_S = 0.1
 
     def __init__(self, config_store, parent=None):
@@ -102,6 +104,13 @@ class PocCore(QtCore.QObject):
         self._motion_transform = (0.0,) * 6
         self._last_fan_power = None
         self._last_fan_send_time = -1e9
+
+        # Main 20 Hz callback timing; platform-independent (Windows and Pi).
+        self.processing_percent = 0
+        self.jitter_percent = 0
+        self.processing_max_percent = 0
+        self._last_data_tick_started_at = None
+        self._processing_history = deque(maxlen=self.PERFORMANCE_WINDOW_FRAMES)
 
         host_cfg = self.config_store.get("sim_host_service", {})
         self.host_service_enabled = bool(host_cfg.get("enabled", True))
@@ -178,6 +187,7 @@ class PocCore(QtCore.QObject):
             self.host_service.start()
         self.load_sim(selected_sim, initial=True)
         self.remote.start()
+        self._last_data_tick_started_at = None
         self.data_timer.start()
 
     def shutdown(self) -> None:
@@ -804,6 +814,22 @@ class PocCore(QtCore.QObject):
         return True
 
     def _data_tick(self) -> None:
+        """Time the complete main callback, including early returns/errors."""
+        tick_start = time.perf_counter()
+        period = self.DATA_PERIOD_MS / 1000.0
+        if self._last_data_tick_started_at is not None:
+            actual_interval = tick_start - self._last_data_tick_started_at
+            self.jitter_percent = round(100.0 * abs(actual_interval - period) / period)
+        self._last_data_tick_started_at = tick_start
+        try:
+            self._data_tick_body()
+        finally:
+            elapsed = time.perf_counter() - tick_start
+            self.processing_percent = round(100.0 * elapsed / period)
+            self._processing_history.append(elapsed)
+            self.processing_max_percent = round(100.0 * max(self._processing_history) / period)
+
+    def _data_tick_body(self) -> None:
         # Serial callbacks are intentionally serviced here so physical and UI
         # controls enter PocCore on the same Qt/main thread.
         self.remote.service()
@@ -988,6 +1014,9 @@ class PocCore(QtCore.QObject):
         backend = getattr(self.platform, "backend", None)
         sim_client = getattr(self.sim, "client", None)
         return {
+            "processing_percent": self.processing_percent,
+            "jitter_percent": self.jitter_percent,
+            "processing_max_percent": self.processing_max_percent,
             "platform_state": self.platform.state.name,
             "parking_state": self.platform.parking_state.name,
             "pending_dispatch": self._dispatch_unpark_pending,

@@ -1,4 +1,4 @@
-#main_window.py  ver 67
+#main_window.py  ver 68
 from __future__ import annotations
 
 import csv
@@ -1524,6 +1524,7 @@ class MainWindow(QtWidgets.QMainWindow):
         sim_ip = getattr(self.core.host_service, "address", "") or "--"
         lines = [
             f"Pi temperature  : {pi_temperature}",
+            f"Frame timing   : processing={snapshot['processing_percent']}%  max(10s)={snapshot['processing_max_percent']}%  jitter={snapshot['jitter_percent']}%",
             f"Platform state : {snapshot['platform_state']}  Festo={festo_ip}  enabled={snapshot['platform_backend_enabled']}  clips={snapshot.get('length_clip_count', 0)}",
             f"Simulator state: POC={snapshot['experience_state']}  native={snapshot['sim_native_state']}  SHS={sim_ip}",
             f"E-STOP         : latched={snapshot['estop_latched']}  recovery={snapshot.get('estop_recovery_active')}",

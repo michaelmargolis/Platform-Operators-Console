@@ -1,17 +1,18 @@
-# create_poc_handover_zip.py ver 19
+# create_poc_handover_zip.py ver 20
 """Create a complete, reviewable POC handover archive.
 
 Run this script from any location. The project root is the directory containing
-this script. Every file named by file_versions.txt is mandatory; additional
-source, configuration, documentation and image assets are included by an
-explicit extension allow-list. Runtime captures, caches, logs, environments,
-existing archives and build output are excluded.
+this script. Every file named by file_versions.txt is mandatory. Also include
+relevant unversioned source, configuration and image files. Restore missing
+UI/display images from the known historical project copy (assets only), and
+fail if essential runtime/installer assets remain missing. Do not package old
+project trees, analysis exports, individual historical release notes, captures,
+caches, logs, environments, existing archives, or build output.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 from pathlib import Path
 import re
 import subprocess
@@ -23,19 +24,22 @@ ARCHIVE_ROOT = "PlatformOperatorsConsole"
 DEFAULT_ARCHIVE_NAME = "PlatformOperatorsConsole_full_handover.zip"
 
 INCLUDED_SUFFIXES = {
-    ".bat", ".cfg", ".cmd", ".cs", ".csv", ".desktop", ".docx",
-    ".dll", ".gif", ".ini", ".jpeg", ".jpg", ".json", ".md", ".png",
-    ".ps1", ".py", ".qrc", ".service", ".sh", ".txt", ".ui",
+    ".bat", ".cfg", ".cmd", ".conf", ".cs", ".csv", ".desktop",
+    ".docx", ".dll", ".gif", ".ico", ".ini", ".jpeg", ".jpg",
+    ".json", ".md", ".png", ".ps1", ".py", ".qrc", ".rules",
+    ".service", ".sh", ".svg", ".toml", ".txt", ".ui", ".webp",
+    ".xml", ".yaml", ".yml",
 }
 INCLUDED_EXTENSIONLESS_NAMES = {"LICENSE", "COPYING"}
 
 EXCLUDED_DIR_NAMES = {
     ".git", ".idea", ".mypy_cache", ".pytest_cache", ".ruff_cache",
     ".tox", ".venv", ".vscode", "__pycache__", "build", "captures",
-    "dist", "logs", "venv",
+    "dist", "logs", "venv", "analysis_exports",
 }
 EXCLUDED_RELATIVE_DIRS = {
     # Old update/staging trees that duplicate canonical project paths.
+    Path("old PlatformOperatorsConsole"),
     Path("config/core"),
     Path("config/fan_controller"),
     Path("config/sim_host_service"),
@@ -72,6 +76,24 @@ EXCLUDED_RELATIVE_PATHS = {
     # raspi/assets/splash/poc_splash_touch2_boot.png instead.
     Path("raspi/assets/splash/poc_splash_1280x720.png"),
 }
+LEGACY_ASSET_ROOT = Path("old PlatformOperatorsConsole")
+LEGACY_RECOVERY_DIRS = (
+    Path("images"),
+    Path("raspi/assets/splash"),
+    Path("raspi/assets/wallpaper"),
+)
+ASSET_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".svg"}
+REQUIRED_ASSETS = {
+    Path("images/POC.png"),
+    Path("images/activate_warning.png"),
+    Path("images/nogo.png"),
+    Path("images/warning.png"),
+    Path("images/ok.png"),
+    Path("raspi/assets/splash/poc_splash_touch2_boot.png"),
+    Path("raspi/assets/wallpaper/poc_wallpaper_1280x720.png"),
+}
+OLD_RELEASE_NOTE_RE = re.compile(r"README_v\d+\.txt$", re.IGNORECASE)
+
 CAPTURE_NAME_RE = re.compile(
     r"(?:nolimits2|spacecoaster|xplane)_telemetry_\d{8}_\d{6}\.csv$",
     re.IGNORECASE,
@@ -116,11 +138,21 @@ def load_versioned_paths(manifest: Path) -> set[Path]:
         if relative in paths:
             raise RuntimeError(f"Duplicate manifest path: {relative}")
         paths.add(relative)
+    obsolete = [path for path in paths if OLD_RELEASE_NOTE_RE.fullmatch(path.name)]
+    if obsolete:
+        raise RuntimeError(
+            "Remove historical README_vXXX.txt entries from file_versions.txt; "
+            "track changelog.txt|1 instead: " + ", ".join(map(str, sorted(obsolete)))
+        )
+    if Path("changelog.txt") not in paths:
+        raise RuntimeError("file_versions.txt must track changelog.txt|1")
     return paths
 
 
 def excluded_unversioned(relative: Path, output: Path, root: Path) -> bool:
     if relative in EXCLUDED_RELATIVE_PATHS:
+        return True
+    if OLD_RELEASE_NOTE_RE.fullmatch(relative.name):
         return True
     if relative.name.startswith("~$"):
         return True
@@ -140,28 +172,57 @@ def excluded_unversioned(relative: Path, output: Path, root: Path) -> bool:
     return False
 
 
-def discover_files(root: Path, output: Path, versioned: set[Path]) -> list[Path]:
-    selected = set(versioned)
+def discover_files(root: Path, output: Path, versioned: set[Path]) -> dict[Path, Path]:
+    """Return archive-relative path -> on-disk source, preferring canonical files."""
     missing = [path for path in sorted(versioned) if not (root / path).is_file()]
     if missing:
         formatted = "\n  ".join(str(path) for path in missing)
         raise RuntimeError(f"Files required by file_versions.txt are missing:\n  {formatted}")
+    selected: dict[Path, Path] = {path: root / path for path in versioned}
 
     for candidate in root.rglob("*"):
         if not candidate.is_file() or candidate.is_symlink():
             continue
         relative = candidate.relative_to(root)
-        if relative in versioned:
+        if relative in selected or excluded_unversioned(relative, output, root):
             continue
-        if excluded_unversioned(relative, output, root):
-            continue
-        if (
-            candidate.suffix.lower() in INCLUDED_SUFFIXES
-            or candidate.name in INCLUDED_EXTENSIONLESS_NAMES
-        ):
-            selected.add(relative)
+        if (candidate.suffix.lower() in INCLUDED_SUFFIXES
+                or candidate.name in INCLUDED_EXTENSIONLESS_NAMES):
+            selected[relative] = candidate
 
-    return sorted(selected, key=lambda path: path.as_posix().lower())
+    # Some exported handovers lost top-level UI and Raspberry Pi display assets,
+    # while retaining them in a historical project copy. Recover only known asset
+    # directories; never use that older copy as a source for code/configuration.
+    # A canonical asset, if present, ALWAYS takes precedence.
+    old_root = root / LEGACY_ASSET_ROOT
+    for directory in LEGACY_RECOVERY_DIRS:
+        source_dir = old_root / directory
+        if not source_dir.is_dir():
+            continue
+        for candidate in source_dir.rglob("*"):
+            if not candidate.is_file() or candidate.is_symlink():
+                continue
+            relative = candidate.relative_to(old_root)
+            if relative in selected or (root / relative).exists():
+                continue
+            if candidate.suffix.lower() not in ASSET_SUFFIXES:
+                continue
+            if relative.name.lower().endswith(".png.png"):
+                continue  # malformed superseded asset copy
+            if excluded_unversioned(relative, output, root):
+                continue
+            selected[relative] = candidate
+
+    missing_assets = sorted(path for path in REQUIRED_ASSETS if path not in selected)
+    if missing_assets:
+        formatted = "\n  ".join(str(path) for path in missing_assets)
+        raise RuntimeError(
+            "Missing mandatory POC UI / Raspberry Pi display resources:\n  "
+            + formatted + "\nRestore these files in the canonical project paths "
+            "(or provide the historical copy) before packaging."
+        )
+
+    return dict(sorted(selected.items(), key=lambda item: item[0].as_posix().lower()))
 
 
 def sha256(path: Path) -> str:
@@ -191,26 +252,26 @@ def validate_versions(root: Path) -> None:
         raise RuntimeError("Version validation failed; archive was not created")
 
 
-def package_manifest(root: Path, files: list[Path], versioned: set[Path]) -> bytes:
+def package_manifest(files: dict[Path, Path], versioned: set[Path]) -> bytes:
     lines = [
         "# POC complete handover package contents",
         "# SHA-256 | source | relative path",
     ]
-    for relative in files:
+    for relative, source in files.items():
         source_kind = "versioned" if relative in versioned else "unversioned"
-        lines.append(f"{sha256(root / relative)} | {source_kind} | {relative.as_posix()}")
+        lines.append(f"{sha256(source)} | {source_kind} | {relative.as_posix()}")
     lines.append("")
     return "\n".join(lines).encode("utf-8")
 
 
-def build_archive(root: Path, output: Path, files: list[Path], versioned: set[Path]) -> None:
+def build_archive(output: Path, files: dict[Path, Path], versioned: set[Path]) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-        for relative in files:
-            archive.write(root / relative, f"{ARCHIVE_ROOT}/{relative.as_posix()}")
+        for relative, source in files.items():
+            archive.write(source, f"{ARCHIVE_ROOT}/{relative.as_posix()}")
         archive.writestr(
             f"{ARCHIVE_ROOT}/PACKAGE_CONTENTS_SHA256.txt",
-            package_manifest(root, files, versioned),
+            package_manifest(files, versioned),
         )
 
     with zipfile.ZipFile(output, "r") as archive:
@@ -239,9 +300,8 @@ def main() -> int:
         validate_versions(root)
         files = discover_files(root, output, versioned)
         unexpected_empty_files = [
-            path for path in files
-            if (root / path).stat().st_size == 0
-            and path.name != "__init__.py"
+            path for path, source in files.items()
+            if source.stat().st_size == 0 and path.name != "__init__.py"
         ]
         if unexpected_empty_files:
             formatted = "\n  ".join(str(path) for path in unexpected_empty_files)
@@ -252,13 +312,21 @@ def main() -> int:
 
         if output.exists():
             output.unlink()
-        build_archive(root, output, files, versioned)
+        build_archive(output, files, versioned)
     except (OSError, RuntimeError, zipfile.BadZipFile) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
     print(f"Created: {output}")
+    recovered = [
+        relative for relative, source in files.items()
+        if source != root / relative
+    ]
     print(f"Included project files: {len(files)}")
+    if recovered:
+        print(f"Recovered {len(recovered)} missing asset(s) from historical project copy:")
+        for path in recovered:
+            print(f"  {path.as_posix()}")
     print(f"Versioned files: {len(versioned)}")
     print(f"Additional relevant files: {len(files) - len(versioned)}")
     print(f"ZIP size: {output.stat().st_size} bytes")
