@@ -1,4 +1,4 @@
-#file_versions.txt  ver 153
+#file_versions.txt  ver 154
 # Application baseline: v150 (initial GitHub repository cleanup; no runtime-code changes)
 # Relative path | expected version
 config/platforms.py|5
@@ -108,23 +108,17 @@ tools/diagnostics/spacecoaster/dummySHS.py|1
 tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|3
-create_poc_handover_zip.py|19
+create_poc_handover_zip.py|20
+changelog.txt|1
 README.md|11
-file_versions.txt|153
+file_versions.txt|154
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
 docs/PARKING_OPERATION_V149.md|1
 docs/Project Ideas.md|2
-README_v151.txt|1
 tools/capture_nl2_rides.py|4
 tests/test_capture_nl2_rides_v153.py|4
-README_v153.txt|1
-README_v154.txt|1
-README_v155.txt|1
 tests/test_nl2_request_ids_v156.py|1
-README_v156.txt|1
 tests/test_nl2_normalized_height_v157.py|1
-README_v157.txt|1
 tests/test_poc_performance_v158.py|1
-README_v158.txt|1
