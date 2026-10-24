@@ -1,4 +1,4 @@
-#platform_controller.py  ver 14
+#platform_controller.py  ver 16
 from __future__ import annotations
 
 import importlib
@@ -23,7 +23,10 @@ class SopPlatformBackend:
     This backend deliberately reuses those modules rather than reimplementing them.
     """
 
-    def __init__(self, config_module: str, festo_ip: str = "192.168.0.10"):
+    def __init__(
+        self, config_module: str, festo_ip: str = "192.168.0.10",
+        festo_interface=None,
+    ):
         from kinematics.kinematics_V3 import Kinematics, PlatformParams
         from output.d_to_p import DistanceToPressure
         from output.muscle_output import MuscleOutput
@@ -41,6 +44,11 @@ class SopPlatformBackend:
             )
 
         self.k = Kinematics()
+        # Only platforms explicitly specifying an axis convention override
+        # the legacy default. The MDX CAD uses ROS rider-frame positive Roll.
+        axis_flip_mask = getattr(self.cfg, "AXIS_FLIP_MASK", None)
+        if axis_flip_mask is not None:
+            self.k.set_axis_flip_mask(axis_flip_mask)
         params = PlatformParams(
             self.cfg.MUSCLE_MIN_LENGTH,
             self.cfg.MUSCLE_MAX_LENGTH,
@@ -123,13 +131,18 @@ class SopPlatformBackend:
         ]
         self.dto_p.set_load(payload_weights[1])
 
+        output_kwargs = {"has_piston": bool(getattr(self.cfg, "HAS_PISTON", False))}
+        if festo_interface is not None:
+            # Only Pose Sender passes an injected sink. Keep the existing
+            # production constructor/recording-test call shape unchanged.
+            output_kwargs["festo_interface"] = festo_interface
         self.muscle_output = MuscleOutput(
             self.dto_p.muscle_length_to_pressure,
             lambda seconds: None,
             festo_ip,
             self.cfg.MUSCLE_MAX_LENGTH,
             self.cfg.MUSCLE_LENGTH_RANGE,
-            has_piston=bool(getattr(self.cfg, "HAS_PISTON", False)),
+            **output_kwargs,
         )
         self.last_transform = [0.0] * 6
         self.muscle_lengths = list(self.cfg.DEACTIVATED_MUSCLE_LENGTHS)

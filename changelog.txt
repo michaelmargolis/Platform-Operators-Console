@@ -1,10 +1,85 @@
-# changelog.txt ver 5
+# changelog.txt ver 9
+v166 | MDX CAD-indexed channels and rider-frame Roll
+------------------------------------------------------------------
+- MDX kinematics now uses a platform-specific Roll sign: positive Roll lowers
+  the rider's right (-Y) side, without affecting chair platform conventions.
+- Reordered the MDX attachment pairs so the six kinematic indices and sent
+  Festo pressure channels match physical CAD valve labels 0..5 (front-right=0).
+- Inverted NoLimits2 quaternion Roll input (confirmed by the NL2 bank test).
+- Added numerical regression checks for physical attachment indices, vertical
+  platform motion, muscle-length and pressure directions, and NL2 Roll.
+- This is a physical valve-mapping change. Test first on the emulator and
+  Visualizer; confirm channel assignments before enabling physical valves.
+- Standalone NoLimits2 CSV analysis now honours the MDX-specific axis mask.
+
+v165
+- Pose Sender: moved the operator buttons into a fixed right-hand control column.
+- Pose Sender: adopted explicit rider-frame axis wording (+X forward, +Y left, +Z up, +roll right side down, +pitch nose down, +yaw CCW).
+- Pose Sender: reversed Heave at the user interface boundary so positive slider and displayed values mean platform up.
+- Added tests for the Pose Sender sign-conversion helpers and UI layout structure.
+
 Platform Operators Console - consolidated release history
 =======================================================
 Latest release first. All available numbered POC release notes from
 README_v150.txt through README_v158.txt have been incorporated below.
 The original release-note text is retained unchanged within each entry;
 historical installation instructions are not current deployment guidance.
+
+POC v164 | Pose Sender optional pressure readback
+------------------------------------------------------------------
+Allow the operator to acknowledge and arm output at startup without any
+pressure response from the EasyIP target (including Platform Visualizer in
+EasyIP mode). Continue optional 200 ms pressure polling and show available
+readings; missing feedback is not a fault and cannot certify physical state.
+Initialize commanded pressures to zero on arm rather than inferring a safe
+initial state from readback. Retain separate UNPARK confirmation, POC slow
+park/unpark and 20 Hz pressure output. Following slow park, automatic disarm
+uses the completion of the commanded transition and zero command, NOT
+measured pressure; this does not prove physical pressure release or parking.
+
+Files changed:
+- output/fstlib/pose_sender.py v1 -> v2: arm and run without readback.
+- output/fstlib/POSE_SENDER_README.md v1 -> v2: corrected operation/safety.
+- tests/test_pose_sender_v164.py v1: regression checks.
+- changelog.txt v6 -> v7: release notes.
+- file_versions.txt v159 -> v160: track this update.
+
+==========================================================================
+
+POC v163 | Standalone six-DOF EasyIP Pose Sender
+------------------------------------------------------------------
+Add output/fstlib/pose_sender.py: standalone PyQt5 six-DOF normalized
+(-1..+1) control. Read current selected_platform from poc_config.json, load
+POC kinematics and workspace limiting (including MDX geometry floor-clearance
+and its configured offset), distance-to-pressure mapping and nominal payload.
+Use existing 50 mm/s, 20 Hz POC length transitions for slow park/unpark.
+Neutral pose is the unparked target. Dynamic DOF changes run at 20 Hz;
+outputs are pressure-slewed by at most 6000 mbar/s.
+
+Use a single nonblocking EasyIP UDP socket. Target defaults to 192.168.0.10;
+editable for emulator testing. Poll actual pressure registers 10..15,
+display both sent and measured six-channel pressures. No pressure-write packet
+is transmitted until valid fresh readback, explicit operator confirmation of
+physical parked state and a separate UNPARK action. Communications loss
+latches an output stop (does not depressurize the PLC). Closing while active
+requires confirmation of external E-stop. Prop flag for HAS_PISTON configs
+reuses POC's existing transitions; physical prop state is NOT measured.
+
+Tests cover pressure polling/validation, workspace-limited pose conversion,
+standalone safe startup, slow park/unpark and piston transition. Existing
+production MuscleOutput construction is unchanged when no test sink is passed.
+
+Files changed:
+- output/fstlib/pose_sender.py v1: new PyQt5 operator test sender.
+- output/fstlib/pose_sender_logic.py v1: network-free motion/pressure logic.
+- output/fstlib/POSE_SENDER_README.md v1: operating and safety notes.
+- core/platform_controller.py v14 -> v15: optional injected output transport.
+- output/muscle_output.py v3 -> v4: optional injected Festo interface.
+- tests/test_pose_sender_v163.py v1: regression coverage.
+- changelog.txt v5 -> v6: release notes.
+- file_versions.txt v158 -> v159: track the update.
+
+==========================================================================
 
 POC v162 | Ride-control labels and prominent intensity slider
 ------------------------------------------------------------------

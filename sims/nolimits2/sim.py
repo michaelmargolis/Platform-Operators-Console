@@ -1,4 +1,4 @@
-#sim.py  ver 32
+#sim.py  ver 33
 from __future__ import annotations
 
 import logging
@@ -844,7 +844,9 @@ class Sim(SimInterface):
             tm.quat_x, tm.quat_y, tm.quat_z, tm.quat_w
         )
         roll, pitch, _yaw = self._quaternion_to_rpy(*quaternion)
-        roll = roll / math.pi
+        # NL2's signed bank angle is opposite the platform rider-frame Roll:
+        # a right-side-down NL2 bank must become positive platform Roll.
+        roll = -roll / math.pi
         pitch = -pitch * 0.6
 
         yaw_rate = self._yaw_rate_from_quaternion(quaternion, tm.received_at)

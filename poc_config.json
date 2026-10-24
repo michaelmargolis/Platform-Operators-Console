@@ -10,7 +10,7 @@
     "heartbeat_timeout_s": 3.0
   },
   "digital_twin": {
-    "address": "-",
+    "address": "192.168.1.125",
     "port": 10020
   }
 }

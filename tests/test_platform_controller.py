@@ -1,4 +1,4 @@
-#test_platform_controller.py  ver 11
+#test_platform_controller.py  ver 12
 from core.platform_controller import PlatformController
 from core.types import PlatformState, PlatformMotionState
 from unittest.mock import patch
@@ -141,7 +141,7 @@ def test_mdx_backend_uses_latest_cad_xyz_and_reserve_neutral_height():
     assert backend.cfg.CAD_Z_REFERENCE_OFFSET == 84.0
     assert backend.k.BASE_MAX_Z == 1083.0
     assert list(backend.k.platform_local_coords[:, 2]) == [
-        -8.0, -2.0, -2.0, -3.0, -2.0, -8.0
+        -8.0, -2.0, -3.0, -2.0, -2.0, -8.0
     ]
     assert abs(backend.k.PLATFORM_LEVEL_Z_MIN - 70.1835225) < 1.0e-5
     assert abs(backend.k.PLATFORM_LEVEL_Z_MAX - 284.3457990) < 1.0e-5

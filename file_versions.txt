@@ -1,5 +1,5 @@
-#file_versions.txt  ver 158
-# Application baseline: v162 (transform label and intensity slider visibility)
+#file_versions.txt  ver 162
+# Application baseline: v166 (MDX CAD channel ordering and Roll correction)
 # Relative path | expected version
 config/platforms.py|5
 controls/__init__.py|1
@@ -10,15 +10,15 @@ controls/physical_controls.py|7
 core/config_store.py|7
 core/digital_twin.py|2
 core/poc_core.py|51
-core/platform_controller.py|14
-kinematics/cfg_SuspendedPlatformMdx.py|2
+core/platform_controller.py|16
+kinematics/cfg_SuspendedPlatformMdx.py|3
 kinematics/cfg_SuspendedChairFalcon.py|1
 kinematics/cfg_SuspendedChair.py|6
 kinematics/README.md|6
 output/__init__.py|1
 output/d_to_p.py|2
 output/chair_DtoP_synthesized.csv|1
-output/muscle_output.py|3
+output/muscle_output.py|4
 output/festo_itf.py|3
 output/fstlib/__init__.py|1
 output/fstlib/easyip.py|1
@@ -41,7 +41,7 @@ sim_host_service/windows/install_shs_startup.ps1|3
 sim_host_service/windows/start_shs.cmd|3
 sims/nolimits2/config.py|14
 sims/nolimits2/nl2_protocol.py|18
-sims/nolimits2/sim.py|32
+sims/nolimits2/sim.py|33
 sims/spacecoaster/config.py|13
 sims/spacecoaster/control.py|4
 sims/spacecoaster/sim.py|19
@@ -65,7 +65,7 @@ tests/test_fan_control.py|4
 tests/test_fan_serial.py|1
 tests/smoke_sim_interface.py|1
 tests/test_nolimits2_adapter.py|29
-tests/test_platform_controller.py|11
+tests/test_platform_controller.py|12
 tests/test_d_to_p.py|1
 core/telemetry_config.py|4
 sims/nolimits2/telemetry_config.ini|2
@@ -109,9 +109,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|3
 create_poc_handover_zip.py|21
-changelog.txt|5
+changelog.txt|9
 README.md|11
-file_versions.txt|158
+file_versions.txt|162
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -125,3 +125,11 @@ tests/test_poc_performance_v158.py|1
 tests/test_transform_bars_v159.py|1
 tests/test_transform_bars_v160.py|1
 tests/test_nl2_shs_gate_v161.py|1
+output/fstlib/pose_sender.py|3
+output/fstlib/pose_sender_logic.py|2
+output/fstlib/POSE_SENDER_README.md|3
+tests/test_pose_sender_v163.py|1
+tests/test_pose_sender_v164.py|1
+tests/test_pose_sender_v165.py|1
+tools/analyze_nl2_csv.py|9
+tests/test_mdx_roll_channels_v166.py|1

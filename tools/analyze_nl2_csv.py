@@ -1,4 +1,4 @@
-# analyze_nl2_csv.py ver 8
+# analyze_nl2_csv.py ver 9
 """Standalone NL2 CSV playback / muscle-length study; no POC outputs are created.
 
 Place in POC/tools; run: python tools/analyze_nl2_csv.py PATH_TO_CAPTURE.csv
@@ -67,6 +67,11 @@ def make_backend(platform_key):
     """Use POC workspace implementation, without constructing MuscleOutput/Festo."""
     cfg = importlib.import_module(PLATFORMS[platform_key]["sop_config_module"]).PlatformConfig()
     k = Kinematics()
+    # Offline replay must use the same per-platform axis convention as the
+    # production backend. Otherwise MDX Roll and actuator indices disagree.
+    axis_flip_mask = getattr(cfg, "AXIS_FLIP_MASK", None)
+    if axis_flip_mask is not None:
+        k.set_axis_flip_mask(axis_flip_mask)
     params = PlatformParams(cfg.MUSCLE_MIN_LENGTH, cfg.MUSCLE_MAX_LENGTH,
                             cfg.FIXED_HARDWARE_LENGTH, cfg.LIMITS_1DOF_TRANFORM)
     platform_coords = getattr(cfg, "platform_coords", None)

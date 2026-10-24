@@ -1,4 +1,4 @@
-#muscle_output.py  ver 3
+#muscle_output.py  ver 4
 import time
 import sys
 import numpy as np
@@ -12,11 +12,11 @@ log = logging.getLogger(__name__)
 PLOT_PRESSURES = False
 
 class MuscleOutput(object):
-    def __init__(self, d_to_p_func, sleep_func, FST_ip='192.168.0.10', max_muscle_length= 1000, muscle_length_range=250, has_piston=False):
+    def __init__(self, d_to_p_func, sleep_func, FST_ip='192.168.0.10', max_muscle_length=1000, muscle_length_range=250, has_piston=False, festo_interface=None):
         """ Initialize the muscle output control module. """
         self.muscle_length_to_pressure = d_to_p_func
         self.sleep_func = sleep_func
-        self.festo = festo_itf.Festo(FST_ip)
+        self.festo = festo_interface if festo_interface is not None else festo_itf.Festo(FST_ip)
         self.MAX_MUSCLE_LENGTH = max_muscle_length
         self.MUSCLE_LENGTH_RANGE = muscle_length_range  # max change in muscle length (not actuator length)
         self.muscle_lengths = [max_muscle_length] * 6 

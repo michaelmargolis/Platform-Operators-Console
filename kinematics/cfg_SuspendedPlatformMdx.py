@@ -1,4 +1,4 @@
-#cfg_SuspendedPlatformMdx.py  ver 2
+#cfg_SuspendedPlatformMdx.py  ver 3
 from math import radians
 
 
@@ -6,6 +6,11 @@ class PlatformConfig(object):
     PLATFORM_NAME = "MDX Suspended Platform"
     PLATFORM_TYPE = "Inverted Stewart Platform"
     PLATFORM_INVERTED = True
+    # MDX rider-frame transform: +roll means right side down (CAD -Y down).
+    # Preserve the original heave convention; no change to chair platforms.
+    AXIS_FLIP_MASK = (1, 1, -1, 1, 1, 1)
+    # The six kinematic indices also identify physical EasyIP valve channels.
+    # CAD: channel 0 is the front-right (+X, -Y) muscle.
     MUSCLE_PRESSURE_MAPPING_FILE = "output/wheelchair_DtoP.csv"
 
     # CAD reference: the nominal moving-attachment plane is 84 mm above floor.
@@ -115,23 +120,25 @@ class PlatformConfig(object):
         self.HAS_PISTON = False
         self.HAS_BRAKE = False
 
-        # Six explicit CAD attachment points in upper/lower 0..5 order.
-        # Raw CAD Z values are shifted by CAD_Z_REFERENCE_OFFSET so the nominal
-        # moving-attachment reference plane is local Z=0.
+        # Explicit CAD attachment pairs in PHYSICAL Festo channel order 0..5.
+        # Earlier releases listed these pairs in reverse order (5..0), so the
+        # numbers sent to the six EasyIP valve channels did not match the CAD.
+        # CAD Z is shifted by CAD_Z_REFERENCE_OFFSET (84 mm).
+        # Channel 0 is rider front-right (+X, -Y), then 1/2 on the right,
+        # and 3/4/5 on the left (+Y).
         self.base_coords = [
-            [438.0, 585.0, 1083.0],
-            [291.0, 622.0, 1083.0],
-            [-731.0, 76.0, 1037.0],
-            [-731.0, -76.0, 1037.0],
-            [289.0, -654.0, 1083.0],
-            [413.0, -566.0, 1083.0],
+            [413.0, -566.0, 1083.0],  # valve 0
+            [289.0, -654.0, 1083.0],  # valve 1
+            [-731.0, -76.0, 1037.0], # valve 2
+            [-731.0, 76.0, 1037.0],  # valve 3
+            [291.0, 622.0, 1083.0],  # valve 4
+            [438.0, 585.0, 1083.0],  # valve 5
         ]
-
         self.platform_coords = [
-            [716.0, 166.0, -8.0],
-            [-222.0, 609.0, -2.0],
-            [-348.0, 536.0, -2.0],
-            [-347.0, -536.0, -3.0],
-            [-221.0, -608.0, -2.0],
-            [716.0, -166.0, -8.0],
+            [716.0, -166.0, -8.0],  # valve 0
+            [-221.0, -608.0, -2.0], # valve 1
+            [-347.0, -536.0, -3.0], # valve 2
+            [-348.0, 536.0, -2.0],  # valve 3
+            [-222.0, 609.0, -2.0],  # valve 4
+            [716.0, 166.0, -8.0],   # valve 5
         ]
