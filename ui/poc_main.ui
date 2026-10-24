@@ -1,4 +1,4 @@
-<!-- poc_main.ui ver 14 -->
+<!-- poc_main.ui ver 15 -->
 <ui version="4.0">
  <class>MainWindow</class>
  <widget class="QMainWindow" name="MainWindow">
@@ -276,7 +276,7 @@ Data</string>
           <item>
            <widget class="QGroupBox" name="grp_transform_levels">
             <property name="title">
-             <string>Transform Levels Out</string>
+             <string>Transform Levels</string>
             </property>
             <layout class="QVBoxLayout" name="transformBarsLayout">
              <property name="spacing">
@@ -458,6 +458,11 @@ Data</string>
                  <width>280</width>
                  <height>52</height>
                 </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">QSlider::groove:horizontal { background: #d0d0d0; border: 1px solid #65717c; height: 24px; border-radius: 12px; }
+QSlider::sub-page:horizontal { background: #39a45a; border-radius: 12px; }
+QSlider::handle:horizontal { background: #177a39; border: 1px solid #125a2d; width: 26px; margin: -7px 0; border-radius: 7px; }</string>
                </property>
                <property name="minimum">
                 <number>0</number>

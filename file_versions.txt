@@ -1,5 +1,5 @@
-#file_versions.txt  ver 156
-# Application baseline: v160 (display-only heave sign; Debug-tab QPainter update switch)
+#file_versions.txt  ver 158
+# Application baseline: v162 (transform label and intensity slider visibility)
 # Relative path | expected version
 config/platforms.py|5
 controls/__init__.py|1
@@ -9,7 +9,7 @@ controls/rotary_encoder.py|1
 controls/physical_controls.py|7
 core/config_store.py|7
 core/digital_twin.py|2
-core/poc_core.py|50
+core/poc_core.py|51
 core/platform_controller.py|14
 kinematics/cfg_SuspendedPlatformMdx.py|2
 kinematics/cfg_SuspendedChairFalcon.py|1
@@ -76,8 +76,8 @@ tests/test_operator_status.py|4
 tests/test_ui_layout.py|11
 tests/test_sim_registry.py|1
 ui/main_window.py|70
-ui/poc_main.ui|14
-ui/poc_main_800x480.ui|17
+ui/poc_main.ui|15
+ui/poc_main_800x480.ui|18
 ui/ui_widgets.py|7
 ui/transform_viewer.py|1
 ui/sim_tabs.py|2
@@ -109,9 +109,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|3
 create_poc_handover_zip.py|21
-changelog.txt|3
+changelog.txt|5
 README.md|11
-file_versions.txt|156
+file_versions.txt|158
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -124,3 +124,4 @@ tests/test_nl2_normalized_height_v157.py|1
 tests/test_poc_performance_v158.py|1
 tests/test_transform_bars_v159.py|1
 tests/test_transform_bars_v160.py|1
+tests/test_nl2_shs_gate_v161.py|1

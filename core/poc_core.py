@@ -1,4 +1,4 @@
-#poc_core.py  ver 50
+#poc_core.py  ver 51
 from __future__ import annotations
 
 import logging
@@ -238,7 +238,12 @@ class PocCore(QtCore.QObject):
         self._ride_has_run = False
         self._estop_running_pause_sent = False
         self._set_experience_state(ExperienceState.DISCONNECTED)
-        self.sim.connect()
+        # NoLimits2 TCP connect() may block the Qt thread when SHS is offline.
+        # Defer the initial attempt until a live SHS heartbeat is received.
+        # With SHS disabled, preserve standalone/direct connection behaviour.
+        if not (key == "nolimits2" and self.host_service_enabled
+                and not self.host_service.connected):
+            self.sim.connect()
 
         period = int(getattr(self.sim, "service_period_ms", 0) or 0)
         if period > 0:
@@ -1059,6 +1064,13 @@ class PocCore(QtCore.QObject):
         }
 
     def _service_tick(self) -> None:
+        # Gate only NEW NoLimits2 TCP attempts: an already-connected simulator
+        # must continue being serviced even if SHS temporarily goes offline.
+        # SHS.service() runs independently in _data_tick_body() at 20 Hz.
+        if (self.sim_key == "nolimits2" and self.host_service_enabled
+                and not self.host_service.connected
+                and not self.sim.client.is_connected):
+            return
         self.sim.service()
 
     def _set_experience_state(self, state: ExperienceState) -> None:

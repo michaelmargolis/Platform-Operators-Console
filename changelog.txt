@@ -1,10 +1,43 @@
-# changelog.txt ver 3
+# changelog.txt ver 5
 Platform Operators Console - consolidated release history
 =======================================================
 Latest release first. All available numbered POC release notes from
 README_v150.txt through README_v158.txt have been incorporated below.
 The original release-note text is retained unchanged within each entry;
 historical installation instructions are not current deployment guidance.
+
+POC v162 | Ride-control labels and prominent intensity slider
+------------------------------------------------------------------
+Remove "Out" from the Transform Levels group caption on both normal and
+compact 800x480 layouts. Increase the visual thickness of the intensity
+slider groove and handle using QSlider styling, within the existing widget
+geometry and layout; retain the percentage-label font and all other layout
+positions. No change to slider range, callbacks, or control behaviour.
+
+Files changed:
+- ui/poc_main.ui v14 -> v15: caption and enlarged slider styling.
+- ui/poc_main_800x480.ui v17 -> v18: caption and compact styling.
+- changelog.txt v4 -> v5: release history.
+- file_versions.txt v157 -> v158: version manifest.
+
+==========================================================================
+
+POC v161 | Defer NoLimits2 TCP connections until SHS heartbeat
+------------------------------------------------------------------
+Prevent initial and retry NoLimits2 TCP connection attempts while SHS is
+configured but not connected. SHS heartbeat is serviced as before; when it
+becomes available, the existing NoLimits2 retry mechanism resumes. Keep
+servicing an already-connected simulator through a transient SHS outage.
+When SHS is disabled, direct NoLimits2 connection behaviour is unchanged.
+No SHS protocol, simulator process-status check, or motion-control changes.
+
+Files changed:
+- core/poc_core.py v50 -> v51: initial connect and service retry gating.
+- tests/test_nl2_shs_gate_v161.py v1: new regression tests.
+- changelog.txt v3 -> v4: release history.
+- file_versions.txt v156 -> v157: version manifest.
+
+==========================================================================
 
 POC v160 | Heave bar polarity and Debug-tab paint isolation
 ------------------------------------------------------------------
