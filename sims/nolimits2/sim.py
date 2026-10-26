@@ -1,7 +1,9 @@
-#sim.py  ver 33
+#sim.py  ver 38
 from __future__ import annotations
 
 import logging
+from collections import deque
+from dataclasses import dataclass
 import math
 import time
 from typing import Optional
@@ -17,6 +19,26 @@ log = logging.getLogger(__name__)
 # protocol trace in nl2_protocol.py.  These messages show why POC decides that
 # a park reset is or is not required.
 NL2_STATE_DEBUG = True
+
+# Station replies arrive at 4 Hz. Require a recent response for dispatch,
+# departure and completion decisions, but allow a little scheduling margin.
+STATION_OBSERVATION_MAX_AGE_S = 1.5
+# Query the nearest station only when the ridden train stops after departing;
+# normal 4 Hz station polling continues to target its pinned departure station.
+ARRIVAL_NEAREST_POLL_S = 0.5
+
+
+@dataclass(frozen=True)
+class StationObservation:
+    identity: tuple[int, int] | None
+    status: int | None
+    valid: bool
+    received_at: float
+    manual: bool = False
+    occupied: bool = False
+    view_train_here: bool = False
+    other_train_here: bool = False
+    can_dispatch: bool = False
 
 
 class Sim(SimInterface):
@@ -71,7 +93,19 @@ class Sim(SimInterface):
         self._reset_requested_at = 0.0
         self._initial_sync = False
         self._telemetry_valid = False
-        self._leaving_station = False
+        # Ridden-train lifecycle is separate from station occupancy.
+        self._view_train_departed = False
+        self._departure_motion_seen = False
+        self._ride_station = None  # pinned departure coaster/station
+        self._ready_station = None  # confirmed arrival/next departure station
+        self._arrival_probe_since = 0.0
+        self._arrival_probe_last_request = 0.0
+        self._ride_train = None  # (telemetry coaster index, train index)
+        self._ride_dispatch_at = 0.0
+        self._aux_dispatch_authorized = False
+        self._aux_wait_for_station_clear = False
+        self._aux_dispatch_count = 0
+        self._state_events = deque(maxlen=256)
         self._last_station_request = 0.0
         self._last_connect_attempt = 0.0
         self._previous_quaternion = None
@@ -89,6 +123,9 @@ class Sim(SimInterface):
         self._ride_load_pending = False
         self._ride_load_requested_at = 0.0
         self._ride_load_request_id = None
+        self._loaded_index = None  # Set only after the corresponding LOAD_PARK OK.
+        self._loading_index = None
+        self._queued_ride_index = None
         self._estop_recovery_pending = False
 
     def connect(self) -> None:
@@ -118,6 +155,7 @@ class Sim(SimInterface):
         # it need not load the default and then immediately switch parks.
         # Subsequent rides still use the usual select_experience() path.
         # Completion is based on NL2's request response, not a play transition.
+        self._clear_ride_tracking()
         self._selected = int(
             self._startup_ride_index if self._startup_ride_index is not None
             else getattr(config, "DEFAULT_RIDE_INDEX", 0)
@@ -125,6 +163,8 @@ class Sim(SimInterface):
         if not 0 <= self._selected < len(self._rides):
             self._selected = 0
         self._initial_sync = False
+        self._loaded_index = None
+        self._queued_ride_index = None
         self._begin_ride_load(self._selected, startup=True)
 
     def disconnect(self) -> None:
@@ -135,6 +175,7 @@ class Sim(SimInterface):
         self._pause_target = None
         self._dispatch_pending = False
         self._dispatch_station_seen_at = 0.0
+        self._clear_ride_tracking()
         self._reset_requested_at = 0.0
         self._initial_sync = False
         self._connected_sync_started = False
@@ -144,6 +185,9 @@ class Sim(SimInterface):
         self._ride_load_pending = False
         self._ride_load_requested_at = 0.0
         self._ride_load_request_id = None
+        self._loading_index = None
+        self._loaded_index = None
+        self._queued_ride_index = None
         self._estop_recovery_pending = False
         self._reset_transform_tracking()
 
@@ -189,6 +233,15 @@ class Sim(SimInterface):
             self.client.request_telemetry()
             if now - self._last_station_request >= config.STATION_POLL_PERIOD_S:
                 self._request_station_state()
+                if (self.state is ExperienceState.RUNNING
+                        and self._view_train_departed and self._arrival_probe_since):
+                    nearest_at = float(getattr(self.client, "current_station_received_at", 0.0) or 0.0)
+                    candidate = self._station_indices()
+                    if (candidate is not None and self._ride_train is not None
+                            and candidate[0] == self._ride_train[0]
+                            and nearest_at >= self._arrival_probe_since
+                            and candidate != self._ride_station):
+                        self.client.request_station_state(*candidate)
                 self._last_station_request = now
         except ConnectionError:
             self.state = ExperienceState.DISCONNECTED
@@ -232,7 +285,13 @@ class Sim(SimInterface):
             self._last_telemetry_frame = telemetry.frame
         self._data_connected = True
         self._telemetry_valid = True
+        before_state = self.state
         self._update_state(telemetry)
+        if self.state is not before_state:
+            self._state_event("state", previous=before_state.name,
+                              current=self.state.name,
+                              frame=telemetry.frame,
+                              speed=round(float(telemetry.speed), 3))
         return SimSample(
             self._last_transform,
             self.state,
@@ -249,9 +308,15 @@ class Sim(SimInterface):
         # begins only when the actual NL2 DISPATCH command is sent.
         self._pause_target = None
         self._dispatch_pending = True
-        self._dispatch_station_seen_at = float(
-            getattr(self.client, "station_status_received_at", 0.0) or 0.0
-        )
+        # Keep the last confirmed arrival station through dispatch preparation;
+        # it will be pinned as the next departure station at DISPATCH.
+        ready_station = self._ready_station
+        self._clear_ride_tracking()
+        self._ready_station = ready_station
+        self._state_event("ride_dispatch_requested", selected=self._selected)
+        # Compare against the actual intended departure station, not a
+        # different station's latest global reply timestamp.
+        self._dispatch_station_seen_at = self._station_observation().received_at
         self._request_station_state()
         if NL2_STATE_DEBUG:
             log.debug("NL2 dispatch requested: waiting for station preparation")
@@ -261,6 +326,8 @@ class Sim(SimInterface):
         # DISPATCH after the physical activation switch has gone OFF.
         self._dispatch_pending = False
         self._dispatch_station_seen_at = 0.0
+        self._aux_dispatch_authorized = False
+        self._state_event("dispatch_authorization_revoked")
 
     def pause(self) -> None:
         # The tested coaster state machine treats telemetry as authoritative for
@@ -322,7 +389,9 @@ class Sim(SimInterface):
         self._pause_target = None
         self._dispatch_pending = False
         self._dispatch_station_seen_at = 0.0
-        self._leaving_station = False
+        ready_station = self._ready_station if stopped_in_station else None
+        self._clear_ride_tracking()
+        self._ready_station = ready_station
         self._reset_transform_tracking()
 
     def recover_from_estop(self) -> None:
@@ -360,13 +429,24 @@ class Sim(SimInterface):
     def select_experience(self, index: int) -> None:
         if not 0 <= index < len(self._experiences):
             raise IndexError(index)
-        if index == self._selected:
-            return
         if not self._sim_connected():
             raise RuntimeError("NoLimits2 must be connected before changing ride")
+        if self._ride_load_pending:
+            # LOAD_PARK requests are not cancellable. Remember the latest
+            # operator choice and send it once the current request completes.
+            self._selected = index
+            self._queued_ride_index = (
+                None if index == self._loading_index else index
+            )
+            return
+        if index == self._loaded_index:
+            self._selected = index
+            return
         self._begin_ride_load(index, startup=False)
 
     def _begin_ride_load(self, index: int, startup: bool = False) -> None:
+        if self._ride_load_pending:
+            raise RuntimeError("NoLimits2 park load already in progress")
         _name, park_path = self._rides[index]
         if not park_path:
             raise RuntimeError("No NL2 park path configured for this ride")
@@ -382,7 +462,7 @@ class Sim(SimInterface):
                         self._experiences[index])
         self._pause_target = None
         self._dispatch_pending = False
-        self._leaving_station = False
+        self._clear_ride_tracking()
         self._initial_sync = False
         # LOAD_PARK creates a new station/control context.  Any outstanding
         # manual-mode request belongs to the previous park and must not suppress
@@ -394,6 +474,7 @@ class Sim(SimInterface):
         self._park_reset_pending = False
         self._reset_requested_at = 0.0
         self._ride_load_pending = True
+        self._loading_index = index
         self._ride_load_requested_at = time.monotonic()
         self._reset_transform_tracking()
         self._lift_height = float(config.INITIAL_LIFT_HEIGHT_M)
@@ -416,7 +497,8 @@ class Sim(SimInterface):
         elif not sim_connected:
             text = "NoLimits2 socket open; waiting for API response"
         elif self._ride_load_pending:
-            text = f"Loading NoLimits2 ride: {self._experiences[self._selected]}"
+            loading = self._loading_index if self._loading_index is not None else self._selected
+            text = f"Loading NoLimits2 ride: {self._experiences[loading]}"
         elif not data_connected:
             text = "NoLimits2 API connected; waiting for sim data"
         elif self._dispatch_pending:
@@ -483,8 +565,24 @@ class Sim(SimInterface):
             return False
 
         outcome, detail = result
+        completed_index = self._loading_index
         self._ride_load_pending = False
         self._ride_load_request_id = None
+        self._loading_index = None
+        if outcome == "error":
+            # An unsuccessful LOAD_PARK does not establish which park is open.
+            self._loaded_index = None
+        else:
+            self._loaded_index = completed_index
+
+        queued_index = self._queued_ride_index
+        self._queued_ride_index = None
+        if queued_index is not None and queued_index != self._loaded_index:
+            # The startup park must finish before we change to the operator's
+            # requested park. Do not briefly expose the old one as READY.
+            self._begin_ride_load(queued_index, startup=False)
+            return True
+
         if outcome == "error":
             if NL2_STATE_DEBUG:
                 log.debug("NL2 LOAD_PARK failed: %s", detail)
@@ -501,6 +599,11 @@ class Sim(SimInterface):
         self.client.latest_telemetry = None
         self.client.station_status = None
         self.client.station_status_received_at = 0.0
+        # Also clear the per-station cache: a just-loaded park may reuse the
+        # same (coaster, station) numbers as the previous one.
+        invalidate_station = getattr(self.client, "invalidate_current_station", None)
+        if callable(invalidate_station):
+            invalidate_station()
         self._reset_requested_at = 0.0
         self._park_reset_pending = False
         # Normal ride loads may settle in READY while waiting for later operator
@@ -531,107 +634,185 @@ class Sim(SimInterface):
             self._request_station_state()
         return True
 
+    def _state_event(self, event: str, **data) -> None:
+        entry = {"time": time.monotonic(), "event": str(event), **data}
+        self._state_events.append(entry)
+        if NL2_STATE_DEBUG:
+            log.info("NL2 ride-state %s: %s", event, data)
+
+    def consume_state_events(self):
+        """Drain low-rate, actionable state/dispatch events for diagnostics."""
+        events = list(self._state_events)
+        self._state_events.clear()
+        return events
+
+    def _clear_ride_tracking(self):
+        self._view_train_departed = False
+        self._departure_motion_seen = False
+        self._ride_station = None
+        self._ready_station = None
+        self._arrival_probe_since = 0.0
+        self._arrival_probe_last_request = 0.0
+        self._ride_train = None
+        self._ride_dispatch_at = 0.0
+        self._aux_dispatch_authorized = False
+        self._aux_wait_for_station_clear = False
+        self._aux_dispatch_count = 0
+
+    def _station_observation(self, now=None, identity=None):
+        if now is None:
+            now = time.monotonic()
+        if identity is None:
+            identity = self._ride_station or self._ready_station or self._station_indices()
+        getter = getattr(self.client, "station_snapshot", None)
+        if callable(getter):
+            snapshot = getter(identity) if identity is not None else None
+            status, received_at = snapshot if snapshot is not None else (None, 0.0)
+            identity_matches = snapshot is not None
+        else:
+            # Legacy unit-test clients only carry one station observation.
+            status = getattr(self.client, "station_status", None)
+            received_at = float(getattr(self.client, "station_status_received_at", 0.0) or 0.0)
+            actual_identity = getattr(self.client, "station_status_station", None)
+            identity_matches = (identity is not None and
+                (actual_identity == identity if hasattr(self.client, "station_status_station") else True))
+        # Real NL2 responses always have a timestamp; test clients without
+        # identity/timestamp metadata retain the earlier compatibility mode.
+        timestamp_ok = (0 < received_at <= now
+                        and now - received_at <= STATION_OBSERVATION_MAX_AGE_S)
+        if not callable(getter) and not hasattr(self.client, "station_status_station") and received_at == 0:
+            timestamp_ok = True
+        valid = bool(identity_matches and status is not None and timestamp_ok)
+        bits = int(status) if valid else 0
+        occupied = bool(bits & self.TRAIN_IN_STATION_MASK)
+        current = bool(occupied and bits & self.CURRENT_RIDE_TRAIN_MASK)
+        return StationObservation(
+            identity, bits if valid else None, valid, received_at,
+            manual=bool(bits & self.MANUAL_MODE_MASK), occupied=occupied,
+            view_train_here=current,
+            other_train_here=bool(occupied and not current),
+            can_dispatch=bool(bits & self.CAN_DISPATCH_MASK),
+        )
+
+    def _arrival_station_observation(self, now):
+        """Return only a fresh, identified observation of the stopped view train.
+
+        The nearest-station query is independent of pinned departure-station
+        polling. The arrival response must follow this stationary episode and
+        the station-state reply must follow the nearest-station response.
+        """
+        if not self._arrival_probe_since or self._ride_train is None:
+            return None
+        station_time = float(getattr(self.client, "current_station_received_at", 0.0) or 0.0)
+        if (station_time < self._arrival_probe_since or station_time > now
+                or now - station_time > STATION_OBSERVATION_MAX_AGE_S):
+            return None
+        identity = self._station_indices()
+        if identity is None or identity[0] != self._ride_train[0]:
+            return None
+        obs = self._station_observation(now=now, identity=identity)
+        if not (obs.valid and obs.view_train_here
+                and obs.received_at >= station_time):
+            return None
+        return obs
+
+    def _complete_view_train_return(self, obs, telemetry):
+        departure = self._ride_station
+        self._aux_dispatch_authorized = False
+        self._manual_mode_requested = False
+        self._ready_station = obs.identity
+        self._ride_station = None
+        self._arrival_probe_since = 0.0
+        self._arrival_probe_last_request = 0.0
+        self.state = ExperienceState.READY
+        self._state_event("view_train_returned", station=obs.identity,
+                          departure_station=departure, frame=telemetry.frame,
+                          speed=float(telemetry.speed))
+        # The next dispatch must use the station holding the returned train.
+        # If it is not in manual mode, normal READY handling will request it.
+        self._request_station_state()
+
+    def _view_train_identity_matches(self, telemetry):
+        if self._ride_train is None:
+            return False
+        return (int(telemetry.coaster_index), int(telemetry.train)) == self._ride_train
+
+    def _consider_auxiliary_dispatch(self, obs, telemetry):
+        if not (self._aux_dispatch_authorized
+                and self._view_train_departed
+                and self.state is ExperienceState.RUNNING
+                and self._pause_target is None
+                and not telemetry.paused
+                and self._view_train_identity_matches(telemetry)
+                and obs.valid and obs.manual):
+            return
+        if not obs.occupied:
+            if self._aux_wait_for_station_clear:
+                self._state_event("aux_station_cleared", station=obs.identity)
+            self._aux_wait_for_station_clear = False
+            return
+        if (self._aux_wait_for_station_clear or not obs.other_train_here
+                or not obs.can_dispatch or obs.identity != self._ride_station):
+            return
+        # The command targets the pinned departure station, NOT the nearest
+        # station to the moving ride train. One send per observed occupancy;
+        # require a fresh EMPTY station observation before another dispatch.
+        self.client.dispatch(*self._ride_station)
+        self._aux_wait_for_station_clear = True
+        self._aux_dispatch_count += 1
+        self._state_event("aux_dispatch_sent", station=self._ride_station,
+                          status=f"0x{obs.status:08x}",
+                          count=self._aux_dispatch_count)
+
     def _update_state(self, telemetry: NL2Telemetry) -> None:
-        in_station = self._train_in_station()
+        obs = self._station_observation()
         stationary = abs(float(telemetry.speed)) < config.STATIONARY_SPEED_MPS
 
-        if self._leaving_station and not in_station:
-            self._leaving_station = False
-
-        # The tested coaster implementation keeps NL2 in manual station mode.
-        # This is essential: without bit_manual set, NL2 may auto-dispatch a
-        # train at startup or immediately after RESET_PARK.  Never declare the
-        # ride READY, and never send a pending park reset, until manual mode is
-        # confirmed by station state.
-        if self.client.station_status is not None:
-            if not self._manual_mode_is_set():
+        # Manual mode is required for explicit dispatch; do not let a cached
+        # station report force a mode command to the wrong station.
+        if obs.valid:
+            if not obs.manual and self.state is not ExperienceState.RUNNING:
                 self._request_manual_mode()
-                # Manual-mode setup alone is not a reset operation.  Keep a
-                # freshly loaded ride in the stable READY/waiting condition;
-                # actual activation/recovery reset paths explicitly enter
-                # RESETTING via _start_park_reset().
                 return
-            if self._manual_mode_requested:
-                if NL2_STATE_DEBUG:
-                    log.debug("NL2 manual mode confirmed by station state")
+            if obs.manual and self._manual_mode_requested:
                 self._manual_mode_requested = False
             if self._park_reset_pending:
                 self._send_park_reset()
                 return
 
-        # Initial connection only synchronizes with NL2. Connecting POC must
-        # never alter the current ride. Park reset belongs exclusively to
-        # prepare_for_activation(), where the operator has requested platform
-        # activation/recovery.
         if self._initial_sync:
-            if self.client.station_status is None:
+            if not obs.valid:
                 return
             self._initial_sync = False
-            if NL2_STATE_DEBUG:
-                status = int(self.client.station_status)
-                log.debug(
-                    "NL2 initial sync: speed=%.3f stationary=%s station=0x%08x "
-                    "train_bit=%s current_train_bit=%s in_station=%s",
-                    float(telemetry.speed),
-                    stationary,
-                    status,
-                    bool(status & 0x0800),
-                    bool(status & 0x1000),
-                    in_station,
-                )
-            if stationary and in_station and self._manual_mode_is_set():
-                self.state = ExperienceState.READY
-                if NL2_STATE_DEBUG:
-                    log.debug("NL2 initial sync: train confirmed stopped in station/manual -> READY")
-            else:
-                # We know NL2 is connected and have synchronized its current
-                # condition, but do not disturb a ride already in progress.
-                # Activation will decide whether RESET_PARK is required.
-                self.state = ExperienceState.READY
-                if NL2_STATE_DEBUG:
-                    log.debug("NL2 initial sync: ride not ready in station -> no reset until activation")
+            # READY is a waiting state. Only is_ready_to_start() grants
+            # permission to dispatch the occupied (view) train.
+            self.state = ExperienceState.READY
+            self._state_event("initial_sync", view_train_here=obs.view_train_here,
+                              stationary=stationary, status=f"0x{obs.status:08x}")
             return
 
         if self.state is ExperienceState.RESETTING:
-            # Waiting only for manual-mode confirmation is also represented as
-            # RESETTING.  If no RESET_PARK has been sent and no reset is
-            # pending, stationary + in-station + manual mode is sufficient to
-            # become READY.
             if self._reset_requested_at <= 0.0 and not self._park_reset_pending:
-                if stationary and in_station and self._manual_mode_is_set():
+                if stationary and obs.valid and obs.view_train_here and obs.manual:
                     self.state = ExperienceState.READY
                     self._estop_recovery_pending = False
                 return
-
-            # A park reset can temporarily remove telemetry/control
-            # availability.  Do not accept cached pre-reset station/telemetry
-            # as completion; both observations must have arrived after the
-            # reset command.
-            station_time = float(getattr(self.client, "station_status_received_at", 0.0) or 0.0)
-            if (
-                self._reset_requested_at > 0.0
-                and telemetry.received_at >= self._reset_requested_at
-                and station_time >= self._reset_requested_at
-                and stationary
-                and in_station
-                and self._manual_mode_is_set()
-            ):
+            if (self._reset_requested_at > 0.0
+                    and telemetry.received_at >= self._reset_requested_at
+                    and obs.valid and obs.received_at >= self._reset_requested_at
+                    and stationary and obs.view_train_here and obs.manual):
                 self.state = ExperienceState.READY
                 self._reset_requested_at = 0.0
                 self._estop_recovery_pending = False
             return
 
-        # Dispatch preparation is asynchronous. Remain READY until the actual
-        # NL2 DISPATCH command has been sent; normal telemetry state processing
-        # must not reinterpret the waiting state meanwhile.
         if self._dispatch_pending:
             return
 
-        # Pause/unpause commands are asynchronous and telemetry is authoritative.
-        # Keep the existing logical state until NL2 reports the requested state.
         if self._pause_target is not None:
             if telemetry.paused == self._pause_target:
-                self.state = ExperienceState.PAUSED if self._pause_target else ExperienceState.RUNNING
+                self.state = (ExperienceState.PAUSED if self._pause_target
+                              else ExperienceState.RUNNING)
                 self._pause_target = None
             return
 
@@ -644,30 +825,64 @@ class Sim(SimInterface):
             self.state = ExperienceState.RUNNING
 
         if self.state is ExperienceState.RUNNING:
-            if stationary and in_station and not self._leaving_station:
-                self.state = ExperienceState.READY
+            # The ridden train is identified by telemetry, not by occupancy of
+            # some station. Departure/auxiliary dispatch stay pinned to the
+            # departure station even while checking a different arrival one.
+            if not self._view_train_identity_matches(telemetry):
+                return
+            if not stationary:
+                self._departure_motion_seen = True
+                self._arrival_probe_since = 0.0
+                self._arrival_probe_last_request = 0.0
+            if (not self._view_train_departed and obs.valid
+                    and self._departure_motion_seen
+                    and obs.received_at > self._ride_dispatch_at
+                    and not obs.view_train_here):
+                self._view_train_departed = True
+                self._state_event("view_train_departed", station=obs.identity,
+                                  frame=telemetry.frame, train=self._ride_train)
+
+            if self._view_train_departed and stationary:
+                # Fast path: normal coaster returns to its departure station.
+                if obs.valid and obs.view_train_here:
+                    self._complete_view_train_return(obs, telemetry)
+                    return
+                # Multi-station coaster: request the station NEAREST THE VIEW
+                # TRAIN, then require a separate identified STATION_STATE
+                # response before declaring a completed ride.
+                now = time.monotonic()
+                if not self._arrival_probe_since:
+                    self._arrival_probe_since = now
+                    self._state_event("arrival_station_probe_started",
+                                      departure_station=self._ride_station)
+                if (not self._arrival_probe_last_request
+                        or now - self._arrival_probe_last_request >= ARRIVAL_NEAREST_POLL_S):
+                    request = getattr(self.client, "request_current_coaster_and_station", None)
+                    if callable(request):
+                        request()
+                        self._arrival_probe_last_request = now
+                arrived = self._arrival_station_observation(now)
+                if arrived is not None:
+                    self._complete_view_train_return(arrived, telemetry)
+                    return
+
+            self._consider_auxiliary_dispatch(obs, telemetry)
             return
 
-        # READY is an operator waiting state.  Match the proven early coaster
-        # controller: telemetry must never promote READY to RUNNING.  RUNNING is
-        # entered only by an explicit POC dispatch request (or by unpausing a
-        # ride that POC already knows is PAUSED).  This prevents activation,
-        # startup synchronization, or reset completion from starting a ride.
-        if stationary and in_station:
-            self.state = ExperienceState.READY
+        # READY is an operator waiting state, not a telemetry-driven RUNNING
+        # transition. In particular, another train stopped in station never
+        # changes the ridden train's lifecycle.
 
     def _service_dispatch_preparation(self) -> None:
         """Non-blocking equivalent of the old prepare_for_dispatch() loop."""
         if not self._dispatch_pending or not self._sim_connected():
             return
 
-        status = self.client.station_status
-        station_time = float(getattr(self.client, "station_status_received_at", 0.0) or 0.0)
-        if status is None or station_time <= self._dispatch_station_seen_at:
+        obs = self._station_observation()
+        if not obs.valid or obs.received_at <= self._dispatch_station_seen_at:
             return
-
-        self._dispatch_station_seen_at = station_time
-        status = int(status)
+        self._dispatch_station_seen_at = obs.received_at
+        status = obs.status
 
         if not (status & self.MANUAL_MODE_MASK):
             self._request_manual_mode()
@@ -691,11 +906,29 @@ class Sim(SimInterface):
 
         if status & self.CAN_DISPATCH_MASK:
             if NL2_STATE_DEBUG:
-                log.debug("NL2 dispatch preparation complete: sending DISPATCH")
+                log.debug("NL2 dispatch preparation complete: verifying view train before DISPATCH")
+            obs = self._station_observation()
+            tm = self.client.latest_telemetry
+            if not (obs.valid and obs.view_train_here and tm is not None
+                    and tm.in_play_mode and obs.identity is not None
+                    and int(tm.coaster_index) == obs.identity[0]):
+                self._request_station_state()
+                return
+            self._ride_station = obs.identity
+            self._ready_station = None
+            self._ride_train = (int(tm.coaster_index), int(tm.train))
+            self._view_train_departed = False
+            self._departure_motion_seen = False
+            self._aux_wait_for_station_clear = False
+            # Authorise auxiliary departure only AFTER the primary command has
+            # actually been transmitted. A socket error cannot arm that path.
             self._dispatch()
+            self._ride_dispatch_at = time.monotonic()
+            self._aux_dispatch_authorized = True
             self._dispatch_pending = False
             self.state = ExperienceState.RUNNING
-            self._leaving_station = True
+            self._state_event("view_train_dispatched", station=self._ride_station,
+                              train=self._ride_train, status=f"0x{obs.status:08x}")
             self._request_station_state()
             return
 
@@ -708,8 +941,10 @@ class Sim(SimInterface):
         # operations.  Do the same here so RESET_PARK(False) cannot enable an
         # automatic station dispatch.
         self.state = ExperienceState.RESETTING
+        self._clear_ride_tracking()
         self._reset_requested_at = 0.0
         self._park_reset_pending = True
+        self._state_event("park_reset_requested")
 
         telemetry = self.client.latest_telemetry
         if telemetry is not None and telemetry.in_play_mode:
@@ -726,6 +961,7 @@ class Sim(SimInterface):
         if NL2_STATE_DEBUG:
             log.debug("NL2 manual mode confirmed; sending RESET_PARK start_paused=False")
         self.client.reset_park(False)
+        self._state_event("park_reset_sent")
         invalidate_station = getattr(self.client, "invalidate_current_station", None)
         if callable(invalidate_station):
             invalidate_station()
@@ -743,7 +979,7 @@ class Sim(SimInterface):
         return int(coaster), int(station)
 
     def _request_station_state(self) -> None:
-        indices = self._station_indices()
+        indices = self._ride_station or self._ready_station or self._station_indices()
         if indices is None:
             request_identity = getattr(self.client, "request_current_coaster_and_station", None)
             if callable(request_identity):
@@ -752,7 +988,7 @@ class Sim(SimInterface):
         self.client.request_station_state(*indices)
 
     def _set_manual_mode(self, enabled: bool) -> bool:
-        indices = self._station_indices()
+        indices = self._ride_station or self._ready_station or self._station_indices()
         if indices is None:
             self._request_station_state()
             return False
@@ -760,22 +996,21 @@ class Sim(SimInterface):
         return True
 
     def _set_platform(self, lowered: bool) -> None:
-        indices = self._station_indices()
+        indices = self._ride_station or self._ready_station or self._station_indices()
         if indices is None:
             self._request_station_state()
             return
         self.client.set_platform(bool(lowered), *indices)
 
     def _dispatch(self) -> None:
-        indices = self._station_indices()
+        indices = self._ride_station or self._ready_station or self._station_indices()
         if indices is None:
             self._request_station_state()
             return
         self.client.dispatch(*indices)
 
     def _manual_mode_is_set(self) -> bool:
-        status = self.client.station_status
-        return status is not None and bool(int(status) & self.MANUAL_MODE_MASK)
+        return self._station_observation().manual
 
     def _request_manual_mode(self) -> None:
         if self._manual_mode_requested:
@@ -797,7 +1032,7 @@ class Sim(SimInterface):
             return False
         if abs(float(telemetry.speed)) >= config.STATIONARY_SPEED_MPS:
             return False
-        return self._train_in_station()
+        return self._station_observation().view_train_here
 
     def _log_reset_decision(self, source: str, stopped_in_station: bool) -> None:
         telemetry = self.client.latest_telemetry
@@ -846,8 +1081,11 @@ class Sim(SimInterface):
         roll, pitch, _yaw = self._quaternion_to_rpy(*quaternion)
         # NL2's signed bank angle is opposite the platform rider-frame Roll:
         # a right-side-down NL2 bank must become positive platform Roll.
-        roll = -roll / math.pi
-        pitch = -pitch * 0.6
+        # The angular scales restore the legacy NL2 gain=0.6 response once
+        # TELEMETRY_INTENSITY_FACTOR is applied below. Do not change the
+        # physical Roll sign or the MDX-specific kinematic axis convention.
+        roll = -roll / math.pi * config.ROLL_SCALE
+        pitch = -pitch * 0.6 * config.PITCH_SCALE
 
         yaw_rate = self._yaw_rate_from_quaternion(quaternion, tm.received_at)
         yaw_rate *= float(config.YAW_RATE_GAIN)

@@ -1,4 +1,68 @@
-# changelog.txt ver 9
+# changelog.txt ver 14
+v171 | NoLimits2 alternate-station return and next-ride dispatch
+------------------------------------------------------------------
+- Preserve v170 pinned departure-station monitoring for auxiliary-train dispatch
+  while allowing the ridden train to finish at a different, nearby station.
+- Probe NL2's current coaster/nearest station only after the ridden train has
+  departed and stopped; require a fresh station-status reply linked to that
+  station and the CURRENT_RIDE_TRAIN flag before declaring READY.
+- Retain a confirmed arrival station as the next dispatch station, supporting
+  alternating-station parks such as Grand National without ride-specific rules.
+- Cache station responses by (coaster, station) with request IDs. Nearest-station
+  discovery no longer clears in-flight departure-station replies, and stale or
+  unsolicited nearest-station responses are ignored.
+- Preserve v170 auxiliary dispatch, pause/deactivation safeguards, manual-mode
+  dispatch requirements and same-station return behaviour.
+- The existing capture state monitor records departure and arrival station IDs
+  in the view_train_returned event details; no CSV schema change was needed.
+- Add alternating-station, stale-reply, wrong-train and two-cycle regression
+  coverage. No changes to SHS, motion processing, kinematics or Festo output.
+
+v170 | NoLimits2 train-aware lifecycle and multi-train auxiliary dispatch
+------------------------------------------------------------------
+- Keep the ridden train's departure/return separate from other station occupancy.
+  Require fresh station-state replies bound to the requested coaster/station and
+  the current ride-view train identity before ride completion.
+- Pin departure station during a ride; dispatch another train only while our
+  ride is RUNNING, unpaused and authorised, once per occupied-station interval.
+  Never dispatch automatically when POC is deactivated or E-stopped.
+- Use ridden-train-only readiness for activation and park-reset completion.
+- Extend capture_nl2_rides with a --state-monitor mode and a timestamped
+  _state_events.csv for state and station changes; regular captures also get
+  the sidecar without changing the existing telemetry CSV schema.
+- Add multi-train tests and update prior state/protocol tests to require
+  identified station responses and the ridden train's confirmed departure.
+
+v169 | NoLimits2 running ride completion requires current ride train
+------------------------------------------------------------------
+- Prevent Tilt Coaster from terminating when it stops on the tilt section
+  while a different train occupies a station (observed status 0x00000856).
+- Only RUNNING to READY requires both NL2 TRAIN_IN_STATION (0x0800) and
+  CURRENT_RIDE_TRAIN (0x1000), as well as the existing stationary and
+  leaving-station checks. Startup, reset and dispatch readiness are unchanged.
+- Add focused regression tests for other-train, returning-train, moving,
+  and station-departure conditions.
+
+v168 | NoLimits2 requested versus confirmed park selection
+------------------------------------------------------------------
+- Track selected (requested) and last successfully loaded NoLimits2 parks separately.
+- Queue an operator park selection until an outstanding startup LOAD_PARK completes;
+  never send two overlapping park loads.
+- Do not treat a failed LOAD_PARK as confirmed; permit retrying the same park.
+- Preserve the existing default startup selection, SHS protocol and controls.
+
+v167 | NoLimits2 legacy Roll/Pitch amplitude restoration
+------------------------------------------------------------------
+- Restore NoLimits2 Roll and Pitch amplitudes to match the original
+  Transform(gain=0.6) response. The global NL2 input factor remains 0.4;
+  explicit axis multipliers (Roll 1.5, Pitch 2.5) compensate only those axes.
+- Preserve the v166 corrected Roll direction and MDX CAD/valve ordering.
+- Add synthetic-quaternion regression tests for +/-Roll and +/-Pitch, the
+  unchanged Surge/Sway/Heave/Yaw inputs, and the effective legacy gain.
+- Update the MDX v166 Roll regression expectation for the new angular gain.
+- No changes to telemetry output protocol, POC intensity controls, shared
+  kinematics, Visualizer, Pose Sender or Festo control.
+
 v166 | MDX CAD-indexed channels and rider-frame Roll
 ------------------------------------------------------------------
 - MDX kinematics now uses a platform-specific Roll sign: positive Roll lowers

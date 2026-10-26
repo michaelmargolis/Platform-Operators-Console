@@ -1,4 +1,4 @@
-#poc_core.py  ver 51
+#poc_core.py  ver 52
 from __future__ import annotations
 
 import logging
@@ -432,11 +432,12 @@ class PocCore(QtCore.QObject):
         self._dispatch_unpark_pending = False
         self._ride_dispatched = False
         self._ride_has_run = False
-        # Abort an NL2 dispatch that was accepted but not yet transmitted.
-        if was_dispatching:
-            cancel = getattr(self.sim, "cancel_pending_dispatch", None)
-            if callable(cancel):
-                cancel()
+        # Revoke auxiliary-train dispatch permission immediately, including
+        # during an asynchronous pause/E-stop transition. Other simulator
+        # adapters either implement only pending-dispatch cancellation or no-op.
+        cancel = getattr(self.sim, "cancel_pending_dispatch", None)
+        if callable(cancel):
+            cancel()
         if not idle_at_station and self.platform.state is PlatformState.ACTIVATED:
             self._estop_latched = True
             self._estop_recovery_active = False

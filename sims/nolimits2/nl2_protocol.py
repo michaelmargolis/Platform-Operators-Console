@@ -1,4 +1,4 @@
-#nl2_protocol.py  ver 18
+#nl2_protocol.py  ver 20
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -133,6 +133,12 @@ class NL2Protocol:
         self.current_station_received_at = 0.0
         self.station_status: Optional[int] = None
         self.station_status_received_at = 0.0
+        self.station_status_station = None  # coaster/station identified by reply request ID
+        self._station_requests = {}
+        # Per-station responses are required while monitoring the pinned
+        # departure station and discovering a different arrival station.
+        self._station_status_by_identity = {}
+        self._nearest_station_requests = {}
         self.last_response_at = 0.0
         self.last_version_response_at = 0.0
         self.last_version_request_at = 0.0
@@ -227,7 +233,16 @@ class NL2Protocol:
         self._send(self._simple_message(self.N_MSG_GET_TELEMETRY))
 
     def request_current_coaster_and_station(self) -> None:
-        self._send(self._simple_message(self.N_MSG_GET_CURRENT_COASTER_AND_NEAREST_STATION))
+        # Bind the nearest-station response to this request, as we already do
+        # for GET_STATION_STATE. Old responses cannot replace the current query.
+        request_id = self._request_id()
+        self._nearest_station_requests[request_id] = time.monotonic()
+        while len(self._nearest_station_requests) > 64:
+            self._nearest_station_requests.pop(next(iter(self._nearest_station_requests)))
+        packet = struct.pack(">cHIHc", b"N",
+                             self.N_MSG_GET_CURRENT_COASTER_AND_NEAREST_STATION,
+                             request_id, 0, b"L")
+        self._send(packet)
 
     def invalidate_current_station(self) -> None:
         self.current_coaster_index = None
@@ -235,10 +250,28 @@ class NL2Protocol:
         self.current_station_received_at = 0.0
         self.station_status = None
         self.station_status_received_at = 0.0
+        self.station_status_station = None
+        self._station_requests.clear()
+        self._station_status_by_identity.clear()
+        self._nearest_station_requests.clear()
+
+    def station_snapshot(self, identity):
+        """Return (status, monotonic reception time) for an identified station."""
+        return self._station_status_by_identity.get(tuple(identity))
 
     def request_station_state(self, coaster: int = 0, station: int = 0) -> None:
-        data = struct.pack(">ii", coaster, station)
-        self._send(self._message(self.N_MSG_GET_STATION_STATE, data))
+        # Requests may overlap. Match the reply ID to its requested station;
+        # the most recently cached nearest station is NOT proof of identity.
+        identity = (int(coaster), int(station))
+        data = struct.pack(">ii", *identity)
+        request_id = self._request_id()
+        self._station_requests[request_id] = identity
+        # Bound outstanding polls if the simulator stops replying.
+        while len(self._station_requests) > 64:
+            self._station_requests.pop(next(iter(self._station_requests)))
+        packet = struct.pack(">cHIH", b"N", self.N_MSG_GET_STATION_STATE,
+                             request_id, len(data)) + data + b"L"
+        self._send(packet)
 
     def set_manual_mode(self, enabled: bool = True, coaster: int = 0, station: int = 0) -> None:
         # Match the tested attraction/manual-mode interface: coaster index,
@@ -456,14 +489,24 @@ class NL2Protocol:
             self.latest_telemetry = NL2Telemetry(*values, received_at=now)
             self.last_error = ""
         elif msg_id == self.N_MSG_INT_VALUE_PAIR and len(data) >= 8:
+            if self._nearest_station_requests.pop(request_id, None) is None:
+                # A delayed or unsolicited nearest-station response must not
+                # replace the station selected for the current ridden train.
+                return
             self.current_coaster_index, self.current_station_index = struct.unpack(">ii", data[:8])
             self.current_station_received_at = now
-            self.station_status = None
-            self.station_status_received_at = 0.0
+            # Crucially, do not invalidate outstanding station-state polls or
+            # their cache: the departure and arrival stations are independent.
             self.last_error = ""
         elif msg_id == self.N_MSG_STATION_STATE and len(data) >= 4:
+            station_identity = self._station_requests.pop(request_id, None)
+            if station_identity is None:
+                # Never let an unsolicited or old response be used to dispatch.
+                return
             self.station_status = struct.unpack(">I", data[:4])[0]
+            self.station_status_station = station_identity
             self.station_status_received_at = now
+            self._station_status_by_identity[station_identity] = (self.station_status, now)
             self.last_error = ""
         elif msg_id == self.N_MSG_ERROR:
             self.last_error = data.decode("utf-8", errors="replace")

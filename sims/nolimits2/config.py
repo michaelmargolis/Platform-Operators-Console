@@ -1,4 +1,4 @@
-#config.py  ver 14
+#config.py  ver 15
 # Simple NoLimits2 prototype configuration.
 
 PORT = 15151
@@ -27,6 +27,17 @@ FAN_CONFIG = {
 }
 INITIAL_LIFT_HEIGHT_M = 32.0
 TELEMETRY_INTENSITY_FACTOR = 0.4
+
+# Restore the angular response of the legacy NoLimits2 Transform(gain=0.6).
+# The current NL2 adapter applies TELEMETRY_INTENSITY_FACTOR to every ordinary
+# channel AFTER converting attitude to normalized Roll/Pitch. These factors
+# compensate only those two axes so the effective gains are once again:
+#     Roll:  -angle / pi * 0.6
+#     Pitch: -angle * 0.6
+# They apply before the final [-1, +1] clamp, and do not change the sign fix,
+# other axes, downstream POC operator intensity, gains, or workspace limits.
+ROLL_SCALE = 1.5
+PITCH_SCALE = 2.5
 
 # Session-only NL2 heave choices. Keep the established legacy cue as the
 # startup default; the operator can also choose Vertical G or Normalized Height.
@@ -84,7 +95,6 @@ RIDES = (
     ("Mdx Logo Coaster", f"{BASE_RIDE_PATH}/MdxLogoCoaster/MdxLogoCoaster.nl2park"),
     ("Blackbird", f"{BASE_RIDE_PATH}/Blackbird/Blackbird.nl2park"),
     ("Fenrir", f"{BASE_RIDE_PATH}/Fenrir/Fenrir.nl2park"),
-    ("Flying Beast", f"{BASE_RIDE_PATH}/Flying Beast/Flying Beast.nl2park"),
     ("Forest Mountain Park", f"{BASE_RIDE_PATH}/Forest Mountain Park/Forest Mountain Park.nl2park"),
     ("GrandNational", f"{BASE_RIDE_PATH}/GrandNational/GrandNational.nl2park"),
     ("Hybris", f"{BASE_RIDE_PATH}/Hybris/Hybris.nl2park"),

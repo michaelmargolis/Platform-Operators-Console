@@ -1,4 +1,4 @@
-#test_nolimits2_adapter.py  ver 29
+#test_nolimits2_adapter.py  ver 31
 from __future__ import annotations
 
 import logging
@@ -695,8 +695,12 @@ def test_protocol_command_ids_payloads_and_telemetry_decode():
     assert protocol.latest_telemetry.in_play_mode
 
     before = time.monotonic()
-    protocol._process_message(NL2Protocol.N_MSG_STATION_STATE, 2, struct.pack(">I", TRAIN_IN_STATION))
+    protocol.request_station_state(0, 0)
+    station_request_id = struct.unpack(">I", protocol._sock.packets[-1][3:7])[0]
+    protocol._process_message(NL2Protocol.N_MSG_STATION_STATE, station_request_id,
+                              struct.pack(">I", TRAIN_IN_STATION))
     assert protocol.station_status == TRAIN_IN_STATION
+    assert protocol.station_status_station == (0, 0)
     assert protocol.station_status_received_at >= before
 
 
@@ -720,7 +724,8 @@ def test_protocol_discovers_current_coaster_and_station_and_uses_pair():
     packet = protocol._sock.packets[-1]
     assert struct.unpack(">H", packet[1:3])[0] == protocol.N_MSG_GET_CURRENT_COASTER_AND_NEAREST_STATION
 
-    protocol._process_message(protocol.N_MSG_INT_VALUE_PAIR, 1, struct.pack(">ii", 3, 2))
+    request_id = struct.unpack(">I", packet[3:7])[0]
+    protocol._process_message(protocol.N_MSG_INT_VALUE_PAIR, request_id, struct.pack(">ii", 3, 2))
     assert protocol.current_coaster_index == 3
     assert protocol.current_station_index == 2
 
@@ -1071,7 +1076,7 @@ def test_estop_recovery_clears_stale_manual_request_and_can_reissue_manual_mode(
     assert sim._estop_recovery_pending is False
 
 
-def test_estop_recovery_completes_with_documented_train_in_station_bit_only():
+def test_estop_recovery_requires_view_train_even_if_other_train_in_station():
     client = FakeNL2Client()
     sim = Sim(client=client)
     connect_and_service(sim)
@@ -1086,8 +1091,8 @@ def test_estop_recovery_completes_with_documented_train_in_station_bit_only():
     sim.read()
     assert sim.state is ExperienceState.RESETTING
 
-    # Recovery first enters the normal unpaused reset path.  NL2 documentation
-    # defines bit 11 alone as "a train is inside station"; bit 12 is not needed.
+    # Any train in station is sufficient to initiate reset, but NOT to confirm
+    # ride-view train readiness after the reset finishes.
     set_station(client, MANUAL_MODE | TRAIN_IN_STATION_BIT)
     fresh(client, speed=0.0, state=3)
     sim.read()
@@ -1095,6 +1100,12 @@ def test_estop_recovery_completes_with_documented_train_in_station_bit_only():
     assert sim.state is ExperienceState.RESETTING
 
     set_station(client, MANUAL_MODE | TRAIN_IN_STATION_BIT)
+    fresh(client, speed=0.0, state=3)
+    sim.read()
+    assert sim.state is ExperienceState.RESETTING
+    assert sim.is_ready_to_start() is False
+
+    set_station(client, TRAIN_IN_STATION)
     fresh(client, speed=0.0, state=3)
     sim.read()
     assert sim.state is ExperienceState.READY

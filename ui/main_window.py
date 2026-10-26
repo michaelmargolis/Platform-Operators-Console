@@ -1,4 +1,4 @@
-#main_window.py  ver 70
+#main_window.py  ver 71
 from __future__ import annotations
 
 import csv
@@ -607,7 +607,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._updating_experience_combo or index < 0:
             return
         if index == self._confirmed_experience_index:
-            return
+            # The combo tracks the requested selection, not LOAD_PARK success.
+            # Allow an operator to retry that same park after a failed load.
+            sim = self.core.sim
+            if not (hasattr(sim, "_loaded_index")
+                    and not getattr(sim, "_ride_load_pending", False)
+                    and getattr(sim, "_loaded_index") != index):
+                return
 
         name = self.combo_experience.itemText(index)
         noun = getattr(self.core.sim, "experience_noun", "ride")

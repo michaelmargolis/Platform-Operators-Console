@@ -1,4 +1,4 @@
-# capture_nl2_rides.py  ver 4
+# capture_nl2_rides.py  ver 5
 """Capture repeatable NoLimits2 rides without launching POC or platform outputs.
 
 Run ``python tools/capture_nl2_rides.py --list`` to see configured rides.
@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 from datetime import datetime
 from pathlib import Path
 import re
@@ -46,6 +47,64 @@ COLUMNS = (
 )
 
 
+STATE_EVENT_COLUMNS = (
+    "wall_time", "elapsed_s", "event", "state", "speed_mps", "station",
+    "station_status", "view_train", "details",
+)
+
+
+class RideStateMonitor:
+    """Low-rate transition log, no Festo/platform control and no polling thread."""
+
+    def __init__(self, stream, ride_name):
+        self.writer = csv.DictWriter(stream, fieldnames=STATE_EVENT_COLUMNS)
+        self.writer.writeheader()
+        self.start = time.monotonic()
+        self.ride_name = ride_name
+        self.last_key = None
+        self.last_state = None
+
+    def _log(self, sim, event, tm=None, details=""):
+        obs = sim._station_observation()
+        elapsed = time.monotonic() - self.start
+        state = sim.state.name
+        speed = "" if tm is None else f"{float(tm.speed):.3f}"
+        station = "" if obs.identity is None else f"{obs.identity[0]}/{obs.identity[1]}"
+        status = "" if obs.status is None else f"0x{obs.status:08x}"
+        view_train = "" if tm is None else f"{tm.coaster_index}/{tm.train}"
+        self.writer.writerow(dict(
+            wall_time=datetime.now().isoformat(timespec="milliseconds"),
+            elapsed_s=f"{elapsed:.3f}", event=event, state=state,
+            speed_mps=speed, station=station, station_status=status,
+            view_train=view_train, details=details,
+        ))
+        print(f"[STATE {elapsed:7.2f}s] {self.ride_name}: {event}: "
+              f"state={state} speed={speed or '?'} station={station or '?'} "
+              f"flags={status or '?'} {details}", flush=True)
+
+    def observe(self, sim, tm):
+        # Events are pushed by the NL2 adapter at dispatch/reset/departure
+        # transitions, so they are not lost if the final state is unchanged.
+        for event in sim.consume_state_events():
+            details = {k: v for k, v in event.items() if k not in ("time", "event")}
+            self._log(sim, event["event"], tm, json.dumps(details, sort_keys=True))
+        obs = sim._station_observation()
+        station_key = (
+            obs.identity, obs.status if obs.valid else None, obs.valid,
+            obs.occupied, obs.view_train_here, obs.can_dispatch,
+        )
+        if station_key != self.last_key:
+            self.last_key = station_key
+            self._log(sim, "station_changed", tm,
+                      f"valid={obs.valid} occupied={obs.occupied} "
+                      f"view_train={obs.view_train_here} "
+                      f"other_train={obs.other_train_here} "
+                      f"can_dispatch={obs.can_dispatch} manual={obs.manual}")
+        if sim.state != self.last_state:
+            self.last_state = sim.state
+            self._log(sim, "observed_state", tm)
+
+
 def selected_indices(spec: str, rides: tuple[tuple[str, str], ...]) -> list[int]:
     """Accept 1-based ride indices, exact ride names, or 'all'."""
     if not spec.strip():
@@ -73,6 +132,9 @@ def pump(sim: Sim, last_frame=None):
     sim.service()
     sample = sim.read()
     tm = sim.client.latest_telemetry
+    observer = getattr(sim, "_capture_state_monitor", None)
+    if observer is not None:
+        observer.observe(sim, tm)
     if not sample.telemetry_valid or tm is None or tm.frame == last_frame:
         return sample, None
     return sample, tm
@@ -196,60 +258,85 @@ def start_ride(sim: Sim, target: int, timeout_s: float, interval_s: float):
 
 def capture_one(sim: Sim, ride_index: int, repeat: int, args, rides):
     ride_name, _ = rides[ride_index]
-    filename = f"{safe_name(ride_name)}_repeat{repeat:02d}_{datetime.now():%Y%m%d_%H%M%S}.csv"
+    stem = f"{safe_name(ride_name)}_repeat{repeat:02d}_{datetime.now():%Y%m%d_%H%M%S}"
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    path = args.output_dir / filename
+    path = args.output_dir / f"{stem}.csv"
+    event_path = args.output_dir / f"{stem}_state_events.csv"
+    monitor_only = bool(getattr(args, "state_monitor", False))
     sample_count = 0
     last_frame = None
     last_source_time = None
     started_at = None
     left_station = False
     period_s = 1.0 / args.hz
-    try:
-        print(f"Preparing {ride_name}, repeat {repeat}; NL2 at {args.host}:{config.PORT}", flush=True)
-        start_ride(sim, ride_index, args.prepare_timeout, period_s)
-        print("Dispatched; recording...", flush=True)
-        started_at = time.monotonic()
-        next_poll = started_at
-        with path.open("w", newline="", encoding="utf-8") as stream:
-            writer = csv.DictWriter(stream, fieldnames=COLUMNS)
-            writer.writeheader()
-            while True:
-                now = time.monotonic()
-                if now - started_at > args.max_duration:
-                    raise TimeoutError(f"Ride did not return to station after {args.max_duration:g}s")
-                sample, tm = pump(sim, last_frame)
-                if tm is not None:
-                    last_frame = tm.frame
-                    elapsed = time.monotonic() - started_at
-                    source_dt = "" if last_source_time is None else tm.received_at - last_source_time
-                    last_source_time = tm.received_at
-                    if sim.state is ExperienceState.RUNNING and not sim._train_in_station():
-                        left_station = True
-                    # Two heave alternatives can be compared offline without changing NL2 settings.
-                    legacy = sim._legacy_height_z(float(tm.pos_y))
-                    vertical = max(-1.0, min(1.0, (float(tm.g_force_y) - 1.0)
-                                                    * config.TELEMETRY_INTENSITY_FACTOR))
-                    row = dict(ride=ride_name, repeat=repeat,
-                               wall_time=datetime.now().isoformat(timespec="milliseconds"),
-                               elapsed_s=f"{elapsed:.4f}", nl2_frame=tm.frame,
-                               source_dt_s=source_dt,
-                               nl2_receive_monotonic_s=tm.received_at,
-                               sim_state=sample.state.name, valid=int(sample.telemetry_valid),
-                               heave_mode="legacy_height" if sim._legacy_heave_enabled else "vertical_g")
-                    row.update({key: getattr(tm, key) for key in RAW_FIELDS})
-                    row.update({f"norm_{axis}": float(value) for axis, value in zip(AXES, sample.transform)})
-                    row.update(legacy_height_heave=legacy, vertical_g_heave=vertical)
-                    writer.writerow(row)
-                    sample_count += 1
-                if left_station and sim.state is ExperienceState.READY and sim.is_ready_to_start():
-                    print(f"Completed: {path} ({sample_count} frames)", flush=True)
-                    return path
-                next_poll += period_s
-                time.sleep(max(0.0, next_poll - time.monotonic()))
-    finally:
-        if started_at is not None and sample_count:
-            print(f"Saved {sample_count} frames to {path}", flush=True)
+
+    with event_path.open("w", newline="", encoding="utf-8") as events_stream:
+        sim._capture_state_monitor = RideStateMonitor(events_stream, ride_name)
+        try:
+            print(f"Preparing {ride_name}, repeat {repeat}; NL2 at {args.host}:{config.PORT}", flush=True)
+            start_ride(sim, ride_index, args.prepare_timeout, period_s)
+            print("Dispatched; monitoring ride state..." if monitor_only
+                  else "Dispatched; recording...", flush=True)
+            started_at = time.monotonic()
+            next_poll = started_at
+
+            # State-only mode avoids writing high-rate telemetry CSV; both
+            # modes retain a timestamped _state_events.csv beside the output.
+            from contextlib import nullcontext
+            frame_stream = (nullcontext(None) if monitor_only else
+                            path.open("w", newline="", encoding="utf-8"))
+            with frame_stream as stream:
+                writer = None if monitor_only else csv.DictWriter(stream, fieldnames=COLUMNS)
+                if writer is not None:
+                    writer.writeheader()
+                while True:
+                    now = time.monotonic()
+                    if now - started_at > args.max_duration:
+                        raise TimeoutError(
+                            f"Ride did not return to station after {args.max_duration:g}s")
+                    sample, tm = pump(sim, last_frame)
+                    if tm is not None:
+                        last_frame = tm.frame
+                        sample_count += 1
+                        left_station = left_station or sim._view_train_departed
+                        if writer is not None:
+                            elapsed = time.monotonic() - started_at
+                            source_dt = ("" if last_source_time is None
+                                         else tm.received_at - last_source_time)
+                            last_source_time = tm.received_at
+                            legacy = sim._legacy_height_z(float(tm.pos_y))
+                            vertical = max(-1.0, min(1.0,
+                                (float(tm.g_force_y) - 1.0)
+                                * config.TELEMETRY_INTENSITY_FACTOR))
+                            row = dict(
+                                ride=ride_name, repeat=repeat,
+                                wall_time=datetime.now().isoformat(timespec="milliseconds"),
+                                elapsed_s=f"{elapsed:.4f}", nl2_frame=tm.frame,
+                                source_dt_s=source_dt,
+                                nl2_receive_monotonic_s=tm.received_at,
+                                sim_state=sample.state.name,
+                                valid=int(sample.telemetry_valid),
+                                heave_mode="legacy_height" if sim._legacy_heave_enabled else "vertical_g",
+                            )
+                            row.update({key: getattr(tm, key) for key in RAW_FIELDS})
+                            row.update({f"norm_{axis}": float(value)
+                                        for axis, value in zip(AXES, sample.transform)})
+                            row.update(legacy_height_heave=legacy,
+                                       vertical_g_heave=vertical)
+                            writer.writerow(row)
+                    if left_station and sim.state is ExperienceState.READY and sim.is_ready_to_start():
+                        print(f"Completed: {event_path if monitor_only else path} "
+                              f"({sample_count} frames processed)", flush=True)
+                        return event_path if monitor_only else path
+                    next_poll += period_s
+                    time.sleep(max(0.0, next_poll - time.monotonic()))
+        finally:
+            # Never retain a reference to an output stream after closing it.
+            sim._capture_state_monitor = None
+            if started_at is not None:
+                print(f"State events: {event_path}", flush=True)
+                if not monitor_only and sample_count:
+                    print(f"Saved {sample_count} frames to {path}", flush=True)
 
 
 def main(argv=None):
@@ -262,6 +349,10 @@ def main(argv=None):
     parser.add_argument("--prepare-timeout", type=float, default=90.0)
     parser.add_argument("--max-duration", type=float, default=480.0)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "captures" / "nl2_ride_study")
+    parser.add_argument(
+        "--state-monitor", action="store_true",
+        help="Select/dispatch a ride and print/save ride-state changes only (no telemetry CSV)",
+    )
     args = parser.parse_args(argv)
     rides = tuple(config.RIDES)
     if args.list:
