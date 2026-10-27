@@ -1,4 +1,4 @@
-#telemetry_config.py  ver 4
+#telemetry_config.py  ver 5
 from __future__ import annotations
 
 import configparser
@@ -65,6 +65,8 @@ class TelemetryConfig:
         self.path = Path(path)
         self.values = {}
         self._filters = [None] * 6
+        # Runtime-only per-ride switches; never saved to telemetry_config.ini.
+        self._angular_overrides = (None, None)  # (roll, pitch)
         self._temporary_classical_z = False
         self._temporary_classical_z_filter = None
         self.load()
@@ -174,6 +176,43 @@ class TelemetryConfig:
             result.append(filt.update(value, dt) if filt is not None else value)
         return tuple(result)
 
+    def set_angular_washout_overrides(self, roll=None, pitch=None, *, reset=False) -> None:
+        """Select shared-mode filtering for Roll/Pitch on the current ride.
+
+        None inherits the saved per-axis enable flag; True enables the selected
+        global washout mode for that axis; False bypasses it. A globally
+        disabled washout type remains disabled. Changing rides may request a
+        reset even when two rides happen to select identical settings.
+        """
+        for value in (roll, pitch):
+            if value is not None and type(value) is not bool:
+                raise ValueError("Angular washout override must be None, True or False")
+        overrides = (roll, pitch)
+        if overrides != self._angular_overrides or reset:
+            self._angular_overrides = overrides
+            self._rebuild_filters()
+
+    def effective_washout(self) -> dict:
+        """Return actual active axes and their source, without altering saved settings."""
+        kind = self.values["washout_type"]
+        enabled = list(self.values["enabled"])
+        for index, override in zip((3, 4), self._angular_overrides):
+            if override is not None:
+                enabled[index] = override
+        return {
+            "type": kind,
+            "enabled": [bool(v) and kind != "disabled" for v in enabled],
+            "roll_override": self._angular_overrides[0],
+            "pitch_override": self._angular_overrides[1],
+            "roll_source": "ride" if self._angular_overrides[0] is not None else "global",
+            "pitch_source": "ride" if self._angular_overrides[1] is not None else "global",
+            "washout_gain": self.values["washout_gain"],
+            "tau_roll": self.values["tau"][3],
+            "tau_pitch": self.values["tau"][4],
+            "legacy_duration_roll": self.values["legacy_duration"][3],
+            "legacy_duration_pitch": self.values["legacy_duration"][4],
+        }
+
     def set_temporary_classical_z(self, enabled: bool) -> None:
         """Override Z with classical washout without changing saved settings."""
         self._temporary_classical_z = bool(enabled)
@@ -185,8 +224,9 @@ class TelemetryConfig:
         kind = self.values["washout_type"]
         global_gain = self.values["washout_gain"]
         filters = []
+        effective = self.effective_washout()["enabled"]
         for i in range(6):
-            if kind == "disabled" or not self.values["enabled"][i]:
+            if not effective[i]:
                 filters.append(None)
             elif kind == "classical":
                 filters.append(_ClassicalFilter(self.values["tau"][i], global_gain))

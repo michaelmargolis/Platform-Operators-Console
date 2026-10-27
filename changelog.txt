@@ -1,4 +1,23 @@
-# changelog.txt ver 14
+# changelog.txt ver 15
+v172 | NoLimits2 per-ride Roll/Pitch washout selection (no changes to ride defaults)
+------------------------------------------------------------------
+- Add RIDE_ANGULAR_WASHOUT to NL2 config as a per-ride (Roll, Pitch) tri-state
+  policy: None inherits the saved global enable flag, True uses the shared
+  selected washout type, False bypasses washout for that axis. The mapping
+  is empty initially, so current motion output is unchanged.
+- Keep all classical/legacy filter parameters global in telemetry_config.ini;
+  ride selection never rewrites saved values. A globally disabled washout
+  type remains disabled even when a ride requests True.
+- Apply the ride policy only after a successful NL2 park load; ignore queued
+  park selections and reset washout history on confirmed ride changes.
+- Record the effective angular washout policy in POC's INFO log and the NL2
+  capture state-events sidecar. Capture normalized transforms remain raw and
+  unfiltered, as before.
+- Make the offline NL2 muscle analyser use each capture's explicit ride name
+  to select the same policy, and include the effective settings in summaries.
+- Add regression tests for inherit/enable/bypass, global disable, filter
+  reset, persistence, and tool integration. No SHS or Festo output changes.
+
 v171 | NoLimits2 alternate-station return and next-ride dispatch
 ------------------------------------------------------------------
 - Preserve v170 pinned departure-station monitoring for auxiliary-train dispatch

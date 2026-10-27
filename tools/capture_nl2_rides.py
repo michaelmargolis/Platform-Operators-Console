@@ -1,4 +1,4 @@
-# capture_nl2_rides.py  ver 5
+# capture_nl2_rides.py  ver 7
 """Capture repeatable NoLimits2 rides without launching POC or platform outputs.
 
 Run ``python tools/capture_nl2_rides.py --list`` to see configured rides.
@@ -7,6 +7,7 @@ Run ``python tools/capture_nl2_rides.py`` for interactive ride/repeat selection.
 from __future__ import annotations
 
 import argparse
+import os
 import csv
 import json
 from datetime import datetime
@@ -19,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from core.telemetry_config import TelemetryConfig
 from core.types import ExperienceState
 from sims.nolimits2 import config
 from sims.nolimits2.sim import Sim
@@ -242,7 +244,8 @@ def select_ride_for_capture(sim: Sim, target: int, timeout_s: float, interval_s:
             wait_between_load_attempts(sim, BUSY_RETRY_DELAY_S, interval_s)
 
 
-def start_ride(sim: Sim, target: int, timeout_s: float, interval_s: float):
+def start_ride(sim: Sim, target: int, timeout_s: float, interval_s: float,
+               before_dispatch=None):
     # The caller keeps one Sim instance/connection across rides and repeats.
     # This mirrors POC ride selection instead of forcing a default-park load
     # every time another CSV is recorded.
@@ -251,6 +254,10 @@ def start_ride(sim: Sim, target: int, timeout_s: float, interval_s: float):
     sim.prepare_for_activation()
     await_condition(sim, lambda s, *_: s.is_ready_to_start(),
                     timeout_s, "manual-mode station readiness", interval_s)
+    # Video is armed only after park load/manual-mode station preparation.
+    # If OBS setup fails here, the ridden train is not dispatched.
+    if before_dispatch is not None:
+        before_dispatch()
     sim.run()
     await_condition(sim, lambda s, *_: s.state is ExperienceState.RUNNING
                     and not s._dispatch_pending,
@@ -269,15 +276,59 @@ def capture_one(sim: Sim, ride_index: int, repeat: int, args, rides):
     started_at = None
     left_station = False
     period_s = 1.0 / args.hz
+    obs = getattr(args, "_obs_recorder", None)
+    completed = False
+    failure = ""
 
     with event_path.open("w", newline="", encoding="utf-8") as events_stream:
         sim._capture_state_monitor = RideStateMonitor(events_stream, ride_name)
         try:
             print(f"Preparing {ride_name}, repeat {repeat}; NL2 at {args.host}:{config.PORT}", flush=True)
-            start_ride(sim, ride_index, args.prepare_timeout, period_s)
+            before_dispatch = None
+            if obs is not None:
+                def before_dispatch():
+                    obs.begin(ride_name, stem, has_telemetry=not monitor_only)
+                    obs.mark("state_event_elapsed_zero", sim._capture_state_monitor.start)
+                    # A short known pre-roll gives OBS time to encode frames;
+                    # continue servicing NL2 rather than sleeping through data.
+                    if obs.lead_s > 0:
+                        wait_between_load_attempts(sim, obs.lead_s, period_s)
+                        await_condition(sim, lambda s, *_: s.is_ready_to_start(),
+                                        args.prepare_timeout, "post-OBS station readiness", period_s)
+                    obs.mark("dispatch_request")
+            start_ride(sim, ride_index, args.prepare_timeout, period_s,
+                       **({"before_dispatch": before_dispatch} if obs is not None else {}))
+            if obs is not None:
+                # Mark the earliest timestamp after dispatch confirmation; all
+                # telemetry elapsed_s values are relative to started_at below.
+                obs.mark("dispatch_confirmed")
+            # The standalone recorder does not apply washout to norm_* samples.
+            # Log what live POC would select using its saved shared parameters.
+            telemetry_settings = TelemetryConfig(ROOT / "sims/nolimits2/telemetry_config.ini")
+            telemetry_settings.set_angular_washout_overrides(
+                *config.angular_washout_overrides(ride_name)
+            )
+            policy = telemetry_settings.effective_washout()
+            sim._capture_state_monitor._log(
+                sim, "angular_washout_policy", details=json.dumps({
+                    "note": "POC policy only; raw capture is unfiltered",
+                    "ride": ride_name,
+                    "type": policy["type"],
+                    "roll_enabled": policy["enabled"][3],
+                    "pitch_enabled": policy["enabled"][4],
+                    "roll_source": policy["roll_source"],
+                    "pitch_source": policy["pitch_source"],
+                    "tau_roll": policy["tau_roll"],
+                    "tau_pitch": policy["tau_pitch"],
+                    "washout_gain": policy["washout_gain"],
+                    "legacy_duration_roll": policy["legacy_duration_roll"],
+                    "legacy_duration_pitch": policy["legacy_duration_pitch"],
+                }, sort_keys=True))
             print("Dispatched; monitoring ride state..." if monitor_only
                   else "Dispatched; recording...", flush=True)
             started_at = time.monotonic()
+            if obs is not None:
+                obs.mark("capture_elapsed_zero", started_at)
             next_poll = started_at
 
             # State-only mode avoids writing high-rate telemetry CSV; both
@@ -296,6 +347,8 @@ def capture_one(sim: Sim, ride_index: int, repeat: int, args, rides):
                             f"Ride did not return to station after {args.max_duration:g}s")
                     sample, tm = pump(sim, last_frame)
                     if tm is not None:
+                        if obs is not None and sample_count == 0:
+                            obs.mark("first_telemetry_received", tm.received_at)
                         last_frame = tm.frame
                         sample_count += 1
                         left_station = left_station or sim._view_train_departed
@@ -327,16 +380,31 @@ def capture_one(sim: Sim, ride_index: int, repeat: int, args, rides):
                     if left_station and sim.state is ExperienceState.READY and sim.is_ready_to_start():
                         print(f"Completed: {event_path if monitor_only else path} "
                               f"({sample_count} frames processed)", flush=True)
+                        completed = True
                         return event_path if monitor_only else path
                     next_poll += period_s
                     time.sleep(max(0.0, next_poll - time.monotonic()))
+        except BaseException as exc:
+            failure = f"{type(exc).__name__}: {exc}"
+            raise
         finally:
-            # Never retain a reference to an output stream after closing it.
-            sim._capture_state_monitor = None
-            if started_at is not None:
-                print(f"State events: {event_path}", flush=True)
-                if not monitor_only and sample_count:
-                    print(f"Saved {sample_count} frames to {path}", flush=True)
+            try:
+                if obs is not None:
+                    # Best-effort short post-completion tail; keep NL2 serviced.
+                    if completed and obs.tail_s > 0:
+                        tail_end = time.monotonic() + obs.tail_s
+                        while time.monotonic() < tail_end:
+                            pump(sim)
+                            time.sleep(min(period_s, max(0, tail_end - time.monotonic())))
+                    obs.finish(status="completed" if completed else "incomplete",
+                               error=failure, frames=sample_count)
+            finally:
+                # Never retain a reference to a closed CSV event stream.
+                sim._capture_state_monitor = None
+                if started_at is not None:
+                    print(f"State events: {event_path}", flush=True)
+                    if not monitor_only and sample_count:
+                        print(f"Saved {sample_count} frames to {path}", flush=True)
 
 
 def main(argv=None):
@@ -353,6 +421,19 @@ def main(argv=None):
         "--state-monitor", action="store_true",
         help="Select/dispatch a ride and print/save ride-state changes only (no telemetry CSV)",
     )
+    parser.add_argument("--record-video", action="store_true",
+                        help="Record each ride through OBS WebSocket (Windows only)")
+    parser.add_argument("--obs-host", default="127.0.0.1")
+    parser.add_argument("--obs-port", type=int, default=4455)
+    parser.add_argument("--obs-password", default=None,
+                        help="OBS WebSocket password (or OBS_WEBSOCKET_PASSWORD environment)")
+    parser.add_argument("--obs-source", default="NL2 Game Capture",
+                        help="Exact OBS Window/Game Capture source name")
+    parser.add_argument("--obs-window-timeout", type=float, default=15.0)
+    parser.add_argument("--obs-tail", type=float, default=0.5,
+                        help="Video tail after return to READY (seconds; default 0.5)")
+    parser.add_argument("--obs-lead", type=float, default=0.35,
+                        help="Video lead-in before dispatch (seconds; default 0.35)")
     args = parser.parse_args(argv)
     rides = tuple(config.RIDES)
     if args.list:
@@ -363,6 +444,10 @@ def main(argv=None):
         print(f"{i:2d}: {name}")
     spec = args.rides if args.rides is not None else input("Select rides (numbers separated by comma, or all): ")
     repeats = args.repeats if args.repeats is not None else int(input("Repeats per ride [3]: ") or "3")
+    if (args.record_video and
+            (sys.platform != "win32" or args.obs_tail < 0 or args.obs_lead < 0
+             or args.obs_window_timeout <= 0)):
+        parser.error("--record-video requires Windows, nonnegative lead/tail and positive window timeout")
     if repeats < 1 or args.hz <= 0 or args.prepare_timeout <= 0 or args.max_duration <= 0:
         parser.error("repeats, hz and timeout values must be positive")
     try:
@@ -374,19 +459,32 @@ def main(argv=None):
     # Load the first requested park directly at connection.  This overrides
     # neither the normal POC default nor later multi-ride selection.
     sim = Sim(address=args.host, startup_ride_index=indices[0])
+    obs = None
     try:
         connect_recorder(sim, args.prepare_timeout, 1.0 / args.hz)
+        if args.record_video:
+            from tools.nl2_obs_recorder import OBSRideRecorder
+            obs = OBSRideRecorder(
+                args.output_dir, host=args.obs_host, port=args.obs_port,
+                password=(args.obs_password if args.obs_password is not None
+                          else os.environ.get("OBS_WEBSOCKET_PASSWORD", "")),
+                source=args.obs_source, window_timeout=args.obs_window_timeout,
+                tail_s=args.obs_tail, lead_s=args.obs_lead,
+            )
+            args._obs_recorder = obs
         for index in indices:
             for repeat in range(1, repeats + 1):
                 try:
                     capture_one(sim, index, repeat, args, rides)
-                except (TimeoutError, ConnectionError, OSError, RuntimeError) as exc:
+                except Exception as exc:
                     print(f"ERROR: {rides[index][0]} repeat {repeat}: {exc}", file=sys.stderr)
                     return 1
-    except (TimeoutError, ConnectionError, OSError, RuntimeError) as exc:
-        print(f"ERROR: NL2 initial connection: {exc}", file=sys.stderr)
+    except Exception as exc:
+        print(f"ERROR: NL2 / OBS capture setup: {exc}", file=sys.stderr)
         return 1
     finally:
+        if obs is not None:
+            obs.close()
         sim.disconnect()
     return 0
 

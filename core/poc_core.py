@@ -1,4 +1,4 @@
-#poc_core.py  ver 52
+#poc_core.py  ver 53
 from __future__ import annotations
 
 import logging
@@ -228,6 +228,7 @@ class PocCore(QtCore.QObject):
         self.sim_key = key
         telemetry_path = Path(__file__).resolve().parent.parent / "sims" / key / "telemetry_config.ini"
         self.telemetry_config = TelemetryConfig(telemetry_path)
+        self._angular_washout_ride = None
         self._motion_transform = (0.0,) * 6
         self._last_fan_power = None
         self._last_fan_send_time = -1e9
@@ -775,6 +776,35 @@ class PocCore(QtCore.QObject):
             # platform's 50 ms control cycle.
             log.exception("Unable to prepare digital twin UDP snapshot")
 
+    def _sync_nl2_angular_washout(self) -> None:
+        """Apply per-ride switches only after NL2 confirms the loaded park.
+
+        LOAD_PARK may be pending, queued or rejected. Do not adopt its new
+        washout policy until the adapter confirms _loaded_index, and never
+        alter the operator's saved simulator-wide washout settings.
+        """
+        if self.sim_key != "nolimits2" or self.telemetry_config is None:
+            return
+        from sims.nolimits2 import config as nl2_config
+        loaded = getattr(self.sim, "_loaded_index", None)
+        pending = bool(getattr(self.sim, "_ride_load_pending", False))
+        experiences = tuple(self.sim.get_experiences())
+        if pending:
+            return
+        name = experiences[loaded] if isinstance(loaded, int) and 0 <= loaded < len(experiences) else None
+        if name == self._angular_washout_ride:
+            return
+        roll, pitch = nl2_config.angular_washout_overrides(name)
+        self.telemetry_config.set_angular_washout_overrides(roll, pitch, reset=True)
+        self._angular_washout_ride = name
+        effective = self.telemetry_config.effective_washout()
+        log.info(
+            "NL2 angular washout: ride=%s mode=%s Roll=%s (%s) Pitch=%s (%s)",
+            name or "unconfirmed", effective["type"],
+            "on" if effective["enabled"][3] else "off", effective["roll_source"],
+            "on" if effective["enabled"][4] else "off", effective["pitch_source"],
+        )
+
     def get_telemetry_config(self) -> dict:
         if self.telemetry_config is None:
             return {}
@@ -895,6 +925,10 @@ class PocCore(QtCore.QObject):
                 self._estop_latched = False
                 self._estop_recovery_active = False
                 log.info("E-STOP recovery complete; simulator is ready to start")
+
+        # The selected ride may change via an asynchronous LOAD_PARK result.
+        # Sync once per confirmed change before any motion filtering occurs.
+        self._sync_nl2_angular_washout()
 
         # RESETTING may legitimately have no valid telemetry. Motion is only
         # accepted while RUNNING and telemetry is explicitly valid.

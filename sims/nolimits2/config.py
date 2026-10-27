@@ -1,4 +1,4 @@
-#config.py  ver 15
+#config.py  ver 16
 # Simple NoLimits2 prototype configuration.
 
 PORT = 15151
@@ -95,6 +95,7 @@ RIDES = (
     ("Mdx Logo Coaster", f"{BASE_RIDE_PATH}/MdxLogoCoaster/MdxLogoCoaster.nl2park"),
     ("Blackbird", f"{BASE_RIDE_PATH}/Blackbird/Blackbird.nl2park"),
     ("Fenrir", f"{BASE_RIDE_PATH}/Fenrir/Fenrir.nl2park"),
+    ("Flying Beast", f"{BASE_RIDE_PATH}/Flying Beast/Flying Beast.nl2park"),
     ("Forest Mountain Park", f"{BASE_RIDE_PATH}/Forest Mountain Park/Forest Mountain Park.nl2park"),
     ("GrandNational", f"{BASE_RIDE_PATH}/GrandNational/GrandNational.nl2park"),
     ("Hybris", f"{BASE_RIDE_PATH}/Hybris/Hybris.nl2park"),
@@ -110,6 +111,28 @@ DEFAULT_RIDE_INDEX = 0  # this ride loaded at startup
 CONNECT_TIMEOUT_S = 1.0
 API_PROBE_PERIOD_S = 1.0
 API_RESPONSE_STALE_S = 3.0
+
+# Per-ride angular washout policy. (Roll, Pitch) use the SHARED washout
+# type, gain and time constants from telemetry_config.ini; no ride-specific
+# filter tuning. Three-state selection per axis:
+#   None  = inherit saved global per-axis enabled setting (default)
+#   True  = enable the globally selected classical/legacy washout mode
+#   False = bypass washout for that axis
+# If global washout type is "disabled", neither axis can be enabled here.
+# No rides are assigned overrides in v172: existing behaviour is unchanged.
+# Example for future measured trials (do not enable until tested):
+# RIDE_ANGULAR_WASHOUT = {"Blackbird": (True, True)}
+RIDE_ANGULAR_WASHOUT = {}
+
+
+def angular_washout_overrides(ride_name):
+    """Resolve a configured ride name to Roll/Pitch tri-state overrides."""
+    overrides = RIDE_ANGULAR_WASHOUT.get(ride_name, (None, None))
+    if (not isinstance(overrides, (tuple, list)) or len(overrides) != 2
+            or any(v is not None and type(v) is not bool for v in overrides)):
+        raise ValueError(f"Invalid Roll/Pitch washout policy for {ride_name!r}: {overrides!r}")
+    return tuple(overrides)
+
 
 # Per-simulator washout configuration.  The common POC motion pipeline will
 # consume these per-axis values; they are intentionally not embedded in the

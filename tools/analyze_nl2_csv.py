@@ -1,4 +1,4 @@
-# analyze_nl2_csv.py ver 9
+# analyze_nl2_csv.py ver 10
 """Standalone NL2 CSV playback / muscle-length study; no POC outputs are created.
 
 Place in POC/tools; run: python tools/analyze_nl2_csv.py PATH_TO_CAPTURE.csv
@@ -26,6 +26,7 @@ if str(ROOT) not in sys.path:
 
 from config.platforms import PLATFORMS
 from core.telemetry_config import TelemetryConfig
+from sims.nolimits2 import config as nl2_config
 from core.platform_controller import SopPlatformBackend
 from kinematics.kinematics_V3 import Kinematics, PlatformParams
 
@@ -61,6 +62,14 @@ def read_capture(path):
     if not data:
         raise ValueError("CSV contains no usable frames")
     return data
+
+
+def capture_ride_name(path):
+    """Use the explicit CSV ride field; never infer a ride from its filename."""
+    with open(path, newline="", encoding="utf-8-sig") as stream:
+        reader = csv.DictReader(stream)
+        row = next(reader, None)
+    return str(row.get("ride", "")).strip() if row else ""
 
 
 def make_backend(platform_key):
@@ -99,10 +108,14 @@ def lengths_for_real(backend, real):
     return [float(x) - float(backend.cfg.FIXED_HARDWARE_LENGTH) for x in actuator]
 
 
-def analyze(data, platform_key, mode, amplitude, intensity, process_telemetry):
+def analyze(data, platform_key, mode, amplitude, intensity, process_telemetry, ride_name=None):
     backend = make_backend(platform_key)
     cfg = backend.cfg
     telem = TelemetryConfig(ROOT / "sims/nolimits2/telemetry_config.ini")
+    telem.set_angular_washout_overrides(
+        *nl2_config.angular_washout_overrides(ride_name)
+    )
+    policy = telem.effective_washout()
     lo, hi = min(row[1] for row in data), max(row[1] for row in data)
     if hi <= lo and mode == "Normalized height":
         raise ValueError("Recorded height range is zero")
@@ -232,6 +245,12 @@ def analyze(data, platform_key, mode, amplitude, intensity, process_telemetry):
                         floor_min_requested_time=min_requested_time,
                         floor_min_applied_time=min_applied_time,
                         extension_reserve_mm=float(getattr(cfg, "MUSCLE_EXTENSION_RESERVE", 0.0)),
+                        ride_name=ride_name or "",
+                        washout_type=(policy["type"] if process_telemetry else "not_applied"),
+                        washout_roll_enabled=(policy["enabled"][3] if process_telemetry else False),
+                        washout_pitch_enabled=(policy["enabled"][4] if process_telemetry else False),
+                        washout_roll_source=policy["roll_source"],
+                        washout_pitch_source=policy["pitch_source"],
                         active_max_length=(float(cfg.MUSCLE_MAX_ACTIVE_LENGTH)
                             if backend.workspace_limit_mode != "off"
                             and float(getattr(cfg, "MUSCLE_EXTENSION_RESERVE", 0.0)) > 0
@@ -242,7 +261,7 @@ SWEEP_AMPLITUDES = (60, 70, 80, 90, 100)
 
 
 def amplitude_sweep(data, platform_key, intensity, process_telemetry,
-                    amplitudes=SWEEP_AMPLITUDES):
+                    amplitudes=SWEEP_AMPLITUDES, ride_name=None):
     """Recalculate a full capture for each normalized-height amplitude.
 
     This intentionally uses the same `analyze` path as playback. Each run
@@ -251,7 +270,8 @@ def amplitude_sweep(data, platform_key, intensity, process_telemetry,
     results = []
     for percent in amplitudes:
         frames, stats = analyze(data, platform_key, "Normalized height",
-                                float(percent) / 100.0, intensity, process_telemetry)
+                                float(percent) / 100.0, intensity, process_telemetry,
+                                ride_name=ride_name)
         n = len(frames)
         events = extract_events(frames, stats)
         results.append(dict(amplitude=percent, frames=n,
@@ -417,8 +437,11 @@ def batch_export(paths, platform_key, mode, amplitude, intensity, process_teleme
         staging = None
         try:
             data = read_capture(path)
-            frames, stats = analyze(data, platform_key, mode, amplitude, intensity, process_telemetry)
-            sweep = amplitude_sweep(data, platform_key, intensity, process_telemetry)
+            ride_name = capture_ride_name(path)
+            frames, stats = analyze(data, platform_key, mode, amplitude, intensity,
+                                    process_telemetry, ride_name=ride_name)
+            sweep = amplitude_sweep(data, platform_key, intensity, process_telemetry,
+                                    ride_name=ride_name)
             name = path.stem
             suffix = 2
             while name.lower() in used_names or (output_dir / name).exists():
@@ -426,8 +449,14 @@ def batch_export(paths, platform_key, mode, amplitude, intensity, process_teleme
                 suffix += 1
             used_names.add(name.lower())
             metadata = dict(source_csv=str(path.resolve()), platform=platform_key,
+                            ride_name=ride_name,
                             heave_mode=mode, amplitude_percent=100*amplitude,
-                            intensity_percent=intensity, saved_gains_washout=process_telemetry)
+                            intensity_percent=intensity, saved_gains_washout=process_telemetry,
+                            washout_type=stats["washout_type"],
+                            washout_roll_enabled=stats["washout_roll_enabled"],
+                            washout_pitch_enabled=stats["washout_pitch_enabled"],
+                            washout_roll_source=stats["washout_roll_source"],
+                            washout_pitch_source=stats["washout_pitch_source"])
             staging = output_dir / f".{name}.partial"
             if staging.exists():
                 shutil.rmtree(staging)
@@ -475,6 +504,7 @@ class AnalyzerApp:
         root.geometry("1120x760")
         self.data, self.frames, self.stats = None, [], None
         self.loaded_csv = None
+        self.loaded_ride_name = ""
         self.batch_paths = []
         self.path = tk.StringVar(value="")
         self.platform = tk.StringVar(value="platform_v2")
@@ -588,13 +618,16 @@ class AnalyzerApp:
     def load_csv(self, path):
         try:
             new_data = read_capture(path)
+            ride_name = capture_ride_name(path)
             frames, stats = analyze(new_data, self.platform.get(), self.mode.get(),
                                     float(self.amplitude.get()) / 100,
-                                    float(self.intensity.get()), self.with_filters.get())
+                                    float(self.intensity.get()), self.with_filters.get(),
+                                    ride_name=ride_name)
             self.playing = False
             self.play_btn.configure(text="Play")
             self.data, self.frames, self.stats = new_data, frames, stats
             self.loaded_csv = str(path)
+            self.loaded_ride_name = ride_name
             self.batch_paths = self.batch_paths or [str(path)]
             self.path.set(Path(path).name)
             self.frame_index.set(0)
@@ -654,7 +687,8 @@ class AnalyzerApp:
         try:
             new_frames, new_stats = analyze(self.data, self.platform.get(),
                                             self.mode.get(), float(self.amplitude.get())/100,
-                                            float(self.intensity.get()), self.with_filters.get())
+                                            float(self.intensity.get()), self.with_filters.get(),
+                                            ride_name=self.loaded_ride_name)
         except Exception as exc:
             messagebox.showerror("Analysis error", str(exc))
             return
@@ -668,7 +702,10 @@ class AnalyzerApp:
         s = self.stats
         self.info.set(
             f"{n:,} frames\n"
-            f"Recorded height range: {s['lo']:.2f} to {s['hi']:.2f} m"
+            f"Recorded height range: {s['lo']:.2f} to {s['hi']:.2f} m\n"
+            f"Angular washout: {s['washout_type']} "
+            f"(Roll {'on' if s['washout_roll_enabled'] else 'off'}, "
+            f"Pitch {'on' if s['washout_pitch_enabled'] else 'off'})"
         )
         self.info2.set(
             f"Raw out of bounds: {s['raw_out']/n:.1%}\n"
@@ -707,7 +744,8 @@ class AnalyzerApp:
             self.root.configure(cursor="watch")
             self.root.update_idletasks()
             results = amplitude_sweep(self.data, self.platform.get(),
-                                      float(self.intensity.get()), self.with_filters.get())
+                                      float(self.intensity.get()), self.with_filters.get(),
+                                      ride_name=self.loaded_ride_name)
         except Exception as exc:
             messagebox.showerror("Amplitude sweep", str(exc))
             return
