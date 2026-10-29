@@ -1,5 +1,5 @@
-#file_versions.txt  ver 172
-# Application baseline: v176 (NoLimits2 park and motion variants)
+#file_versions.txt  ver 173
+# Application baseline: v177 (operator modifier display and named replay default)
 # Relative path | expected version
 config/platforms.py|5
 controls/__init__.py|1
@@ -41,7 +41,7 @@ sim_host_service/windows/install_shs_startup.ps1|3
 sim_host_service/windows/start_shs.cmd|3
 sims/nolimits2/config.py|17
 sims/nolimits2/nl2_protocol.py|20
-sims/nolimits2/sim.py|39
+sims/nolimits2/sim.py|40
 sims/spacecoaster/config.py|13
 sims/spacecoaster/control.py|4
 sims/spacecoaster/sim.py|19
@@ -75,7 +75,7 @@ tests/test_telemetry_config.py|4
 tests/test_operator_status.py|4
 tests/test_ui_layout.py|11
 tests/test_sim_registry.py|1
-ui/main_window.py|72
+ui/main_window.py|73
 ui/poc_main.ui|15
 ui/poc_main_800x480.ui|18
 ui/ui_widgets.py|7
@@ -109,9 +109,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|3
 create_poc_handover_zip.py|21
-changelog.txt|19
+changelog.txt|20
 README.md|11
-file_versions.txt|172
+file_versions.txt|173
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -141,7 +141,9 @@ tests/test_nl2_ride_completion_v169.py|2
 tests/test_nl2_multitrain_v170.py|1
 tests/test_nl2_multistation_v171.py|1
 tests/test_nl2_angular_washout_v172.py|1
-sims/nolimits2/ride_config.py|1
+sims/nolimits2/ride_config.py|2
 sims/nolimits2/angular_cues.py|1
 tests/test_ride_variants_v176.py|1
 docs/NO_LIMITS_RIDE_VARIANTS_V176.md|1
+tests/test_ride_labels_v177.py|1
+docs/NO_LIMITS_RIDE_VARIANTS_V177.md|1

@@ -1,4 +1,21 @@
-# changelog.txt ver 19
+# changelog.txt ver 20
+v177 | Configurable operator variant modifiers and strict label syntax
+------------------------------------------------------------------
+- Add SHOW_VARIANT_MODIFIERS in NL2 ride_config.py. When True (the default),
+  show complete unique variant labels in POC; when False, show park names only.
+  All internal variant IDs, Debug, logging and CSV metadata retain full labels.
+- Validate that variant suffixes are space-prefixed [modifier] groups and
+  fail startup if the configured display mode collapses two entries to the
+  same visible name. Existing multiple Blackbird variants are allowed with
+  the default True setting; remove extras before deploying with False.
+- Provide display names without changing park identity, park reload/ACK state,
+  filters, kinematics, POC safety gates or production global telemetry INI.
+- sim_player v19 (separate complete replacement) loads the standard named
+  park configuration first; it lists the special legacy replay as <park> raw.
+  Its full variant labels remain visible and independent of POC display flag.
+- Add dedicated headless validation and offline replay default regression tests.
+  GUI and hardware validation remain for Windows/Pi.
+
 v176 | NoLimits2 park identity and operator-selectable motion variants
 ------------------------------------------------------------------
 - Centralize physical parks and height calibration in ride_config.PARKS and

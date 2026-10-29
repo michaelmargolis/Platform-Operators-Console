@@ -1,4 +1,4 @@
-#sim.py  ver 39
+#sim.py  ver 40
 from __future__ import annotations
 
 import logging
@@ -427,6 +427,10 @@ class Sim(SimInterface):
 
     def park_name_for_experience(self, index):
         return ride_config.PARKS[self._park_keys[index]]["name"]
+
+    def display_name_for_experience(self, index):
+        """Hide bracketed modifiers in the POC UI only, not in identifiers."""
+        return ride_config.display_label(self._experiences[index])
 
     def _same_park(self, a, b):
         return (a is not None and b is not None and

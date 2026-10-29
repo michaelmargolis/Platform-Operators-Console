@@ -1,4 +1,4 @@
-#main_window.py  ver 72
+#main_window.py  ver 73
 from __future__ import annotations
 
 import csv
@@ -999,7 +999,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self._csv_last_source_frame = None
         self._updating_experience_combo = True
         self.combo_experience.clear()
-        self.combo_experience.addItems(experiences)
+        display_name = getattr(self.core.sim, "display_name_for_experience", None)
+        self.combo_experience.addItems(
+            [display_name(i) for i in range(len(experiences))]
+            if callable(display_name) else experiences
+        )
         if experiences:
             selected_index = max(0, min(selected_index, len(experiences) - 1))
             self.combo_experience.setCurrentIndex(selected_index)
@@ -1359,11 +1363,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
         output = self.core.get_output_snapshot()
         debug = self.core.get_debug_snapshot()
+        # Log the full variant ID even when the operator dropdown suppresses
+        # [modifiers]. Do not derive a software ID from abbreviated UI text.
+        experience_index = self.combo_experience.currentIndex()
+        all_experiences = self.core.sim.get_experiences()
+        recorded_experience = (all_experiences[experience_index]
+                               if 0 <= experience_index < len(all_experiences)
+                               else self.combo_experience.currentText())
         row = {
             "wall_time": datetime.now().isoformat(timespec="milliseconds"),
             "elapsed_s": f"{time.monotonic() - self._csv_started_at:.3f}",
             "sim": self.core.sim_key or "",
-            "experience": self.combo_experience.currentText(),
+            "experience": recorded_experience,
             "experience_state": sample.state.name,
             "telemetry_valid": int(bool(sample.telemetry_valid)),
             "frame": "" if frame is None else int(frame),
