@@ -1,4 +1,4 @@
-#test_nolimits2_adapter.py  ver 31
+#test_nolimits2_adapter.py  ver 32
 from __future__ import annotations
 
 import logging
@@ -288,6 +288,9 @@ def test_repeated_nl2_frame_holds_previous_transform():
 
 def test_nl2_heave_mode_is_session_selectable():
     sim = Sim(client=FakeNL2Client())
+    # v175+ defaults to calibrated Normalized Height; test the explicitly
+    # selected legacy fallback rather than assuming an obsolete startup mode.
+    sim.set_heave_mode(config.HEAVE_MODE_LEGACY_HEIGHT)
     legacy = sim._transform_from_telemetry(telemetry(pos_y=7.4, gy=1.5))
     assert math.isclose(legacy[2], -0.50, abs_tol=1.0e-9)
 
@@ -300,6 +303,7 @@ def test_nl2_heave_mode_is_session_selectable():
 
 def test_mdx_logo_legacy_height_profile_clamps_to_configured_endpoints():
     sim = Sim(client=FakeNL2Client())
+    sim.set_heave_mode(config.HEAVE_MODE_LEGACY_HEIGHT)
 
     assert math.isclose(
         sim._transform_from_telemetry(telemetry(pos_y=0.0))[2],
@@ -964,13 +968,12 @@ def test_select_experience_sends_load_park_and_enters_resetting():
     sim = Sim(address="127.0.0.1", client=client)
     client.is_connected = True
     client.last_response_at = time.monotonic()
-    sim._rides = (("Ride A", r"C:\Rides\A.nl2park"), ("Ride B", r"C:\Rides\B.nl2park"))
-    sim._experiences = tuple(name for name, _ in sim._rides)
-    sim._selected = 0
+    # Production selector entries are validated ride variants; use two actual
+    # parks rather than replacing the adapter's configured catalog in-place.
     sim.select_experience(1)
     assert sim.state is ExperienceState.RESETTING
     assert sim._ride_load_pending is True
-    assert ("load_park", r"C:\Rides\B.nl2park", True) in client.commands
+    assert ("load_park", sim._rides[1][1], True) in client.commands
     request_id = sim._ride_load_request_id
 
     # Existing in-play telemetry must not advance the load before its response.

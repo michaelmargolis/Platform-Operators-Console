@@ -1,4 +1,4 @@
-#main_window.py  ver 71
+#main_window.py  ver 72
 from __future__ import annotations
 
 import csv
@@ -1071,7 +1071,8 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         display_name = self.combo_experience.itemText(index)
         self.grp_ride_controls.setTitle(display_name)
-        name = display_name.strip()
+        park_name = getattr(self.core.sim, "park_name_for_experience", None)
+        name = (park_name(index) if callable(park_name) else display_name).strip()
         image_dir = Path(__file__).resolve().parent.parent / "sims" / self.core.sim_key / "images"
         found = None
         for suffix in (".png", ".jpg", ".jpeg"):
@@ -1562,6 +1563,15 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Activation     : mode={snapshot['activation_control_mode']}  interlock={snapshot['activation_interlock']}",
             f"Request result : {snapshot['activation_request_result']}",
         ]
+        if self.core.sim_key == "nolimits2":
+            gains = snapshot.get("nl2_gain_scales_pct")
+            pct = (", ".join(f"{gain:g}" for gain in gains)
+                   if gains is not None else "unavailable")
+            lines.extend((
+                f"NL2 variant    : {snapshot.get('nl2_variant') or 'not yet confirmed'}",
+                f"NL2 motion     : cue={snapshot.get('nl2_angular_cue') or '--'}  heave={snapshot.get('nl2_heave_mode') or '--'}",
+                f"Variant gains  : Surge/Sway/Heave/Roll/Pitch/Yaw = {pct}%",
+            ))
         lines.extend((
             f"Sim connection : attempts={snapshot['sim_connect_attempts']}",
             f"Sim error      : {snapshot['sim_last_error']}",

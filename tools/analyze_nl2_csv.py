@@ -1,4 +1,4 @@
-# analyze_nl2_csv.py ver 10
+# analyze_nl2_csv.py ver 11
 """Standalone NL2 CSV playback / muscle-length study; no POC outputs are created.
 
 Place in POC/tools; run: python tools/analyze_nl2_csv.py PATH_TO_CAPTURE.csv
@@ -108,13 +108,17 @@ def lengths_for_real(backend, real):
     return [float(x) - float(backend.cfg.FIXED_HARDWARE_LENGTH) for x in actuator]
 
 
-def analyze(data, platform_key, mode, amplitude, intensity, process_telemetry, ride_name=None):
+def analyze(data, platform_key, mode, amplitude, intensity, process_telemetry, ride_name=None,
+            variant_snapshot=None):
     backend = make_backend(platform_key)
     cfg = backend.cfg
     telem = TelemetryConfig(ROOT / "sims/nolimits2/telemetry_config.ini")
-    telem.set_angular_washout_overrides(
-        *nl2_config.angular_washout_overrides(ride_name)
-    )
+    if variant_snapshot is None:
+        overrides = nl2_config.angular_washout_overrides(ride_name)
+    else:
+        overrides = (variant_snapshot.get("roll_washout"), variant_snapshot.get("pitch_washout"))
+        telem.set_temporary_classical_z(variant_snapshot.get("heave_mode") == "vertical_g")
+    telem.set_angular_washout_overrides(*overrides)
     policy = telem.effective_washout()
     lo, hi = min(row[1] for row in data), max(row[1] for row in data)
     if hi <= lo and mode == "Normalized height":

@@ -1,4 +1,4 @@
-# test_nl2_normalized_height_v157.py ver 1
+# test_nl2_normalized_height_v157.py ver 2
 """Phase 2 NL2 heave mapping: calibrated ride height, per-ride amplitudes, safety."""
 import math
 
@@ -17,16 +17,21 @@ EXPECTED_AMPLITUDES = {
     "GrandNational": .90,
     "Hybris": .90,
     "Wilderness Park": .90,
+    "Scenic Run": .90,  # Calibrated after the original v157 test.
 }
 
 
 def _at_ride(sim, name):
+    # Pure heave mapping helper: adopt the configured variant for the park.
+    # Production selection is separately tested using LOAD_PARK acknowledgements.
     sim._selected = sim.get_experiences().index(name)
+    sim._apply_loaded_variant(sim._selected)
 
 
 def test_initial_heave_mode_and_unchanged_legacy_and_vertical_g():
     sim = Sim(client=FakeNL2Client())
-    assert sim.heave_mode == config.HEAVE_MODE_LEGACY_HEIGHT
+    assert sim.heave_mode == config.HEAVE_MODE_NORMALIZED_HEIGHT  # v175 default
+    sim.set_heave_mode(config.HEAVE_MODE_LEGACY_HEIGHT)
     assert sim._legacy_heave_enabled is True  # v156 recorder compatibility
     assert sim._transform_from_telemetry(telemetry(pos_y=7.4, gy=1.5))[2] == -0.5
     sim.set_heave_mode(config.HEAVE_MODE_VERTICAL_G)
@@ -58,7 +63,7 @@ def test_per_ride_amplitude_endpoints_midpoint_and_clamping(ride, amplitude):
     assert amplitude <= .90
 
 
-@pytest.mark.parametrize('ride', ['Flying Beast', 'Scenic Run', 'Tilt Coaster'])
+@pytest.mark.parametrize('ride', ['Flying Beast', 'Tilt Coaster'])
 def test_unrecorded_and_incomplete_rides_reject_normalized_height(ride):
     sim = Sim(client=FakeNL2Client())
     _at_ride(sim, ride)
@@ -71,11 +76,19 @@ def test_unrecorded_and_incomplete_rides_reject_normalized_height(ride):
 def test_ride_switch_retains_normalized_mode_with_profile_and_reverts_when_missing():
     client = FakeNL2Client()
     sim = Sim(client=client)
-    sim.set_heave_mode(config.HEAVE_MODE_NORMALIZED_HEIGHT)
-    sim._begin_ride_load(sim.get_experiences().index('Blackbird'))
+    sim.connect()
+    sim.service()
+    client.complete_request(sim._ride_load_request_id, ok=True)
+    sim._service_ride_load_result()
+    # A genuine park load must be ACKed before switching again.
+    sim.select_experience(sim.get_experiences().index('Blackbird'))
+    client.complete_request(sim._ride_load_request_id, ok=True)
+    sim._service_ride_load_result()
     assert sim.heave_mode == config.HEAVE_MODE_NORMALIZED_HEIGHT
     assert sim._transform_from_telemetry(telemetry(pos_y=41.0))[2] == -.90
-    sim._begin_ride_load(sim.get_experiences().index('Scenic Run'))
+    sim.select_experience(sim.get_experiences().index('Flying Beast'))
+    client.complete_request(sim._ride_load_request_id, ok=True)
+    sim._service_ride_load_result()
     assert sim.heave_mode == config.HEAVE_MODE_LEGACY_HEIGHT
     assert not sim.has_normalized_height_profile()
 

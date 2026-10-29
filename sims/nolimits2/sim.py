@@ -1,4 +1,4 @@
-#sim.py  ver 38
+#sim.py  ver 39
 from __future__ import annotations
 
 import logging
@@ -10,7 +10,7 @@ from typing import Optional
 
 from core.sim_interface import SimInterface
 from core.types import ExperienceState, SimSample, SimStatus
-from sims.nolimits2 import config
+from sims.nolimits2 import config, ride_config, angular_cues
 from sims.nolimits2.nl2_protocol import NL2Protocol, NL2Telemetry
 
 log = logging.getLogger(__name__)
@@ -80,6 +80,7 @@ class Sim(SimInterface):
         self.state = ExperienceState.DISCONNECTED
         self._selected = int(getattr(config, "DEFAULT_RIDE_INDEX", 0))
         self._rides = self._discover_rides()
+        self._park_keys = tuple(ride_config.park_key_for_variant(name) for name, _ in self._rides)
         # Optional initial selection for standalone study tools; normal POC
         # still loads config.DEFAULT_RIDE_INDEX when no override is supplied.
         if startup_ride_index is not None and not 0 <= startup_ride_index < len(self._rides):
@@ -114,6 +115,8 @@ class Sim(SimInterface):
         self._last_telemetry_frame = None
         self._lift_height = float(config.INITIAL_LIFT_HEIGHT_M)
         self._heave_mode = config.HEAVE_MODE
+        self._angular_cue_mode = angular_cues.EULER
+        self._normalized_height_amplitude = None
         self._connected_sync_started = False
         self._data_connected = False
         self._heartbeat_connected = False
@@ -123,6 +126,7 @@ class Sim(SimInterface):
         self._ride_load_pending = False
         self._ride_load_requested_at = 0.0
         self._ride_load_request_id = None
+        self._park_load_failed = False
         self._loaded_index = None  # Set only after the corresponding LOAD_PARK OK.
         self._loading_index = None
         self._queued_ride_index = None
@@ -188,6 +192,7 @@ class Sim(SimInterface):
         self._loading_index = None
         self._loaded_index = None
         self._queued_ride_index = None
+        self._park_load_failed = False
         self._estop_recovery_pending = False
         self._reset_transform_tracking()
 
@@ -405,6 +410,7 @@ class Sim(SimInterface):
         """True only for the proven safe dispatch condition."""
         return bool(
             self.state is ExperienceState.READY
+            and not self._park_load_failed
             and not self._dispatch_pending
             and not self._ride_load_pending
             and self._stopped_in_station()
@@ -415,13 +421,27 @@ class Sim(SimInterface):
         self.client.recenter_vr()
 
     def _discover_rides(self):
-        # The park files live on the Windows simulator PC, not on POC.  The
-        # complete deployed list therefore comes from config.RIDES; never scan
-        # the local POC filesystem.
-        rides = tuple((str(name), str(park_path)) for name, park_path in getattr(config, "RIDES", ()))
-        if not rides:
-            return (("Current NoLimits2 ride", ""),)
-        return rides
+        """Operator dropdown entries are variants; only physical parks load."""
+        return tuple((label, ride_config.PARKS[ride_config.park_key_for_variant(label)]["path"])
+                     for label in ride_config.labels())
+
+    def park_name_for_experience(self, index):
+        return ride_config.PARKS[self._park_keys[index]]["name"]
+
+    def _same_park(self, a, b):
+        return (a is not None and b is not None and
+                self._rides[a][1].casefold() == self._rides[b][1].casefold())
+
+    def _apply_loaded_variant(self, index):
+        """Adopt only a confirmed variant; never reset park/station state."""
+        value = ride_config.variant(self._experiences[index])
+        self._angular_cue_mode = value["angular_cue"]
+        self._heave_mode = value["heave_mode"]
+        self._normalized_height_amplitude = value["normalized_height_amplitude"]
+        self._lift_height = float(config.INITIAL_LIFT_HEIGHT_M)
+        self._reset_transform_tracking()
+        log.info("NL2 variant active: %s park=%s cue=%s heave=%s",
+                 value["label"], value["park"], self._angular_cue_mode, self._heave_mode)
 
     def get_experiences(self):
         return self._experiences
@@ -432,15 +452,16 @@ class Sim(SimInterface):
         if not self._sim_connected():
             raise RuntimeError("NoLimits2 must be connected before changing ride")
         if self._ride_load_pending:
-            # LOAD_PARK requests are not cancellable. Remember the latest
-            # operator choice and send it once the current request completes.
             self._selected = index
-            self._queued_ride_index = (
-                None if index == self._loading_index else index
-            )
+            # A variant of the park currently loading needs no second LOAD_PARK.
+            self._queued_ride_index = (None if self._same_park(index, self._loading_index)
+                                       else index)
             return
-        if index == self._loaded_index:
-            self._selected = index
+        if self._same_park(index, self._loaded_index):
+            if index != self._loaded_index:
+                self._selected = index
+                self._loaded_index = index
+                self._apply_loaded_variant(index)
             return
         self._begin_ride_load(index, startup=False)
 
@@ -452,14 +473,6 @@ class Sim(SimInterface):
             raise RuntimeError("No NL2 park path configured for this ride")
 
         self._selected = index
-        if (self._heave_mode == config.HEAVE_MODE_NORMALIZED_HEIGHT
-                and not self.has_normalized_height_profile(index)):
-            # An uncalibrated ride must never use an invented height range.
-            # Both height modes use the saved Z washout setting (no temporary
-            # classical Z override), so the core's filtering remains valid.
-            self._heave_mode = config.HEAVE_MODE_LEGACY_HEIGHT
-            log.warning("NL2 Normalized Height unavailable for %s; using Legacy Height",
-                        self._experiences[index])
         self._pause_target = None
         self._dispatch_pending = False
         self._clear_ride_tracking()
@@ -474,6 +487,7 @@ class Sim(SimInterface):
         self._park_reset_pending = False
         self._reset_requested_at = 0.0
         self._ride_load_pending = True
+        self._park_load_failed = False
         self._loading_index = index
         self._ride_load_requested_at = time.monotonic()
         self._reset_transform_tracking()
@@ -572,16 +586,21 @@ class Sim(SimInterface):
         if outcome == "error":
             # An unsuccessful LOAD_PARK does not establish which park is open.
             self._loaded_index = None
+            self._park_load_failed = True
         else:
             self._loaded_index = completed_index
+            self._park_load_failed = False
 
         queued_index = self._queued_ride_index
         self._queued_ride_index = None
-        if queued_index is not None and queued_index != self._loaded_index:
-            # The startup park must finish before we change to the operator's
-            # requested park. Do not briefly expose the old one as READY.
+        if queued_index is not None and not self._same_park(queued_index, self._loaded_index):
+            # An explicitly different park must follow the previous LOAD_PARK.
             self._begin_ride_load(queued_index, startup=False)
             return True
+        if outcome != "error" and self._same_park(self._selected, completed_index):
+            # Latest variant choice wins for a park that has just finished loading.
+            self._loaded_index = self._selected
+            self._apply_loaded_variant(self._loaded_index)
 
         if outcome == "error":
             if NL2_STATE_DEBUG:
@@ -1112,6 +1131,14 @@ class Sim(SimInterface):
             for value in data
         ]
         transform[2] = heave
+        if getattr(self, "_angular_cue_mode", angular_cues.EULER) != angular_cues.EULER:
+            return angular_cues.map_angular_cue(
+                tuple(transform), quaternion, self._angular_cue_mode,
+                roll_gain=(float(config.TELEMETRY_INTENSITY_FACTOR)
+                           * float(config.ROLL_SCALE) / math.pi),
+                pitch_gain=(float(config.TELEMETRY_INTENSITY_FACTOR)
+                            * float(config.PITCH_SCALE) * 0.6),
+            )
         return tuple(transform)
 
     @property
@@ -1129,7 +1156,7 @@ class Sim(SimInterface):
             index = self._selected
         if not 0 <= index < len(self._experiences):
             return False
-        profile = config.NORMALIZED_HEIGHT_PROFILES.get(self._experiences[index])
+        profile = config.NORMALIZED_HEIGHT_PROFILES.get(self.park_name_for_experience(index))
         if not profile:
             return False
         try:
@@ -1158,14 +1185,15 @@ class Sim(SimInterface):
         """Invert ride-height fraction for the suspended-platform Z convention."""
         if not self.has_normalized_height_profile():
             raise ValueError(f"No calibrated height profile for {self._experiences[self._selected]}")
-        profile = config.NORMALIZED_HEIGHT_PROFILES[self._experiences[self._selected]]
+        profile = config.NORMALIZED_HEIGHT_PROFILES[self.park_name_for_experience(self._selected)]
         low, high = float(profile["min_height_m"]), float(profile["max_height_m"])
-        amplitude = float(profile.get("amplitude", config.NORMALIZED_HEIGHT_DEFAULT_AMPLITUDE))
+        amplitude = float(self._normalized_height_amplitude if self._normalized_height_amplitude is not None
+                          else profile.get("amplitude", config.NORMALIZED_HEIGHT_DEFAULT_AMPLITUDE))
         fraction = max(0.0, min(1.0, (height_m - low) / (high - low)))
         return max(-1.0, min(1.0, amplitude * (1.0 - 2.0 * fraction)))
 
     def _legacy_height_z(self, height_m: float) -> float:
-        ride_name = self._experiences[self._selected]
+        ride_name = self.park_name_for_experience(self._selected)
         profile = config.LEGACY_HEIGHT_PROFILES.get(ride_name)
         if profile:
             bottom = float(profile["bottom_height_m"])

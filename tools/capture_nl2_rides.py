@@ -1,4 +1,4 @@
-# capture_nl2_rides.py  ver 7
+# capture_nl2_rides.py  ver 8
 """Capture repeatable NoLimits2 rides without launching POC or platform outputs.
 
 Run ``python tools/capture_nl2_rides.py --list`` to see configured rides.
@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
 
 from core.telemetry_config import TelemetryConfig
 from core.types import ExperienceState
-from sims.nolimits2 import config
+from sims.nolimits2 import config, ride_config
 from sims.nolimits2.sim import Sim
 
 AXES = ("surge", "sway", "heave", "roll", "pitch", "yaw")
@@ -214,10 +214,11 @@ def connect_recorder(sim: Sim, timeout_s: float, interval_s: float):
 
 def select_ride_for_capture(sim: Sim, target: int, timeout_s: float, interval_s: float):
     """Use the regular adapter ride change, retrying only NL2's transient busy response."""
-    if sim._selected == target:
+    target = ride_config.variant_index_for_park_index(target)
+    if sim._selected == target and getattr(sim, "_loaded_index", target) == target:
         return
     ride_name, park_path = sim._rides[target]
-    print(f"Selecting ride index {target}: {ride_name}", flush=True)
+    print(f"Selecting park's standard variant index {target}: {ride_name}", flush=True)
     for attempt in range(BUSY_RETRIES + 1):
         if attempt == 0:
             sim.select_experience(target)
@@ -458,7 +459,8 @@ def main(argv=None):
     print("Selected study rides: " + ", ".join(rides[index][0] for index in indices), flush=True)
     # Load the first requested park directly at connection.  This overrides
     # neither the normal POC default nor later multi-ride selection.
-    sim = Sim(address=args.host, startup_ride_index=indices[0])
+    sim = Sim(address=args.host,
+              startup_ride_index=ride_config.variant_index_for_park_index(indices[0]))
     obs = None
     try:
         connect_recorder(sim, args.prepare_timeout, 1.0 / args.hz)

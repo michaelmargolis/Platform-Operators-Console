@@ -1,4 +1,4 @@
-#telemetry_config.py  ver 5
+#telemetry_config.py  ver 6
 from __future__ import annotations
 
 import configparser
@@ -67,6 +67,7 @@ class TelemetryConfig:
         self._filters = [None] * 6
         # Runtime-only per-ride switches; never saved to telemetry_config.ini.
         self._angular_overrides = (None, None)  # (roll, pitch)
+        self._variant_gain_percent = (100.0,) * 6
         self._temporary_classical_z = False
         self._temporary_classical_z_filter = None
         self.load()
@@ -163,8 +164,8 @@ class TelemetryConfig:
         master = self.values["master_gain"] / 100.0
         intensity = max(0.0, min(100.0, float(intensity_percent))) / 100.0
         return tuple(
-            float(value) * (gain / 100.0) * master * intensity
-            for value, gain in zip(transform, self.values["gains"])
+            float(value) * (gain / 100.0) * (variant / 100.0) * master * intensity
+            for value, gain, variant in zip(transform, self.values["gains"], self._variant_gain_percent)
         )
 
     def process(self, transform: Iterable[float], intensity_percent: float, dt: float) -> tuple[float, ...]:
@@ -175,6 +176,19 @@ class TelemetryConfig:
                 filt = self._temporary_classical_z_filter
             result.append(filt.update(value, dt) if filt is not None else value)
         return tuple(result)
+
+    def set_variant_gain_scales(self, scales):
+        """Runtime-only relative six-axis percentages; not part of INI/snapshot."""
+        from math import isfinite
+        values = tuple(scales)
+        if (len(values) != 6 or any(type(v) not in (int, float) or
+                                    not isfinite(v) or v < 0 or v > 200 for v in values)):
+            raise ValueError("Exactly six finite variant gain percentages 0..200 required")
+        self._variant_gain_percent = tuple(float(v) for v in values)
+
+    @property
+    def variant_gain_scales(self):
+        return self._variant_gain_percent
 
     def set_angular_washout_overrides(self, roll=None, pitch=None, *, reset=False) -> None:
         """Select shared-mode filtering for Roll/Pitch on the current ride.

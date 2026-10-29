@@ -1,4 +1,63 @@
-# changelog.txt ver 15
+# changelog.txt ver 19
+v176 | NoLimits2 park identity and operator-selectable motion variants
+------------------------------------------------------------------
+- Centralize physical parks and height calibration in ride_config.PARKS and
+  define operator-visible, unique-label RIDE_VARIANTS with optional shared
+  angular cue, relative six-axis gains, Roll/Pitch washout and heave mode.
+- Preserve the original 10 park paths and calibrated height profiles. The
+  NoLimits2 adapter now tracks the confirmed physical park independently of
+  the selected variant, allowing same-park switches without LOAD_PARK or
+  resetting station/train state. Pending loads apply the latest same-park
+  variant only after successful acknowledgement; failed loads are not READY.
+- Keep all global gain/washout values in telemetry_config.ini. Variant gain
+  multipliers are temporary runtime settings and never written to the INI.
+  The existing Euler path is unchanged; Sine and Gravity share pure angular
+  mapping with the separate offline sim_player utility.
+- The ride dropdown uses variant labels while cover art remains based on the
+  physical park. Debug reports the confirmed variant, cue, heave source and
+  effective relative gains. Startup remains the standard Mdx Logo Coaster.
+- Keep the independent NL2/OBS study capture tool selecting one physical park
+  per ride number even when multiple operator variants share that park.
+- Enhance the shared offline analyzer for an explicit variant washout/Z-filter
+  snapshot. sim_player v18 adds research-only preset selection (separate ZIP).
+- No changes to Festo, SHS, kinematics, platform motion limits or UDP Twin format.
+- Headless regression tests added, and superseded v157 test assumptions
+  updated to match v175 Normalized Height startup/Scenic Run calibration.
+  PyQt/Windows/NL2 bench verification is still needed before physical testing.
+
+v175 | Match compact NoLimits2 park filenames for OBS capture
+------------------------------------------------------------------
+- Normalize the configured ride name and the actual .nl2park filename before
+  selecting the NL2 render window. Fixes Mdx Logo Coaster vs MdxLogoCoaster.
+- Keep the NL3D_MAIN class and executable checks; reject unrelated parks.
+- Add regression tests for compact filenames, conventional names, and
+  incorrect-window rejection. No changes to OBS encoding or POC motion.
+
+v174 | Handle Windows OBS recording file locks during finalization
+------------------------------------------------------------------
+- Retry locked video renames, preserve an original file when still locked,
+  and retry recording-directory restoration after transient OBS failures.
+
+v173 | Optional OBS recording in standalone NoLimits2 capture utility
+------------------------------------------------------------------
+- Add opt-in --record-video mode using OBS Studio's built-in WebSocket interface;
+  no OBS dependency or Windows restriction for ordinary CSV captures.
+- Discover each park's NL2 render window across all monitors by dynamic
+  NL3D_main_* class and caption; support OBS Game Capture and Window Capture.
+- Set the recording directory per session, restore its prior value afterward,
+  and rename OBS's actual output file to the matching ride CSV basename.
+- Start recording after NL2 station preparation but before dispatch, with
+  configurable 0.35 s lead-in; stop after READY with configurable 0.5 s tail.
+  The normal adapter still controls park load, station logic and dispatch.
+- Save a per-ride *_video_sync.json with a shared process clock, events,
+  first telemetry observation and output name. OBS control acknowledgements
+  are explicitly NOT calibrated video frame timestamps.
+- Stop on normal completion, timeouts and interruptions; preserve incomplete
+  diagnostic metadata where recording started. No changes to POC runtime,
+  motion calculation, SHS, Festo, or existing raw capture CSV columns.
+- Add offline mock OBS regression tests; Windows OBS/NL2 integration still
+  requires a live test.
+
 v172 | NoLimits2 per-ride Roll/Pitch washout selection (no changes to ride defaults)
 ------------------------------------------------------------------
 - Add RIDE_ANGULAR_WASHOUT to NL2 config as a per-ride (Roll, Pitch) tri-state

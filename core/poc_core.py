@@ -1,4 +1,4 @@
-#poc_core.py  ver 53
+#poc_core.py  ver 54
 from __future__ import annotations
 
 import logging
@@ -777,15 +777,14 @@ class PocCore(QtCore.QObject):
             log.exception("Unable to prepare digital twin UDP snapshot")
 
     def _sync_nl2_angular_washout(self) -> None:
-        """Apply per-ride switches only after NL2 confirms the loaded park.
+        """Confirm variants before adopting gains/washout/heave filters.
 
-        LOAD_PARK may be pending, queued or rejected. Do not adopt its new
-        washout policy until the adapter confirms _loaded_index, and never
-        alter the operator's saved simulator-wide washout settings.
+        Nothing is written to the simulator-wide telemetry INI. Queued or
+        failed park loads cannot leak their experimental motion settings.
         """
         if self.sim_key != "nolimits2" or self.telemetry_config is None:
             return
-        from sims.nolimits2 import config as nl2_config
+        from sims.nolimits2 import ride_config
         loaded = getattr(self.sim, "_loaded_index", None)
         pending = bool(getattr(self.sim, "_ride_load_pending", False))
         experiences = tuple(self.sim.get_experiences())
@@ -794,16 +793,21 @@ class PocCore(QtCore.QObject):
         name = experiences[loaded] if isinstance(loaded, int) and 0 <= loaded < len(experiences) else None
         if name == self._angular_washout_ride:
             return
-        roll, pitch = nl2_config.angular_washout_overrides(name)
+        variant = ride_config.variant(name) if name is not None else None
+        roll = variant["roll_washout"] if variant else None
+        pitch = variant["pitch_washout"] if variant else None
+        gains = ([variant["gain_scale_pct"][axis] for axis in ride_config.AXES]
+                 if variant is not None else [100] * 6)
+        self.telemetry_config.set_variant_gain_scales(gains)
         self.telemetry_config.set_angular_washout_overrides(roll, pitch, reset=True)
+        self.telemetry_config.set_temporary_classical_z(
+            bool(variant and self.sim.heave_mode == "vertical_g"))
         self._angular_washout_ride = name
+        self._motion_transform = (0.0,) * 6
         effective = self.telemetry_config.effective_washout()
-        log.info(
-            "NL2 angular washout: ride=%s mode=%s Roll=%s (%s) Pitch=%s (%s)",
-            name or "unconfirmed", effective["type"],
-            "on" if effective["enabled"][3] else "off", effective["roll_source"],
-            "on" if effective["enabled"][4] else "off", effective["pitch_source"],
-        )
+        log.info("NL2 variant active: %s cue=%s gains=%s washout=%s Roll=%s Pitch=%s",
+                 name or "unconfirmed", variant["angular_cue"] if variant else "euler",
+                 gains, effective["type"], effective["roll_source"], effective["pitch_source"])
 
     def get_telemetry_config(self) -> dict:
         if self.telemetry_config is None:
@@ -840,9 +844,14 @@ class PocCore(QtCore.QObject):
             log.exception("Unable to select ride/flight")
             self.message.emit(str(exc))
             return False
+        # Same-park variant changes are confirmed immediately by the NL2 adapter.
+        # Synchronise gains/washout now, before another activation can occur.
+        # Asynchronous park loads remain pending; _sync rejects them until ACK.
+        self._sync_nl2_angular_washout()
         if (previous_heave_mode is not None
-                and getattr(self.sim, "heave_mode", None) != previous_heave_mode):
-            self.message.emit("Normalized Height unavailable for this ride; using Legacy Height")
+                and getattr(self.sim, "heave_mode", None) != previous_heave_mode
+                and not getattr(self.sim, "_ride_load_pending", False)):
+            self.message.emit(f"NL2 heave mode: {self.sim.heave_mode}")
         experiences = list(self.sim.get_experiences())
         self.experiencesChanged.emit(experiences, index)
         self._set_experience_state(self.sim.state)
@@ -1053,6 +1062,12 @@ class PocCore(QtCore.QObject):
         sample = self._last_sample
         backend = getattr(self.platform, "backend", None)
         sim_client = getattr(self.sim, "client", None)
+        loaded_variant = None
+        if self.sim_key == "nolimits2" and not getattr(self.sim, "_ride_load_pending", False):
+            loaded_index = getattr(self.sim, "_loaded_index", None)
+            experiences = tuple(self.sim.get_experiences())
+            if isinstance(loaded_index, int) and 0 <= loaded_index < len(experiences):
+                loaded_variant = experiences[loaded_index]
         return {
             "processing_percent": self.processing_percent,
             "jitter_percent": self.jitter_percent,
@@ -1068,6 +1083,14 @@ class PocCore(QtCore.QObject):
             "last_length_clip": getattr(backend, "last_length_clip", None),
             "experience_state": self.experience_state.name,
             "sim_native_state": getattr(getattr(self.sim, "state", None), "name", str(getattr(self.sim, "state", ""))),
+            "nl2_variant": loaded_variant,
+            "nl2_angular_cue": (getattr(self.sim, "_angular_cue_mode", "euler")
+                                if loaded_variant is not None else None),
+            "nl2_heave_mode": (getattr(self.sim, "heave_mode", None)
+                              if loaded_variant is not None else None),
+            "nl2_gain_scales_pct": (self.telemetry_config.variant_gain_scales
+                                    if self.sim_key == "nolimits2" and
+                                    self.telemetry_config is not None else None),
             "estop_latched": self._estop_latched,
             "estop_recovery_active": self._estop_recovery_active,
             "ready_to_start": self.get_sim_status().ready_to_start,

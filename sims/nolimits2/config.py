@@ -1,4 +1,4 @@
-#config.py  ver 16
+#config.py  ver 17
 # Simple NoLimits2 prototype configuration.
 
 PORT = 15151
@@ -46,36 +46,18 @@ HEAVE_MODE_VERTICAL_G = "vertical_g"
 HEAVE_MODE_NORMALIZED_HEIGHT = "normalized_height"
 HEAVE_MODE = HEAVE_MODE_NORMALIZED_HEIGHT
 
-# Calibrated from completed NL2 ride-study captures (October 2026). Minima
-# and maxima are rounded slightly OUTWARD so repeated runs remain in range.
-# Amplitude is a fraction of normalized heave, BEFORE POC gains and intensity.
-# These are initial MDX-platform test settings, not validated dynamic limits.
-# Leave incomplete/unrecorded rides out: do not guess their track heights.
+# Park data/calibrations belong to ride_config.py. These aliases keep the
+# standalone capture/analyzer tools and existing configuration tests compatible.
+from sims.nolimits2 import ride_config
+
 NORMALIZED_HEIGHT_DEFAULT_AMPLITUDE = 0.80
 NORMALIZED_HEIGHT_PROFILES = {
-    "Mdx Logo Coaster": {"min_height_m": 3.2, "max_height_m": 32.7, "amplitude": 0.80},
-    "Blackbird": {"min_height_m": 5.9, "max_height_m": 41.0, "amplitude": 0.90},
-    "Fenrir": {"min_height_m": 2.7, "max_height_m": 45.6, "amplitude": 0.70},
-    "Forest Mountain Park": {"min_height_m": 4.6, "max_height_m": 48.1, "amplitude": 0.90},
-    "GrandNational": {"min_height_m": 2.5, "max_height_m": 21.2, "amplitude": 0.90},
-    "Hybris": {"min_height_m": -3.9, "max_height_m": 87.8, "amplitude": 0.90},
-    "Wilderness Park": {"min_height_m": -20.5, "max_height_m": 72.1, "amplitude": 0.90},
-    "Scenic Run": {"min_height_m": 2.8, "max_height_m": 99.8, "amplitude": 0.90},
-    }
-
-# Established absolute-height lift cue retained unchanged alongside Vertical G
-# and Normalized Height. Values are normalized platform Z commands.
-# The Mdx Logo Coaster heights come from the 2026-09-10 captured run. The Z
-# range is shifted for the provisional 1094 mm chair geometry while
-# retaining the tested 0.32 normalized lift span. This minimizes balanced
-# clipping in the 2026-09-10 Mdx Logo Coaster legacy capture.
+    park["name"]: dict(park["normalized_height"])
+    for park in ride_config.PARKS.values() if "normalized_height" in park
+}
 LEGACY_HEIGHT_PROFILES = {
-    "Mdx Logo Coaster": {
-        "bottom_height_m": 7.4,
-        "lift_top_height_m": 32.6,
-        "z_at_bottom": -0.50,
-        "z_at_lift_top": -0.18,
-    },
+    park["name"]: dict(park["legacy_height"])
+    for park in ride_config.PARKS.values() if "legacy_height" in park
 }
 
 # SOC supplies yaw angular velocity directly. NL2 supplies orientation only,
@@ -87,23 +69,12 @@ YAW_RATE_GAIN = 2.0
 # and clipping, while retaining prompt response to a real turn.
 YAW_RATE_LOW_PASS_TAU_S = 0.25
 
-# NoLimits2 parks available to the generic POC ride selector. Paths are Windows
-# paths interpreted by NL2 on the simulator PC; they do not need to exist on
-# the Pi running POC. Add deployed rides here.
-BASE_RIDE_PATH = r"C:/Program Files/NoLimits 2/parks/MDX"
-RIDES = (
-    ("Mdx Logo Coaster", f"{BASE_RIDE_PATH}/MdxLogoCoaster/MdxLogoCoaster.nl2park"),
-    ("Blackbird", f"{BASE_RIDE_PATH}/Blackbird/Blackbird.nl2park"),
-    ("Fenrir", f"{BASE_RIDE_PATH}/Fenrir/Fenrir.nl2park"),
-    ("Flying Beast", f"{BASE_RIDE_PATH}/Flying Beast/Flying Beast.nl2park"),
-    ("Forest Mountain Park", f"{BASE_RIDE_PATH}/Forest Mountain Park/Forest Mountain Park.nl2park"),
-    ("GrandNational", f"{BASE_RIDE_PATH}/GrandNational/GrandNational.nl2park"),
-    ("Hybris", f"{BASE_RIDE_PATH}/Hybris/Hybris.nl2park"),
-    ("Scenic Run", f"{BASE_RIDE_PATH}/Scenic Run/Scenic Run.nl2park"),
-    ("Tilt Coaster", f"{BASE_RIDE_PATH}/Tilt Coaster/Tilt Coaster.nl2park"),
-    ("Wilderness Park", f"{BASE_RIDE_PATH}/Wilderness Park/Wilderness Park.nl2park"),
-)
-DEFAULT_RIDE_INDEX = 0  # this ride loaded at startup
+# The physical park list (one park per entry) is retained for the recorder.
+# The POC dropdown gets variant labels from ride_config.RIDE_VARIANTS instead.
+BASE_RIDE_PATH = ride_config.BASE_RIDE_PATH
+RIDES = ride_config.park_rides()
+DEFAULT_VARIANT_LABEL = ride_config.DEFAULT_VARIANT_LABEL
+DEFAULT_RIDE_INDEX = ride_config.labels().index(DEFAULT_VARIANT_LABEL)
 
 # Connection/API health.  TCP connection and NL2 API connection are separate:
 # after TCP connects, the adapter sends GET_VERSION immediately and treats a
@@ -112,22 +83,15 @@ CONNECT_TIMEOUT_S = 1.0
 API_PROBE_PERIOD_S = 1.0
 API_RESPONSE_STALE_S = 3.0
 
-# Per-ride angular washout policy. (Roll, Pitch) use the SHARED washout
-# type, gain and time constants from telemetry_config.ini; no ride-specific
-# filter tuning. Three-state selection per axis:
-#   None  = inherit saved global per-axis enabled setting (default)
-#   True  = enable the globally selected classical/legacy washout mode
-#   False = bypass washout for that axis
-# If global washout type is "disabled", neither axis can be enabled here.
-# No rides are assigned overrides in v172: existing behaviour is unchanged.
-# Example for future measured trials (do not enable until tested):
-# RIDE_ANGULAR_WASHOUT = {"Blackbird": (True, True)}
+# Compatibility only. New settings belong in ride_config.RIDE_VARIANTS.
+# Historical tests/utilities may monkeypatch this legacy dictionary in-session.
 RIDE_ANGULAR_WASHOUT = {}
 
 
 def angular_washout_overrides(ride_name):
-    """Resolve a configured ride name to Roll/Pitch tri-state overrides."""
-    overrides = RIDE_ANGULAR_WASHOUT.get(ride_name, (None, None))
+    overrides = RIDE_ANGULAR_WASHOUT.get(ride_name)
+    if overrides is None and ride_name not in RIDE_ANGULAR_WASHOUT:
+        overrides = ride_config.angular_washout_overrides(ride_name)
     if (not isinstance(overrides, (tuple, list)) or len(overrides) != 2
             or any(v is not None and type(v) is not bool for v in overrides)):
         raise ValueError(f"Invalid Roll/Pitch washout policy for {ride_name!r}: {overrides!r}")

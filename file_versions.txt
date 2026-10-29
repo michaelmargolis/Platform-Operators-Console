@@ -1,5 +1,5 @@
-#file_versions.txt  ver 168
-# Application baseline: v172 (NoLimits2 per-ride Roll/Pitch washout policy)
+#file_versions.txt  ver 172
+# Application baseline: v176 (NoLimits2 park and motion variants)
 # Relative path | expected version
 config/platforms.py|5
 controls/__init__.py|1
@@ -9,7 +9,7 @@ controls/rotary_encoder.py|1
 controls/physical_controls.py|7
 core/config_store.py|7
 core/digital_twin.py|2
-core/poc_core.py|53
+core/poc_core.py|54
 core/platform_controller.py|16
 kinematics/cfg_SuspendedPlatformMdx.py|3
 kinematics/cfg_SuspendedChairFalcon.py|1
@@ -39,9 +39,9 @@ sim_host_service/windows/README.md|6
 sim_host_service/windows/configure_shs_firewall.ps1|1
 sim_host_service/windows/install_shs_startup.ps1|3
 sim_host_service/windows/start_shs.cmd|3
-sims/nolimits2/config.py|16
+sims/nolimits2/config.py|17
 sims/nolimits2/nl2_protocol.py|20
-sims/nolimits2/sim.py|38
+sims/nolimits2/sim.py|39
 sims/spacecoaster/config.py|13
 sims/spacecoaster/control.py|4
 sims/spacecoaster/sim.py|19
@@ -64,10 +64,10 @@ tests/test_xplane_adapter.py|7
 tests/test_fan_control.py|4
 tests/test_fan_serial.py|1
 tests/smoke_sim_interface.py|1
-tests/test_nolimits2_adapter.py|31
+tests/test_nolimits2_adapter.py|32
 tests/test_platform_controller.py|12
 tests/test_d_to_p.py|1
-core/telemetry_config.py|5
+core/telemetry_config.py|6
 sims/nolimits2/telemetry_config.ini|2
 sims/spacecoaster/telemetry_config.ini|2
 sims/xplane/telemetry_config.ini|2
@@ -75,7 +75,7 @@ tests/test_telemetry_config.py|4
 tests/test_operator_status.py|4
 tests/test_ui_layout.py|11
 tests/test_sim_registry.py|1
-ui/main_window.py|71
+ui/main_window.py|72
 ui/poc_main.ui|15
 ui/poc_main_800x480.ui|18
 ui/ui_widgets.py|7
@@ -109,18 +109,20 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|3
 create_poc_handover_zip.py|21
-changelog.txt|15
+changelog.txt|19
 README.md|11
-file_versions.txt|168
+file_versions.txt|172
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
 docs/PARKING_OPERATION_V149.md|1
 docs/Project Ideas.md|2
-tools/capture_nl2_rides.py|7
+tools/capture_nl2_rides.py|8
+tools/nl2_obs_recorder.py|3
+tests/test_nl2_obs_capture_v173.py|3
 tests/test_capture_nl2_rides_v153.py|4
 tests/test_nl2_request_ids_v156.py|1
-tests/test_nl2_normalized_height_v157.py|1
+tests/test_nl2_normalized_height_v157.py|2
 tests/test_poc_performance_v158.py|1
 tests/test_transform_bars_v159.py|1
 tests/test_transform_bars_v160.py|1
@@ -131,7 +133,7 @@ output/fstlib/POSE_SENDER_README.md|3
 tests/test_pose_sender_v163.py|1
 tests/test_pose_sender_v164.py|1
 tests/test_pose_sender_v165.py|1
-tools/analyze_nl2_csv.py|10
+tools/analyze_nl2_csv.py|11
 tests/test_mdx_roll_channels_v166.py|2
 tests/test_nl2_angular_scaling_v167.py|1
 tests/test_nl2_park_selection_v168.py|1
@@ -139,3 +141,7 @@ tests/test_nl2_ride_completion_v169.py|2
 tests/test_nl2_multitrain_v170.py|1
 tests/test_nl2_multistation_v171.py|1
 tests/test_nl2_angular_washout_v172.py|1
+sims/nolimits2/ride_config.py|1
+sims/nolimits2/angular_cues.py|1
+tests/test_ride_variants_v176.py|1
+docs/NO_LIMITS_RIDE_VARIANTS_V176.md|1
