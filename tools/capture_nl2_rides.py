@@ -1,4 +1,4 @@
-# capture_nl2_rides.py  ver 8
+# capture_nl2_rides.py  ver 9
 """Capture repeatable NoLimits2 rides without launching POC or platform outputs.
 
 Run ``python tools/capture_nl2_rides.py --list`` to see configured rides.
@@ -214,7 +214,6 @@ def connect_recorder(sim: Sim, timeout_s: float, interval_s: float):
 
 def select_ride_for_capture(sim: Sim, target: int, timeout_s: float, interval_s: float):
     """Use the regular adapter ride change, retrying only NL2's transient busy response."""
-    target = ride_config.variant_index_for_park_index(target)
     if sim._selected == target and getattr(sim, "_loaded_index", target) == target:
         return
     ride_name, park_path = sim._rides[target]
@@ -460,7 +459,7 @@ def main(argv=None):
     # Load the first requested park directly at connection.  This overrides
     # neither the normal POC default nor later multi-ride selection.
     sim = Sim(address=args.host,
-              startup_ride_index=ride_config.variant_index_for_park_index(indices[0]))
+              startup_ride_index=indices[0], capture_mode=True)
     obs = None
     try:
         connect_recorder(sim, args.prepare_timeout, 1.0 / args.hz)

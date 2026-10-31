@@ -1,4 +1,4 @@
-<!-- README.md ver 11 -->
+<!-- README.md ver 12 -->
 # Platform Operators Console
 
 The Platform Operators Console (POC) is the Raspberry Pi operator console for
@@ -11,10 +11,11 @@ desktop-autostart application. It is not installed as a system service.
 
 ## Supported simulators
 
-- **NoLimits 2:** live TCP telemetry and ride control. The curent version
-  supports seven rides, selection is only permitted while deactivated.
-  ride configuration is provided on the Input Control tab and in
-  `sims/nolimits2/config.py`.
+- **NoLimits 2:** live TCP telemetry and ride control. Selection is permitted
+  only while deactivated. Shared park paths/calibrations are in
+  `sims/nolimits2/ride_config.py`; generic simulator settings remain in
+  `sims/nolimits2/config.py`. Variants and review statuses live in the selected
+  physical platform's JSON catalog.
 - **SpaceCoaster:** Unity UDP state/control with recorded motion-cue CSV
   playback.  Motion CSV  playback deliberately bypasses washout.
 - **X-Plane development adapter:** UDP plugin telemetry, situation loading and
@@ -58,6 +59,42 @@ Make sure the platform physically safe before development or maintenance runs.
 - POC refuses to exit until the platform is fully deactivated.
 - A startup interlock prevents an already-active physical switch from causing
   automatic activation.
+
+## Ride variant review (POC v178)
+
+Each platform has its own persistent
+`sims/nolimits2/ride_variants/<platform_key>.json`. It is seeded from `defaults/`
+only if absent. Software updates must not replace working catalogs or their review
+decisions. Back up local `ride_config.py` edits before installing v178; the
+migration utility imports an old literal RIDE_VARIANTS list into new JSON files
+without executing Python or overwriting existing catalogs.
+
+For each park, POC displays its preferred variant only; when none is preferred,
+it displays candidates. Rejected variants are hidden. Selecting a preferred
+variant rejects every other variant for that park, only on the current platform.
+
+Enable **Debug -> Controls -> Review mode** to show the **Review** button beside
+the ride dropdown. Review mode starts off each session. With the platform
+deactivated and parked, Review offers **Select as preferred**, **Reject this
+variant**, and **Cancel**. Cancel is initially selected. Rotate the encoder to
+cycle choices; press to choose, or touch a button. No keyboard or mouse is needed.
+
+**Avoid rejecting all variants for a park unless you have good reason to remove
+that park from the operator's ride list.** The dialog warns before the last
+available variant is rejected. Undo/repair is deferred to manual JSON editing
+with POC stopped. Rejection hides the entry but deliberately leaves its current
+loaded settings and reactivation behavior unchanged until another selection;
+it does not automatically load or activate a replacement.
+
+The bundled player (`py -m tools.sim_player`) has an independent **Platform**
+selector and **File -> Save current settings as a ride variant...**. New candidates
+are saved directly to that platform's JSON. The player may inspect new candidates
+while a preferred ride exists; those candidates stay hidden in POC. POC reads
+added/tuned definitions on restart. PC and Pi catalogs need explicit transfer.
+
+See [the v178 configuration, migration and operator guide](docs/NO_LIMITS_VARIANT_CURATION_V178.md)
+for full workflow, file protection and verification instructions. All future
+player updates are POC releases; separate sim_player version ZIPs end at v20.
 
 ## Platform configuration
 
@@ -140,8 +177,8 @@ For Windows SHS installation and fan COM-port setup, see
 
 - Treat the latest accepted complete handover ZIP as the sole source ground
   truth.
-- Normal update ZIPs contain only changed/new files at application-relative
-  paths.
+- Normal update ZIPs contain changed/new POC files at application-relative
+  paths. Player updates are POC releases; v178 includes the complete player tree.
 - Increment every changed tracked file and update `file_versions.txt`.
 - Run `version_check.py`, compile changed Python and run relevant tests before
   packaging.

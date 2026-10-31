@@ -1,4 +1,4 @@
-#sim.py  ver 40
+#sim.py  ver 41
 from __future__ import annotations
 
 import logging
@@ -11,6 +11,7 @@ from typing import Optional
 from core.sim_interface import SimInterface
 from core.types import ExperienceState, SimSample, SimStatus
 from sims.nolimits2 import config, ride_config, angular_cues
+from sims.nolimits2.variant_store import VariantStore
 from sims.nolimits2.nl2_protocol import NL2Protocol, NL2Telemetry
 
 log = logging.getLogger(__name__)
@@ -70,7 +71,16 @@ class Sim(SimInterface):
     CURRENT_RIDE_TRAIN_MASK = 0x1000
 
     def __init__(self, address="127.0.0.1", client: Optional[NL2Protocol] = None,
-                 startup_ride_index: Optional[int] = None):
+                 startup_ride_index: Optional[int] = None, *, platform_key="platform_v2",
+                 variant_store=None, capture_mode=False):
+        self.platform_key = platform_key
+        self.variant_store = (variant_store if variant_store is not None else
+                              VariantStore.for_capture(platform_key) if capture_mode else
+                              VariantStore.load(platform_key))
+        if self.variant_store.platform_key != platform_key:
+            raise ValueError("Variant store does not match the physical platform")
+        if not capture_mode:
+            self.variant_store.validate_display()
         self.address = address
         self.client = client or NL2Protocol(
             address,
@@ -80,13 +90,16 @@ class Sim(SimInterface):
         self.state = ExperienceState.DISCONNECTED
         self._selected = int(getattr(config, "DEFAULT_RIDE_INDEX", 0))
         self._rides = self._discover_rides()
-        self._park_keys = tuple(ride_config.park_key_for_variant(name) for name, _ in self._rides)
+        self._park_keys = tuple(self.variant_store.entry(name)["park"] for name, _ in self._rides)
         # Optional initial selection for standalone study tools; normal POC
         # still loads config.DEFAULT_RIDE_INDEX when no override is supplied.
         if startup_ride_index is not None and not 0 <= startup_ride_index < len(self._rides):
             raise IndexError(startup_ride_index)
         self._startup_ride_index = startup_ride_index
         self._experiences = tuple(name for name, _path in self._rides)
+        self._refresh_visible_experiences()
+        default_label = self.variant_store.default_label()
+        self._selected = (self._experiences.index(default_label) if default_label else None)
         self._last_transform = (0.0,) * 6
         self._pause_target = None
         self._dispatch_pending = False
@@ -160,12 +173,14 @@ class Sim(SimInterface):
         # Subsequent rides still use the usual select_experience() path.
         # Completion is based on NL2's request response, not a play transition.
         self._clear_ride_tracking()
-        self._selected = int(
-            self._startup_ride_index if self._startup_ride_index is not None
-            else getattr(config, "DEFAULT_RIDE_INDEX", 0)
-        )
-        if not 0 <= self._selected < len(self._rides):
-            self._selected = 0
+        default_label = self.variant_store.default_label()
+        self._selected = (self._startup_ride_index if self._startup_ride_index is not None
+                          else self._experiences.index(default_label) if default_label else None)
+        if self._selected is None:
+            self._park_load_failed = True
+            self._loaded_index = None
+            self.state = ExperienceState.DISCONNECTED
+            return  # No implicit park selection when all variants are rejected.
         self._initial_sync = False
         self._loaded_index = None
         self._queued_ride_index = None
@@ -265,6 +280,10 @@ class Sim(SimInterface):
         # happens to arrive.
         self._service_ride_load_result()
 
+        if self._selected is None:
+            self._data_connected = False
+            self._telemetry_valid = False
+            return SimSample((0.0,) * 6, self.state, False)
         telemetry = self.client.latest_telemetry
         now = time.monotonic()
         if telemetry is None or now - telemetry.received_at > config.TELEMETRY_STALE_S:
@@ -357,6 +376,8 @@ class Sim(SimInterface):
         stays READY; anything else
         causes RESET_PARK(False) and RESETTING.
         """
+        if self._selected is None:
+            return  # Nothing configured: never reset an unrelated open NL2 park.
         if not self._sim_connected():
             if NL2_STATE_DEBUG:
                 log.debug(
@@ -410,6 +431,7 @@ class Sim(SimInterface):
         """True only for the proven safe dispatch condition."""
         return bool(
             self.state is ExperienceState.READY
+            and self._selected is not None
             and not self._park_load_failed
             and not self._dispatch_pending
             and not self._ride_load_pending
@@ -421,16 +443,54 @@ class Sim(SimInterface):
         self.client.recenter_vr()
 
     def _discover_rides(self):
-        """Operator dropdown entries are variants; only physical parks load."""
-        return tuple((label, ride_config.PARKS[ride_config.park_key_for_variant(label)]["path"])
-                     for label in ride_config.labels())
+        # Stable all-definition indices are never rebuilt after review. Only
+        # the public dropdown mapping changes; pending/loaded references survive.
+        return tuple((entry["label"], ride_config.PARKS[entry["park"]]["path"])
+                     for entry in self.variant_store.entries())
 
-    def park_name_for_experience(self, index):
+    def _refresh_visible_experiences(self):
+        visible = set(self.variant_store.visible_labels())
+        self._visible_indices = tuple(i for i, label in enumerate(self._experiences) if label in visible)
+
+    def _internal_experience_index(self, index):
+        if not isinstance(index, int) or not 0 <= index < len(self._visible_indices):
+            raise IndexError(index)
+        return self._visible_indices[index]
+
+    def _park_name_for_index(self, index):
         return ride_config.PARKS[self._park_keys[index]]["name"]
 
+    def park_name_for_experience(self, index):
+        return self._park_name_for_index(self._internal_experience_index(index))
+
     def display_name_for_experience(self, index):
-        """Hide bracketed modifiers in the POC UI only, not in identifiers."""
-        return ride_config.display_label(self._experiences[index])
+        i = self._internal_experience_index(index)
+        return (self._experiences[i] if ride_config.SHOW_VARIANT_MODIFIERS
+                else self._park_name_for_index(i))
+
+    def get_selected_experience_index(self):
+        return (self._visible_indices.index(self._selected)
+                if self._selected in self._visible_indices else -1)
+
+    def is_experience_loaded(self, index):
+        return self._loaded_index == self._internal_experience_index(index)
+
+    @property
+    def loaded_variant_label(self):
+        return self._experiences[self._loaded_index] if self._loaded_index is not None else None
+
+    def loaded_variant_snapshot(self):
+        label = self.loaded_variant_label
+        return self.variant_store.snapshot(label) if label is not None else None
+
+    def review_current_variant(self, decision, expected_label):
+        # Core owns parked/deactivated interlock; recheck load identity here.
+        if self._ride_load_pending or self.loaded_variant_label != expected_label:
+            raise RuntimeError("The loaded variant changed; reopen Review")
+        self.variant_store.review(expected_label, decision)
+        self._refresh_visible_experiences()
+        # Intentionally do not change _selected, _loaded_index, cue or station
+        # state: the current rejected ride can still be reactivated this session.
 
     def _same_park(self, a, b):
         return (a is not None and b is not None and
@@ -438,7 +498,7 @@ class Sim(SimInterface):
 
     def _apply_loaded_variant(self, index):
         """Adopt only a confirmed variant; never reset park/station state."""
-        value = ride_config.variant(self._experiences[index])
+        value = self.variant_store.snapshot(self._experiences[index])
         self._angular_cue_mode = value["angular_cue"]
         self._heave_mode = value["heave_mode"]
         self._normalized_height_amplitude = value["normalized_height_amplitude"]
@@ -448,11 +508,10 @@ class Sim(SimInterface):
                  value["label"], value["park"], self._angular_cue_mode, self._heave_mode)
 
     def get_experiences(self):
-        return self._experiences
+        return tuple(self._experiences[i] for i in self._visible_indices)
 
     def select_experience(self, index: int) -> None:
-        if not 0 <= index < len(self._experiences):
-            raise IndexError(index)
+        index = self._internal_experience_index(index)
         if not self._sim_connected():
             raise RuntimeError("NoLimits2 must be connected before changing ride")
         if self._ride_load_pending:
@@ -472,6 +531,8 @@ class Sim(SimInterface):
     def _begin_ride_load(self, index: int, startup: bool = False) -> None:
         if self._ride_load_pending:
             raise RuntimeError("NoLimits2 park load already in progress")
+        if index is None or not 0 <= index < len(self._rides):
+            raise RuntimeError("No selected NoLimits2 ride")
         _name, park_path = self._rides[index]
         if not park_path:
             raise RuntimeError("No NL2 park path configured for this ride")
@@ -510,7 +571,9 @@ class Sim(SimInterface):
         # PC connectivity is owned by SHS in PocCore.  Do not generate
         # heartbeat-specific text here because core may legitimately override
         # this adapter's legacy pc_connected value with the SHS heartbeat.
-        if not self.client.is_connected:
+        if self._selected is None:
+            text = "No available ride variants for this platform"
+        elif not self.client.is_connected:
             text = "Waiting for NoLimits2 TCP connection"
         elif not sim_connected:
             text = "NoLimits2 socket open; waiting for API response"
@@ -536,7 +599,7 @@ class Sim(SimInterface):
             sim_connected=sim_connected,
             data_connected=data_connected,
             text=text,
-            entity_name=self._experiences[self._selected],
+            entity_name=self._experiences[self._selected] if self._selected is not None else "",
             busy=bool(
                 self.state is ExperienceState.RESETTING
                 or self._ride_load_pending
@@ -1158,9 +1221,11 @@ class Sim(SimInterface):
         """Whether this ride has calibrated track-height bounds."""
         if index is None:
             index = self._selected
-        if not 0 <= index < len(self._experiences):
+        else:
+            index = self._internal_experience_index(index)
+        if index is None or not 0 <= index < len(self._experiences):
             return False
-        profile = config.NORMALIZED_HEIGHT_PROFILES.get(self.park_name_for_experience(index))
+        profile = config.NORMALIZED_HEIGHT_PROFILES.get(self._park_name_for_index(index))
         if not profile:
             return False
         try:
@@ -1189,7 +1254,7 @@ class Sim(SimInterface):
         """Invert ride-height fraction for the suspended-platform Z convention."""
         if not self.has_normalized_height_profile():
             raise ValueError(f"No calibrated height profile for {self._experiences[self._selected]}")
-        profile = config.NORMALIZED_HEIGHT_PROFILES[self.park_name_for_experience(self._selected)]
+        profile = config.NORMALIZED_HEIGHT_PROFILES[self._park_name_for_index(self._selected)]
         low, high = float(profile["min_height_m"]), float(profile["max_height_m"])
         amplitude = float(self._normalized_height_amplitude if self._normalized_height_amplitude is not None
                           else profile.get("amplitude", config.NORMALIZED_HEIGHT_DEFAULT_AMPLITUDE))
@@ -1197,7 +1262,7 @@ class Sim(SimInterface):
         return max(-1.0, min(1.0, amplitude * (1.0 - 2.0 * fraction)))
 
     def _legacy_height_z(self, height_m: float) -> float:
-        ride_name = self.park_name_for_experience(self._selected)
+        ride_name = self._park_name_for_index(self._selected)
         profile = config.LEGACY_HEIGHT_PROFILES.get(ride_name)
         if profile:
             bottom = float(profile["bottom_height_m"])

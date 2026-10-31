@@ -1,4 +1,4 @@
-#poc_core.py  ver 54
+#poc_core.py  ver 56
 from __future__ import annotations
 
 import logging
@@ -65,12 +65,27 @@ class PocCore(QtCore.QObject):
         # transport is UDP and does not require a software output gate.
         from config.platforms import PLATFORMS
         self.platform_key = self.config_store.get("selected_platform", "platform_v2")
+        self._startup_variant_store = None
+        if self.config_store.get("selected_sim", "nolimits2") == "nolimits2":
+            from sims.nolimits2.variant_store import VariantStore
+            self._startup_variant_store = VariantStore.load(self.platform_key)
+            self._startup_variant_store.validate_display()
         platform_def = PLATFORMS[self.platform_key]
         self.platform_name = platform_def.get("platform_name", self.platform_key)
         platform_backend = SopPlatformBackend(
             platform_def["sop_config_module"],
             platform_def.get("festo_ip", "192.168.0.10"),
         )
+        # Check visible ride-only offsets against this platform before starting
+        # the simulator or accepting any activation. Invalid candidates must
+        # be corrected offline rather than failing during a 20 Hz motion tick.
+        if self._startup_variant_store is not None:
+            visible = set(self._startup_variant_store.visible_labels())
+            for entry in self._startup_variant_store.entries():
+                if entry["label"] in visible:
+                    platform_backend.set_ride_neutral_height_delta_mm(
+                        entry.get("neutral_height_delta_mm", 0.0))
+            platform_backend.set_ride_neutral_height_delta_mm(0.0)
         self.platform = PlatformController(backend=platform_backend)
         self.platform.set_state_callback(self._on_platform_state)
         self.sim = None
@@ -208,6 +223,11 @@ class PocCore(QtCore.QObject):
         ):
             raise RuntimeError("Simulator can only be changed while platform is deactivated")
 
+        # Validate the destination simulator catalog before disconnecting or
+        # asking SHS to change anything. Physical platform is fixed this session.
+        candidate = create_sim(key, self.host_service.address, platform_key=self.platform_key,
+                               variant_store=self._startup_variant_store if initial else None)
+        self._startup_variant_store = None
         if not initial and self.host_service_enabled:
             if not self.host_service.select_sim(key):
                 self.message.emit(self.host_service.last_error or "Simulator host switch request failed")
@@ -219,7 +239,7 @@ class PocCore(QtCore.QObject):
 
         # All simulators run on the PC hosting Sim Host Service, so SHS is the
         # single source of the simulator host address.
-        self.sim = create_sim(key, self.host_service.address)
+        self.sim = candidate
         # Optional simulator capability: SpaceCoaster uses the shared SHS client
         # for Windows-side mouse workarounds. Other simulators need no hook.
         set_host_service = getattr(self.sim, "set_host_service", None)
@@ -229,6 +249,9 @@ class PocCore(QtCore.QObject):
         telemetry_path = Path(__file__).resolve().parent.parent / "sims" / key / "telemetry_config.ini"
         self.telemetry_config = TelemetryConfig(telemetry_path)
         self._angular_washout_ride = None
+        # Switching away from NL2 must not leave a ride-only height bias on
+        # the physical backend for other simulators.
+        self.platform.backend.set_ride_neutral_height_delta_mm(0.0)
         self._motion_transform = (0.0,) * 6
         self._last_fan_power = None
         self._last_fan_send_time = -1e9
@@ -253,7 +276,8 @@ class PocCore(QtCore.QObject):
             self.service_timer.stop()
 
         experiences = list(self.sim.get_experiences())
-        self.experiencesChanged.emit(experiences, 0)
+        selected = getattr(self.sim, "get_selected_experience_index", lambda: 0)()
+        self.experiencesChanged.emit(experiences, selected)
         self.simChanged.emit(key)
         self.simStatusChanged.emit(self.get_sim_status())
         self.config_store.set("selected_sim", key)
@@ -261,7 +285,7 @@ class PocCore(QtCore.QObject):
 
     def simulator_hot_switch_supported(self, key: str) -> bool:
         # Requirement: if a sim cannot hot-switch, persist selection and request restart.
-        candidate = create_sim(key, self.host_service.address)
+        candidate = create_sim(key, self.host_service.address, platform_key=self.platform_key)
         return bool(candidate.hot_switch)
 
     def persist_sim_for_restart(self, key: str) -> None:
@@ -785,19 +809,20 @@ class PocCore(QtCore.QObject):
         if self.sim_key != "nolimits2" or self.telemetry_config is None:
             return
         from sims.nolimits2 import ride_config
-        loaded = getattr(self.sim, "_loaded_index", None)
-        pending = bool(getattr(self.sim, "_ride_load_pending", False))
-        experiences = tuple(self.sim.get_experiences())
-        if pending:
+        if bool(getattr(self.sim, "_ride_load_pending", False)):
             return
-        name = experiences[loaded] if isinstance(loaded, int) and 0 <= loaded < len(experiences) else None
+        name = self.sim.loaded_variant_label
         if name == self._angular_washout_ride:
             return
-        variant = ride_config.variant(name) if name is not None else None
+        variant = self.sim.loaded_variant_snapshot()
         roll = variant["roll_washout"] if variant else None
         pitch = variant["pitch_washout"] if variant else None
         gains = ([variant["gain_scale_pct"][axis] for axis in ride_config.AXES]
                  if variant is not None else [100] * 6)
+        # Apply only the CONFIRMED variant, not a queued park load. This setter
+        # validates the neutral pose but never commands physical movement.
+        self.platform.backend.set_ride_neutral_height_delta_mm(
+            variant.get("neutral_height_delta_mm", 0.0) if variant else 0.0)
         self.telemetry_config.set_variant_gain_scales(gains)
         self.telemetry_config.set_angular_washout_overrides(roll, pitch, reset=True)
         self.telemetry_config.set_temporary_classical_z(
@@ -805,9 +830,11 @@ class PocCore(QtCore.QObject):
         self._angular_washout_ride = name
         self._motion_transform = (0.0,) * 6
         effective = self.telemetry_config.effective_washout()
-        log.info("NL2 variant active: %s cue=%s gains=%s washout=%s Roll=%s Pitch=%s",
+        log.info("NL2 variant active: %s cue=%s gains=%s neutral_delta_mm=%+.1f "
+                 "washout=%s Roll=%s Pitch=%s",
                  name or "unconfirmed", variant["angular_cue"] if variant else "euler",
-                 gains, effective["type"], effective["roll_source"], effective["pitch_source"])
+                 gains, self.platform.backend.ride_neutral_height_delta_mm,
+                 effective["type"], effective["roll_source"], effective["pitch_source"])
 
     def get_telemetry_config(self) -> dict:
         if self.telemetry_config is None:
@@ -832,6 +859,39 @@ class PocCore(QtCore.QObject):
         values = self.telemetry_config.load()
         self.message.emit(f"Telemetry settings restored for {self.sim.name}")
         return values
+
+    def can_review_variant(self) -> bool:
+        return bool(self.sim_key == "nolimits2" and self.sim is not None
+                    and self.platform.state is PlatformState.DEACTIVATED
+                    and self.platform.parked
+                    and not getattr(self.sim, "_ride_load_pending", False)
+                    and self.sim.loaded_variant_label is not None
+                    and self.sim.variant_store.entry(self.sim.loaded_variant_label).get("status") != "rejected")
+
+    def variant_review_info(self):
+        if not self.can_review_variant():
+            raise RuntimeError("Deactivate and park, and wait for a confirmed ride before review")
+        label = self.sim.loaded_variant_label
+        entry = self.sim.variant_store.entry(label)
+        remaining = self.sim.variant_store.review_preview(label, "rejected").visible_labels(entry["park"])
+        return {"label": label, "park_name": self.sim._park_name_for_index(self.sim._loaded_index),
+                "platform_key": self.platform_key, "last_for_park": not remaining}
+
+    def review_variant(self, label, decision) -> bool:
+        if not self.can_review_variant():
+            self.message.emit("Review not saved: deactivate and park, then reopen Review")
+            return False
+        try:
+            self.sim.review_current_variant(decision, label)
+        except (OSError, ValueError, RuntimeError, KeyError) as exc:
+            log.exception("Variant review was not saved")
+            self.message.emit(f"Review not saved: {exc}")
+            return False
+        self.experiencesChanged.emit(list(self.sim.get_experiences()), self.sim.get_selected_experience_index())
+        self.simStatusChanged.emit(self.get_sim_status())
+        suffix = ("; current loaded settings retained until another selection" if decision == "rejected" else "")
+        self.message.emit(f"{label}: {decision}{suffix}")
+        return True
 
     def select_experience(self, index: int) -> bool:
         if self.platform.state is not PlatformState.DEACTIVATED or not self.platform.parked:
@@ -1064,10 +1124,7 @@ class PocCore(QtCore.QObject):
         sim_client = getattr(self.sim, "client", None)
         loaded_variant = None
         if self.sim_key == "nolimits2" and not getattr(self.sim, "_ride_load_pending", False):
-            loaded_index = getattr(self.sim, "_loaded_index", None)
-            experiences = tuple(self.sim.get_experiences())
-            if isinstance(loaded_index, int) and 0 <= loaded_index < len(experiences):
-                loaded_variant = experiences[loaded_index]
+            loaded_variant = self.sim.loaded_variant_label
         return {
             "processing_percent": self.processing_percent,
             "jitter_percent": self.jitter_percent,
@@ -1091,6 +1148,9 @@ class PocCore(QtCore.QObject):
             "nl2_gain_scales_pct": (self.telemetry_config.variant_gain_scales
                                     if self.sim_key == "nolimits2" and
                                     self.telemetry_config is not None else None),
+            "nl2_neutral_height_delta_mm": (
+                getattr(backend, "ride_neutral_height_delta_mm", 0.0)
+                if loaded_variant is not None else None),
             "estop_latched": self._estop_latched,
             "estop_recovery_active": self._estop_recovery_active,
             "ready_to_start": self.get_sim_status().ready_to_start,

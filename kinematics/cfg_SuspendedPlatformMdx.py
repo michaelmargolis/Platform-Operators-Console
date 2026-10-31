@@ -1,4 +1,4 @@
-#cfg_SuspendedPlatformMdx.py  ver 3
+#cfg_SuspendedPlatformMdx.py  ver 4
 from math import radians
 
 
@@ -22,6 +22,10 @@ class PlatformConfig(object):
     # Reserve is used to choose the neutral level-platform height. In the normal
     # geometry-limited mode the platform may use more extension when the actual
     # floor outline and physical actuator limits show that the pose is safe.
+    # Explicit floor applicability. With MUSCLE_EXTENSION_RESERVE present,
+    # Kinematics still uses that reserve (not this legacy Z offset) for neutral.
+    # 50 mm was the previous backend fallback; adding it changes no MDX geometry.
+    PLATFORM_CLEARANCE_OFFSET = 50.0
     MUSCLE_EXTENSION_RESERVE = 60.0
 
     # One-switch fallback for platform testing:

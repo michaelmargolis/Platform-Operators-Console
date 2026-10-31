@@ -1,4 +1,4 @@
-#poc.py  ver 3
+#poc.py  ver 4
 #!/usr/bin/env python3
 from __future__ import annotations
 
@@ -53,7 +53,14 @@ def main() -> int:
         )
         return 2
 
-    core = PocCore(config)
+    try:
+        # Catalog validation happens in PocCore before constructing its physical
+        # backend. Invalid JSON must produce a visible error, not a Qt traceback.
+        core = PocCore(config)
+    except (OSError, ValueError, RuntimeError, KeyError) as exc:
+        logging.getLogger(__name__).error("POC startup configuration error: %s", exc)
+        QtWidgets.QMessageBox.critical(None, "POC Configuration Error", str(exc))
+        return 2
     window = MainWindow(core, config)
     if args.fullscreen:
         escape_shortcut = QtWidgets.QShortcut(
@@ -65,7 +72,13 @@ def main() -> int:
         window.showFullScreen()
     else:
         window.show()
-    core.start()
+    try:
+        core.start()
+    except (OSError, ValueError, RuntimeError, KeyError) as exc:
+        logging.getLogger(__name__).error("POC startup failed: %s", exc)
+        core.shutdown()
+        QtWidgets.QMessageBox.critical(window, "POC Startup Error", str(exc))
+        return 2
     return app.exec_()
 
 

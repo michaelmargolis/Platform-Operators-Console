@@ -1,4 +1,4 @@
-# platforms.py ver 5
+# platforms.py ver 6
 """Physical-platform metadata used by the prototype selector.
 
 The module paths match the current POC kinematics configuration. The canonical
@@ -16,17 +16,11 @@ PLATFORMS = {
     },
     "chair_v3": {
         "name": "V3 Chair",
-        "sop_config_module": "kinematics.cfg_SuspendedChair",
+        "sop_config_module": "kinematics.cfg_SuspendedChairV3",
     },
     "Falcon": {
         "name": "Falcon Platform",
         "sop_config_module": "kinematics.cfg_SuspendedChairFalcon",
     },
-    # Legacy selector key retained so existing poc_config.json files continue
-    # to start. It intentionally uses the single suspended-chair geometry.
-    "chair_v2": {
-        "name": "V2 Chair",
-        "sop_config_module": "kinematics.cfg_SuspendedChair",
-        "festo_ip": "192.168.0.10",
-    },
+
 }

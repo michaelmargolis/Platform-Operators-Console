@@ -1,0 +1,6 @@
+# .gitignore ver 1
+# Live local catalogs and their backups are operator data, not shipped defaults.
+/*.json
+/*.json.bak
+/.*.lock
+/.*.tmp

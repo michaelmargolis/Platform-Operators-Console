@@ -1,4 +1,4 @@
-# sim_registry.py ver 1
+# sim_registry.py ver 2
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -34,8 +34,10 @@ def definition_for(key: str) -> SimDefinition:
     raise KeyError(key)
 
 
-def create_sim(key: str, address: str):
+def create_sim(key: str, address: str, *, platform_key="platform_v2", variant_store=None):
     definition = definition_for(key)
     module = import_module(definition.module)
     cls = getattr(module, definition.class_name)
+    if key == "nolimits2":
+        return cls(address=address, platform_key=platform_key, variant_store=variant_store)
     return cls(address=address)

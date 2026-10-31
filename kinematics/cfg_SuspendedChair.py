@@ -46,7 +46,7 @@ class PlatformConfig(object):
         self.PAYLOAD_WEIGHTS = (50, 60, 150)
         self.MOTION_INTENSITY_RANGE = (10, 50, 150)
 
-        self.LIMITS_1DOF_TRANFORM = (90, 90, 100, radians(12), radians(10), radians(12))
+        self.LIMITS_1DOF_TRANFORM = (90, 90, 100, radians(10), radians(8), radians(9))
 
         self.DEACTIVATED_MUSCLE_LENGTHS = [self.MUSCLE_MAX_LENGTH] * 6
         # Clearance decision uses contraction because this platform's muscles

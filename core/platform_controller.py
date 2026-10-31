@@ -1,4 +1,4 @@
-#platform_controller.py  ver 16
+#platform_controller.py  ver 19
 from __future__ import annotations
 
 import importlib
@@ -6,6 +6,8 @@ import logging
 import math
 from typing import Callable, Sequence
 
+from core.platform_geometry import clearance_settings, configure_workspace
+from core.ride_neutral import validated_ride_neutral_delta, real_heave_for_physical_height
 from core.types import PlatformState, PlatformMotionState
 
 log = logging.getLogger(__name__)
@@ -55,66 +57,16 @@ class SopPlatformBackend:
             self.cfg.FIXED_HARDWARE_LENGTH,
             self.cfg.LIMITS_1DOF_TRANFORM,
         )
+        clearance_offset, reserve = clearance_settings(self.cfg)
         self.k.set_geometry(
             self.cfg.base_coords,
             platform_coords,
             params,
-            getattr(self.cfg, "PLATFORM_CLEARANCE_OFFSET", 50),
-            getattr(self.cfg, "MUSCLE_EXTENSION_RESERVE", None),
+            clearance_offset, reserve,
+            neutral_height_offset_mm=getattr(self.cfg, "NEUTRAL_HEIGHT_OFFSET_MM", 0.0),
         )
 
-        self.workspace_limit_mode = str(
-            getattr(self.cfg, "WORKSPACE_LIMIT_MODE", "off")
-        ).strip().lower()
-        if self.workspace_limit_mode not in ("off", "reserve", "geometry"):
-            raise RuntimeError(
-                f"Invalid WORKSPACE_LIMIT_MODE {self.workspace_limit_mode!r}; "
-                "expected 'geometry', 'reserve' or 'off'."
-            )
-        self.workspace_limit_iterations = max(
-            1, int(getattr(self.cfg, "WORKSPACE_LIMIT_ITERATIONS", 6))
-        )
-        self.workspace_limit_count = 0
-        self.workspace_limited = False
-        self.workspace_scale = 1.0
-        self.workspace_limit_reason = None
-        self.workspace_floor_clearance = None
-        self.workspace_actuator_min = None
-        self.workspace_actuator_max = None
-        self.last_applied_real_transform = [0.0] * 6
-
-        self._workspace_hull_xy = ()
-        self._workspace_floor_z = None
-        self._workspace_underside_z = None
-        self._workspace_min_floor_clearance = None
-        self._workspace_hull_margin = 0.0
-        if self.workspace_limit_mode == "geometry":
-            required = (
-                "FLOOR_Z",
-                "PLATFORM_UNDERSIDE_Z",
-                "MIN_FLOOR_CLEARANCE",
-                "PLATFORM_UNDERSIDE_HULL_XY",
-            )
-            missing = [name for name in required if not hasattr(self.cfg, name)]
-            if missing:
-                raise RuntimeError(
-                    "Geometry workspace limiting requires config values: "
-                    + ", ".join(missing)
-                )
-            self._workspace_floor_z = float(self.cfg.FLOOR_Z)
-            self._workspace_underside_z = float(self.cfg.PLATFORM_UNDERSIDE_Z)
-            self._workspace_min_floor_clearance = float(self.cfg.MIN_FLOOR_CLEARANCE)
-            self._workspace_hull_margin = max(
-                0.0, float(getattr(self.cfg, "FLOOR_HULL_APPROX_MARGIN", 0.0))
-            )
-            self._workspace_hull_xy = tuple(
-                (float(point[0]), float(point[1]))
-                for point in self.cfg.PLATFORM_UNDERSIDE_HULL_XY
-            )
-            if len(self._workspace_hull_xy) < 3:
-                raise RuntimeError(
-                    "PLATFORM_UNDERSIDE_HULL_XY must contain at least three points."
-                )
+        configure_workspace(self)
 
         self.dto_p = DistanceToPressure(
             self.cfg.MUSCLE_LENGTH_RANGE + 1,
@@ -244,6 +196,59 @@ class SopPlatformBackend:
             and maximum <= float(max_actuator_length)
         )
 
+    def _ride_neutral_real_transform(self):
+        """Feasible motion anchor, expressed in IK input coordinates."""
+        neutral = [0.0] * 6
+        neutral[2] = real_heave_for_physical_height(
+            getattr(self, "ride_neutral_height_delta_mm", 0.0),
+            self.k.FLIP_TRANSLATION[2],
+        )
+        return neutral
+
+    def real_with_ride_neutral_offset(self, transform: Sequence[float]):
+        """Apply the ride's PHYSICAL vertical shift after gains/washout.
+
+        The caller supplies IK real-transform coordinates; this adjustment is
+        not used by fixed real-pose parking and prop-clearance operations.
+        """
+        requested = [float(value) for value in transform]
+        requested[2] += self._ride_neutral_real_transform()[2]
+        return requested
+
+    def set_ride_neutral_height_delta_mm(self, delta_mm):
+        """Validate neutral pose without moving hardware or modifying CAD.
+
+        An infeasible *neutral* offset is rejected; extreme dynamic frames
+        continue to use the configured workspace limiter or explicit clipping
+        diagnostics. Do not silently shift an impossible neutral to a floor
+        or muscle boundary.
+        """
+        delta = validated_ride_neutral_delta(delta_mm)
+        if delta != 0.0:
+            anchor = [0.0] * 6
+            anchor[2] = real_heave_for_physical_height(delta, self.k.FLIP_TRANSLATION[2])
+            # IK caches drive the digital twin. Checking a candidate offset is
+            # not a physical move and must not leave a fictitious pose cached.
+            old_pose = getattr(self.k, "cached_pose", None)
+            try:
+                actuator = self._actuator_lengths_for_real_transform(anchor)
+            finally:
+                if old_pose is not None:
+                    self.k.cached_pose = old_pose
+            maximum = float(self.cfg.MAX_ACTUATOR_LENGTH)
+            if self.workspace_limit_mode == "reserve":
+                maximum = float(getattr(self.cfg, "MAX_ACTIVE_ACTUATOR_LENGTH", maximum))
+            if not self._actuator_bounds_ok(actuator, maximum):
+                raise ValueError(
+                    f"Ride neutral offset {delta:+g} mm is outside "
+                    "the platform's allowable neutral muscle lengths")
+            floor = self._floor_clearance_for_real_transform(anchor)
+            if floor is not None and floor < (self._workspace_min_floor_clearance
+                                                + self._workspace_hull_margin - 1e-7):
+                raise ValueError(
+                    f"Ride neutral offset {delta:+g} mm violates the minimum floor clearance")
+        self.ride_neutral_height_delta_mm = delta
+
     def _limit_workspace(self, transform: Sequence[float]):
         requested = [float(value) for value in transform]
         self.workspace_limited = False
@@ -301,7 +306,8 @@ class SopPlatformBackend:
         # geometry-mode trial gets the direct heave floor correction first.
         low = 0.0
         high = 1.0
-        best = [0.0] * 6
+        anchor = self._ride_neutral_real_transform()
+        best = list(anchor)
         if self.workspace_limit_mode == "geometry":
             best, _ = self._apply_floor_limit(best)
         best_lengths = self._actuator_lengths_for_real_transform(best)
@@ -311,7 +317,8 @@ class SopPlatformBackend:
         best_floor_limited = False
         for _ in range(self.workspace_limit_iterations):
             scale = (low + high) / 2.0
-            trial = [value * scale for value in requested]
+            trial = [center + scale * (value - center)
+                     for center, value in zip(anchor, requested)]
             trial_floor_limited = False
             if self.workspace_limit_mode == "geometry":
                 trial, trial_floor_limited = self._apply_floor_limit(trial)
@@ -366,7 +373,7 @@ class SopPlatformBackend:
             )
 
     def _lengths_for_transform(self, transform: Sequence[float]):
-        real_transform = self.k.norm_to_real(transform)
+        real_transform = self.real_with_ride_neutral_offset(self.k.norm_to_real(transform))
         applied_transform, actuator_lengths = self._limit_workspace(real_transform)
         self.last_applied_real_transform = list(applied_transform)
         return self._calculate_muscle_lengths(

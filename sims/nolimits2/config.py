@@ -1,4 +1,4 @@
-#config.py  ver 17
+#config.py  ver 18
 # Simple NoLimits2 prototype configuration.
 
 PORT = 15151
@@ -70,11 +70,11 @@ YAW_RATE_GAIN = 2.0
 YAW_RATE_LOW_PASS_TAU_S = 0.25
 
 # The physical park list (one park per entry) is retained for the recorder.
-# The POC dropdown gets variant labels from ride_config.RIDE_VARIANTS instead.
+# The POC dropdown gets variant labels from the selected platform JSON instead.
 BASE_RIDE_PATH = ride_config.BASE_RIDE_PATH
 RIDES = ride_config.park_rides()
 DEFAULT_VARIANT_LABEL = ride_config.DEFAULT_VARIANT_LABEL
-DEFAULT_RIDE_INDEX = ride_config.labels().index(DEFAULT_VARIANT_LABEL)
+DEFAULT_RIDE_INDEX = 0  # compatibility; POC resolves preferred/default label in its store
 
 # Connection/API health.  TCP connection and NL2 API connection are separate:
 # after TCP connects, the adapter sends GET_VERSION immediately and treats a
@@ -83,7 +83,7 @@ CONNECT_TIMEOUT_S = 1.0
 API_PROBE_PERIOD_S = 1.0
 API_RESPONSE_STALE_S = 3.0
 
-# Compatibility only. New settings belong in ride_config.RIDE_VARIANTS.
+# Compatibility only. New settings belong in the selected platform JSON.
 # Historical tests/utilities may monkeypatch this legacy dictionary in-session.
 RIDE_ANGULAR_WASHOUT = {}
 

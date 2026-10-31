@@ -1,0 +1,10 @@
+# theme.py ver 1
+"""sim_player palette: presentation-only constants shared by Qt6 UI modules."""
+BG = "#111a25"
+PANEL = "#1b2938"
+RAIL = "#314459"
+TEXT = "#e6ecf3"
+MUTED = "#a9bad0"
+ACCENT = "#5ca9d5"
+GREEN = "#67bdaf"
+ORANGE = "#edac6b"

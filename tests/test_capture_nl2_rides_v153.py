@@ -1,4 +1,4 @@
-# test_capture_nl2_rides_v153.py  ver 4
+# test_capture_nl2_rides_v153.py  ver 5
 """Offline checks for the separate NL2 ride study utility."""
 import importlib.util
 from pathlib import Path
@@ -164,7 +164,7 @@ def test_main_reuses_one_connection_for_all_rides_and_repeats(monkeypatch, tmp_p
     recorded = []
 
     class RecordingSession:
-        def __init__(self, address, startup_ride_index=None):
+        def __init__(self, address, startup_ride_index=None, capture_mode=False):
             self.address = address
             self.startup_ride_index = startup_ride_index
             self.disconnected = 0
@@ -190,7 +190,7 @@ def test_main_reuses_one_connection_for_all_rides_and_repeats(monkeypatch, tmp_p
 def test_main_chooses_blackbird_as_initial_park_without_changing_normal_default(monkeypatch, tmp_path):
     created = []
     class Session:
-        def __init__(self, address, startup_ride_index=None):
+        def __init__(self, address, startup_ride_index=None, capture_mode=False):
             created.append(startup_ride_index)
         def disconnect(self):
             pass

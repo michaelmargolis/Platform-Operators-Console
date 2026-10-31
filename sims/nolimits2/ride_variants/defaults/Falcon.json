@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "platform_key": "Falcon",
+  "variants": [
+    {
+      "label": "Mdx Logo Coaster",
+      "park": "mdxlogo",
+      "status": "candidate"
+    },
+    {
+      "label": "Blackbird",
+      "park": "blackbird",
+      "status": "candidate"
+    },
+    {
+      "label": "Blackbird [Sine]",
+      "park": "blackbird",
+      "angular_cue": "sine",
+      "status": "candidate"
+    },
+    {
+      "label": "Blackbird [Sine Roll 120%]",
+      "park": "blackbird",
+      "angular_cue": "sine",
+      "gain_scale_pct": {
+        "roll_gain": 120
+      },
+      "status": "candidate"
+    },
+    {
+      "label": "Blackbird [Gravity]",
+      "park": "blackbird",
+      "angular_cue": "gravity",
+      "status": "candidate"
+    },
+    {
+      "label": "Fenrir",
+      "park": "fenrir",
+      "status": "candidate"
+    },
+    {
+      "label": "Flying Beast",
+      "park": "flyingbeast",
+      "status": "candidate"
+    },
+    {
+      "label": "Forest Mountain Park",
+      "park": "forestmountain",
+      "status": "candidate"
+    },
+    {
+      "label": "GrandNational",
+      "park": "grandnational",
+      "status": "candidate"
+    },
+    {
+      "label": "Hybris",
+      "park": "hybris",
+      "status": "candidate"
+    },
+    {
+      "label": "Scenic Run",
+      "park": "scenicrun",
+      "status": "candidate"
+    },
+    {
+      "label": "Tilt Coaster",
+      "park": "tiltcoaster",
+      "status": "candidate"
+    },
+    {
+      "label": "Wilderness Park",
+      "park": "wilderness",
+      "status": "candidate"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-# kinematics_V3.py ver 3
+# kinematics_V3.py ver 4
 """ kinematics_V3
 This module provides inverse kinematics for the Mdx motion platforms.
 The core method, named inverse_kinematics, is passed the desired orientation as: [surge, sway, heave, roll, pitch, yaw]
@@ -41,6 +41,7 @@ class Kinematics(object):
         platform_params,
         clearance_offset=50,
         muscle_extension_reserve=None,
+        neutral_height_offset_mm=0.0,
     ):
         """
         Set base and moving-platform attachment geometry and calculate the
@@ -56,7 +57,9 @@ class Kinematics(object):
         instead derive the lower level-platform boundary from the maximum active
         actuator length. The upper boundary is where the first actuator reaches
         MIN_ACTUATOR_LENGTH. Their midpoint becomes the neutral reference-plane
-        height.
+        height. A platform-specific neutral-height adjustment (millimetres,
+        positive means physically higher/shorter muscles) can subsequently
+        bias that reference without changing the CAD geometry or travel limits.
         """
 
         # Unpack platform parameters.
@@ -164,7 +167,16 @@ class Kinematics(object):
                 f"Invalid neutral-height bounds: lower={z_min:.3f}, upper={z_max:.3f}"
             )
 
-        mid_z = (z_min + z_max) / 2.0
+        neutral_height_offset_mm = float(neutral_height_offset_mm)
+        if not math.isfinite(neutral_height_offset_mm):
+            raise ValueError("neutral_height_offset_mm must be finite")
+        mid_z = (z_min + z_max) / 2.0 + neutral_height_offset_mm
+        if not z_min <= mid_z <= z_max:
+            raise ValueError(
+                f"Neutral-height offset {neutral_height_offset_mm:g} mm places "
+                f"neutral Z={mid_z:.3f} outside [{z_min:.3f}, {z_max:.3f}]"
+            )
+        self.NEUTRAL_HEIGHT_OFFSET_MM = neutral_height_offset_mm
         self.PLATFORM_LEVEL_Z_MIN = float(z_min)
         self.PLATFORM_LEVEL_Z_MAX = float(z_max)
 

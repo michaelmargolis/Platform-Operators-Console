@@ -1,4 +1,4 @@
-#main_window.py  ver 73
+#main_window.py  ver 75
 from __future__ import annotations
 
 import csv
@@ -15,6 +15,7 @@ from config.platforms import PLATFORMS
 from core.sim_registry import OPERATOR_SIMS
 from core.types import ActivationControlMode, ExperienceState, PlatformState, PlatformMotionState
 from ui.sim_tabs import SimTabManager
+from ui.variant_review import VariantReviewDialog
 from ui.ui_widgets import (
     ActivationButton,
     TransformBarsWidget,
@@ -104,6 +105,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._csv_last_source_frame = None
         self._ride_pixmap = QtGui.QPixmap()
         self._encoder_message_box = None
+        self._review_dialog = None
         self._activate_switch_warning_dialog = None
         self._encoder_dialog_choice = QtWidgets.QMessageBox.Yes
         self._encoder_dialog_kind = None
@@ -194,7 +196,61 @@ class MainWindow(QtWidgets.QMainWindow):
             self.activationControlLayout.setContentsMargins(
                 2, margins.top(), 2, margins.bottom()
             )
+        self.chk_review_mode = QtWidgets.QCheckBox("Review mode", self.grp_debug_controls)
+        self.chk_review_mode.setObjectName("chk_review_mode")
+        self.chk_review_mode.setMinimumHeight(34)
+        self.chk_review_mode.setChecked(False)  # session-only, never restored
+        self.debugControlsLayout.insertWidget(1, self.chk_review_mode)
+        self.btn_review_variant = QtWidgets.QPushButton("Review", self)
+        self.btn_review_variant.setObjectName("btn_review_variant")
+        self.btn_review_variant.setMinimumHeight(self.combo_experience.minimumHeight())
+        self.btn_review_variant.setFixedWidth(78)
+        self.headerLayout.insertWidget(self.headerLayout.indexOf(self.combo_experience) + 1,
+                                      self.btn_review_variant)
+        self._experience_width_limits = (self.combo_experience.minimumWidth(), self.combo_experience.maximumWidth())
+        self.btn_review_variant.hide()
+        self.chk_review_mode.toggled.connect(self._sync_review_controls)
+        self.btn_review_variant.clicked.connect(self._open_variant_review)
         self.btn_exit_desktop.clicked.connect(self._confirm_exit_to_desktop)
+
+    def _sync_review_controls(self, *_args):
+        enabled = bool(self.chk_review_mode.isChecked() and self.core.sim_key == "nolimits2")
+        self.btn_review_variant.setVisible(enabled)
+        low, high = self._experience_width_limits
+        self.combo_experience.setMinimumWidth(max(180, low - 84) if enabled else low)
+        self.combo_experience.setMaximumWidth(max(200, high - 84) if enabled else high)
+        allowed = enabled and self.core.can_review_variant()
+        self.btn_review_variant.setEnabled(allowed)
+        if self._review_dialog is not None and not allowed:
+            self._review_dialog.reject()
+
+    def _open_variant_review(self):
+        if self._review_dialog is not None or self._encoder_message_box is not None:
+            return
+        if not self.chk_review_mode.isChecked() or not self.core.can_review_variant():
+            return
+        try:
+            info = self.core.variant_review_info()
+        except (ValueError, RuntimeError, KeyError) as exc:
+            self._show_message(str(exc))
+            return
+        dialog = VariantReviewDialog(info, self)
+        self._review_dialog = dialog
+        dialog.finished.connect(lambda answer, box=dialog, label=info['label']:
+                                self._variant_review_answered(answer, box, label))
+        dialog.open()
+
+    def _variant_review_answered(self, answer, dialog, label):
+        if self._review_dialog is dialog:
+            self._review_dialog = None
+        # Protect against one held encoder contact being handled twice.
+        self._ignore_encoder_press_until = time.monotonic() + 0.15
+        decision = {VariantReviewDialog.PREFERRED: "preferred",
+                    VariantReviewDialog.REJECTED: "rejected"}.get(answer)
+        if decision is not None and self.chk_review_mode.isChecked():
+            self.core.review_variant(label, decision)
+        dialog.deleteLater()
+        self._sync_review_controls()
 
     def _confirm_exit_to_desktop(self):
         if not self._platform_safe_to_close():
@@ -536,17 +592,22 @@ class MainWindow(QtWidgets.QMainWindow):
         key = self.combo_simulator.itemData(index)
         new_name = self.combo_simulator.itemText(index)
         changed = False
-        if not self.core.simulator_hot_switch_supported(key):
-            self.core.persist_sim_for_restart(key)
-            self._show_message(
-                f"{new_name} saved as selected simulator; restart POC to use it"
-            )
-            # The running adapter has not changed yet; keep the combo showing
-            # the simulator that is actually active until POC restarts.
-            self._restore_sim_combo()
-            changed = True
-        else:
-            changed = bool(self.core.load_sim(key))
+        try:
+            if not self.core.simulator_hot_switch_supported(key):
+                self.core.persist_sim_for_restart(key)
+                self._show_message(
+                    f"{new_name} saved as selected simulator; restart POC to use it"
+                )
+                # The running adapter has not changed yet; keep the combo showing
+                # the simulator that is actually active until POC restarts.
+                self._restore_sim_combo()
+                changed = True
+            else:
+                changed = bool(self.core.load_sim(key))
+        except (OSError, ValueError, RuntimeError, KeyError) as exc:
+            # The adapter validates before switching SHS or disconnecting the
+            # active simulator, so a bad catalog cannot silently replace it.
+            self._show_message(str(exc))
 
         if not changed:
             self._restore_sim_combo()
@@ -612,7 +673,8 @@ class MainWindow(QtWidgets.QMainWindow):
             sim = self.core.sim
             if not (hasattr(sim, "_loaded_index")
                     and not getattr(sim, "_ride_load_pending", False)
-                    and getattr(sim, "_loaded_index") != index):
+                    and not getattr(sim, "is_experience_loaded",
+                                    lambda i: getattr(sim, "_loaded_index") == i)(index)):
                 return
 
         name = self.combo_experience.itemText(index)
@@ -667,6 +729,9 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         step = 1 if direction > 0 else -1
 
+        if self._review_dialog is not None:
+            self._review_dialog.rotate(step)
+            return
         # A modal experience-confirmation box has first claim on the encoder.
         box = self._encoder_message_box
         if box is not None:
@@ -709,8 +774,8 @@ class MainWindow(QtWidgets.QMainWindow):
             count = self.combo_experience.count()
             if count <= 0:
                 return
-            current = max(0, self.combo_experience.currentIndex())
-            target = max(0, min(count - 1, current + step))
+            current = self.combo_experience.currentIndex()
+            target = 0 if current < 0 else max(0, min(count - 1, current + step))
             if target != current:
                 self.combo_experience.setCurrentIndex(target)
                 self._experience_highlighted(target)
@@ -721,6 +786,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_encoder_pressed(self):
         """Select the encoder-highlighted dialog or experience option."""
         if time.monotonic() < self._ignore_encoder_press_until:
+            return
+        if self._review_dialog is not None:
+            self._review_dialog.press()
             return
         box = self._encoder_message_box
         if box is not None:
@@ -745,6 +813,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._updating_experience_combo = True
         if 0 <= self._confirmed_experience_index < self.combo_experience.count():
             self.combo_experience.setCurrentIndex(self._confirmed_experience_index)
+        else:
+            self.combo_experience.setCurrentIndex(-1)
         self._updating_experience_combo = False
         self._load_ride_image_for_index(self._confirmed_experience_index)
 
@@ -975,6 +1045,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_debug()
 
     def _on_sim_changed(self, key):
+        self._sync_review_controls()
         self._last_sim_button_state = None
         if self._csv_stream is not None:
             self._close_csv_output(report=True)
@@ -1004,17 +1075,19 @@ class MainWindow(QtWidgets.QMainWindow):
             [display_name(i) for i in range(len(experiences))]
             if callable(display_name) else experiences
         )
-        if experiences:
-            selected_index = max(0, min(selected_index, len(experiences) - 1))
+        if experiences and selected_index >= 0:
+            selected_index = min(selected_index, len(experiences) - 1)
             self.combo_experience.setCurrentIndex(selected_index)
             self._confirmed_experience_index = selected_index
         else:
             self._confirmed_experience_index = -1
+            self.combo_experience.setCurrentIndex(-1)
         self._updating_experience_combo = False
         self._load_ride_image()
         self._sync_nl2_heave_mode()
 
     def _on_sim_status(self, status):
+        self._sync_review_controls()
         self._set_status_icon(self.lbl_pc_indicator, "ok" if status.pc_connected else "nogo")
         self._set_status_icon(
             self.lbl_sim_indicator,
@@ -1068,7 +1141,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_debug()
 
     def _load_ride_image(self):
-        self._load_ride_image_for_index(self.combo_experience.currentIndex())
+        index = self.combo_experience.currentIndex()
+        if index < 0 and self.core.sim_key == "nolimits2":
+            loaded = self.core.sim.loaded_variant_label
+            if loaded:
+                self.grp_ride_controls.setTitle(loaded + " (still loaded)")
+                return  # Keep the current image; do not imply another ride loaded.
+        self._load_ride_image_for_index(index)
 
     def _load_ride_image_for_index(self, index):
         if self.core.sim_key is None or index < 0 or index >= self.combo_experience.count():
@@ -1370,6 +1449,8 @@ class MainWindow(QtWidgets.QMainWindow):
         recorded_experience = (all_experiences[experience_index]
                                if 0 <= experience_index < len(all_experiences)
                                else self.combo_experience.currentText())
+        if self.core.sim_key == "nolimits2" and self.core.sim.loaded_variant_label is not None:
+            recorded_experience = self.core.sim.loaded_variant_label
         row = {
             "wall_time": datetime.now().isoformat(timespec="milliseconds"),
             "elapsed_s": f"{time.monotonic() - self._csv_started_at:.3f}",
@@ -1582,6 +1663,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"NL2 variant    : {snapshot.get('nl2_variant') or 'not yet confirmed'}",
                 f"NL2 motion     : cue={snapshot.get('nl2_angular_cue') or '--'}  heave={snapshot.get('nl2_heave_mode') or '--'}",
                 f"Variant gains  : Surge/Sway/Heave/Roll/Pitch/Yaw = {pct}%",
+                f"Ride neutral   : {snapshot.get('nl2_neutral_height_delta_mm') if snapshot.get('nl2_neutral_height_delta_mm') is not None else '--'} mm delta",
             ))
         lines.extend((
             f"Sim connection : attempts={snapshot['sim_connect_attempts']}",

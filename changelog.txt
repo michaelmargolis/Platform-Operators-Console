@@ -1,4 +1,103 @@
-# changelog.txt ver 20
+# changelog.txt ver 25
+v182 | Chair V3 limits and per-variant ride-neutral height adjustment
+--------------------------------------------------------------------
+- Set Chair V3 instance motion limits to Surge/Sway/Heave 90/90/100 mm and
+  Roll/Pitch/Yaw +/-10/8/9 degrees, as specified for the next release. Preserve
+  Chair V3's existing +100 mm platform baseline neutral, Chair V2 and the
+  MDX/Falcon platform settings unchanged.
+- Add optional finite `neutral_height_delta_mm` (+/-100 mm) to the separate
+  per-platform JSON ride catalogs. Zero/absent is backward compatible.
+  Positive raises physical platform Z (shortens muscles); negative lowers it.
+- Apply ride-only offset after gains/washout and before live/offline kinematics,
+  with matching workspace-limiter anchor. Validate the neutral against actual
+  actuator range and applicable floor hull. Do not change prop/park poses or
+  source geometry; apply only confirmed NL2 variants, not queued park loads.
+- Add sim_player Ride neutral height slider (+/-100 in 5 mm steps), precise
+  numeric control and Reset. Show platform and effective neutral heights,
+  reanalyze on commit, preserve video and timeline, include trial values in
+  experiment/baseline snapshots and saved JSON candidates.
+- Feedback includes initial muscle lengths, separate short/long clamp counts
+  and worst violations, plus modeled floor clearance when available. Raw replay
+  remains unchanged and disables ride-neutral controls.
+- Add headless parity, safety, validation, JSON persistence, GUI method and
+  backward-compatibility tests; complete sim_player source/tests included.
+  Automatic offset sweeps remain deferred. Qt GUI and real hardware must be
+  tested on the target systems before motion deployment.
+
+v181 | Chair V3 neutral-height bias for physical-platform testing
+---------------------------------------------------------------------
+- Give chair_v3 its own configuration module inheriting the original chair CAD
+  and 600..800 mm muscle limits. Raise its neutral platform reference height
+  by 100 mm from 216.5 to 316.5 mm. This does not affect chair_v2, MDX or Falcon.
+- Keep the existing clearance=0/no-floor-hull policy and existing final muscle
+  clamp rules. The V3 trial addresses over-extension at the start of NL2 rides,
+  but some subsequent motion still exceeds both ends of the 600..800 mm range.
+- Apply the same explicit neutral-height bias in the live POC backend and shared
+  sim_player analyzer. No new UI or variant fields are introduced in this release.
+- Replay all 19 available complete ride captures (nine parks, 45,391 frames)
+  using chair_v3: initial longest lengths 710..763 mm, and total clipped frames
+  70.5% -> 12.9% (not zero). Flying Beast has no available capture for this test.
+- Add numerical validation and baseline-isolation tests. Package all player
+  files/tests with this POC delta, as established since v178. GUI/physical
+  hardware testing remains outstanding.
+
+v180 | Kinematic anomaly duration bars in integrated sim_player
+------------------------------------------------------------------
+- Draw orange horizontal spans for each kinematic anomaly interval using the
+  recorded first/last anomalous sample times; remove orange vertical event
+  markers and peak ticks. The white playback playhead remains visible.
+- Tooltips are available over the whole interval; clicking a bar retains the
+  existing seek-to-peak behaviour and anomaly-panel selection. When spans
+  overlap, shorter intervals take hover/click priority. Single-frame events
+  remain selectable with a five-pixel minimum visible stub.
+- Leave all ride-event markers/captions, anomaly detection, video, controls,
+  POC simulator configuration and active motion unchanged. Complete player
+  source and tests included in this POC delta; GUI awaits Windows Qt6 QA.
+
+v179 | Player platform selector and platform-independent muscle plot
+--------------------------------------------------------------------
+- Fix duplicate Chair V3 labels in sim_player Platform dropdown. The legacy
+  chair_v2 selection is shown as V2 Chair while retaining its independent
+  catalog key and shared chair kinematics module. No platform configuration
+  or working variant JSON is modified.
+- Display valid muscle minimum and maximum at consistent plot positions
+  across 800 and 1000 mm muscle platforms. Keep 50 mm lines linear within
+  the legal range; show over-range requests/extrema in compressed gutters
+  with unchanged exact-mm labels, request warnings and tooltips.
+- Document that fewer final-clipped frames can form more separate timeline
+  events when changing Yaw gain; do not alter the mathematical processing.
+- Package the complete player tree and tests in this single POC delta, as
+  required by the integrated release process. Qt6 UI still needs Windows QA.
+
+v178 | Platform JSON catalogs, encoder review and bundled sim_player
+------------------------------------------------------------------
+- Move variants out of ride_config.py into independent per-platform JSON files;
+  retain shared PARKS/calibration and generic simulator configuration separation.
+  Working catalogs are seeded only when absent; shipped defaults never overwrite
+  review results. Add atomic writes, backups, strict validation and conflict checks.
+- Candidate/preferred/rejected states are local to one platform. POC shows only a
+  preferred ride for each park, otherwise candidates; rejected entries are hidden.
+  Choosing preferred rejects all competing variants for that park atomically.
+- Add Debug Controls Review mode (off each startup) and a Review button beside the
+  ride dropdown. Three touch/encoder choices, initially Cancel; warn when rejection
+  leaves no available variant for the park. No undo/editor functionality yet.
+- Preserve stable loaded/pending NL2 references while refreshing visible choices.
+  Rejecting the current variant hides it but leaves its loaded settings/station
+  state/reactivation behavior intact until another explicit selection. Review
+  requires deactivated/parked state and no pending load; no automatic replacement.
+- Bundle the complete sim_player tree and tests. Add independent Platform selector,
+  platform-aware replay/cache/experiments and direct Save as candidate to JSON.
+  Player retains research access to candidates hidden by a POC preference.
+  All subsequent player changes are POC releases, not standalone player versions.
+- Share floor-geometry setup. Zero/absent PLATFORM_CLEARANCE_OFFSET requires no
+  floor hull and permits full physical active muscle length. MDX explicitly keeps
+  its former 50 mm offset fallback; its reserve/hull/neutral calculation is unchanged.
+- Keep physical-park capture enumeration independent of review filtering. Include
+  optional non-executing legacy-variant migration and operator/upgrade documentation.
+- Add isolated headless regression tests; Qt UI, live NL2/SHS and physical-platform
+  operation still require Pi/Windows validation. No decoder, Festo protocol, raw CSV
+  or global telemetry INI changes. No neutral-height bias or sensor feature added.
+
 v177 | Configurable operator variant modifiers and strict label syntax
 ------------------------------------------------------------------
 - Add SHOW_VARIANT_MODIFIERS in NL2 ride_config.py. When True (the default),

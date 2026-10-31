@@ -1,4 +1,4 @@
-# analyze_nl2_csv.py ver 11
+# analyze_nl2_csv.py ver 14
 """Standalone NL2 CSV playback / muscle-length study; no POC outputs are created.
 
 Place in POC/tools; run: python tools/analyze_nl2_csv.py PATH_TO_CAPTURE.csv
@@ -86,20 +86,15 @@ def make_backend(platform_key):
     platform_coords = getattr(cfg, "platform_coords", None)
     if platform_coords is None:
         platform_coords = cfg.platform_coords_xy
-    k.set_geometry(cfg.base_coords, platform_coords, params,
-                   getattr(cfg, "PLATFORM_CLEARANCE_OFFSET", 50),
-                   getattr(cfg, "MUSCLE_EXTENSION_RESERVE", None))
+    from core.platform_geometry import clearance_settings, configure_workspace
+    offset, reserve = clearance_settings(cfg)
+    k.set_geometry(
+        cfg.base_coords, platform_coords, params, offset, reserve,
+        neutral_height_offset_mm=getattr(cfg, "NEUTRAL_HEIGHT_OFFSET_MM", 0.0),
+    )
     backend = SopPlatformBackend.__new__(SopPlatformBackend)
     backend.cfg, backend.k = cfg, k
-    backend.workspace_limit_mode = str(getattr(cfg, "WORKSPACE_LIMIT_MODE", "off")).lower()
-    backend.workspace_limit_iterations = max(1, int(getattr(cfg, "WORKSPACE_LIMIT_ITERATIONS", 6)))
-    backend.workspace_limit_count = 0
-    backend._workspace_hull_xy = tuple(tuple(float(z) for z in xy) for xy in
-                                       getattr(cfg, "PLATFORM_UNDERSIDE_HULL_XY", ()))
-    backend._workspace_floor_z = getattr(cfg, "FLOOR_Z", None)
-    backend._workspace_underside_z = getattr(cfg, "PLATFORM_UNDERSIDE_Z", None)
-    backend._workspace_min_floor_clearance = getattr(cfg, "MIN_FLOOR_CLEARANCE", None)
-    backend._workspace_hull_margin = float(getattr(cfg, "FLOOR_HULL_APPROX_MARGIN", 0))
+    configure_workspace(backend)
     return backend
 
 
@@ -111,6 +106,9 @@ def lengths_for_real(backend, real):
 def analyze(data, platform_key, mode, amplitude, intensity, process_telemetry, ride_name=None,
             variant_snapshot=None):
     backend = make_backend(platform_key)
+    if variant_snapshot is not None:
+        backend.set_ride_neutral_height_delta_mm(
+            variant_snapshot.get("neutral_height_delta_mm", 0.0))
     cfg = backend.cfg
     telem = TelemetryConfig(ROOT / "sims/nolimits2/telemetry_config.ini")
     if variant_snapshot is None:
@@ -162,7 +160,7 @@ def analyze(data, platform_key, mode, amplitude, intensity, process_telemetry, r
         dt = max(0.0, elapsed - data[i-1][0]) if i else 0.05
         norm = (telem.process(norm, intensity, dt)
                 if process_telemetry else tuple(x * intensity/100.0 for x in norm))
-        real = backend.k.norm_to_real(norm)
+        real = backend.real_with_ride_neutral_offset(backend.k.norm_to_real(norm))
         raw = lengths_for_real(backend, real)
         # Call POC's existing CAD-outline clearance calculation for the
         # requested pose. It is not available when floor limiting is disabled.
@@ -230,7 +228,10 @@ def analyze(data, platform_key, mode, amplitude, intensity, process_telemetry, r
                            applied_floor=applied_floor,
                            below_floor=(requested_floor < required_floor - 1.0e-7
                                         if has_floor else False)))
-    return frames, dict(lo=lo, hi=hi, min_length=float(cfg.MUSCLE_MIN_LENGTH),
+    return frames, dict(lo=lo, hi=hi,
+                        platform_neutral_height_mm=float(backend.k.PLATFORM_MID_HEIGHT),
+                        neutral_height_delta_mm=float(backend.ride_neutral_height_delta_mm),
+                        min_length=float(cfg.MUSCLE_MIN_LENGTH),
                         max_length=float(cfg.MUSCLE_MAX_LENGTH),
                         limited=limited_count, raw_out=raw_out_count,
                         output_clipped=output_clipped_count,
