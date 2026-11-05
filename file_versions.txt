@@ -1,5 +1,5 @@
-#file_versions.txt  ver 178
-# Application baseline: v182 (ride-specific neutral offset + Chair V3 limits)
+#file_versions.txt  ver 183
+# Application baseline: v187 (field-verified flyer lock polarity and NL2 local console)
 # Relative path | expected version
 config/platforms.py|6
 controls/__init__.py|1
@@ -40,8 +40,8 @@ sim_host_service/windows/configure_shs_firewall.ps1|1
 sim_host_service/windows/install_shs_startup.ps1|3
 sim_host_service/windows/start_shs.cmd|3
 sims/nolimits2/config.py|18
-sims/nolimits2/nl2_protocol.py|20
-sims/nolimits2/sim.py|41
+sims/nolimits2/nl2_protocol.py|22
+sims/nolimits2/sim.py|46
 sims/spacecoaster/config.py|13
 sims/spacecoaster/control.py|4
 sims/spacecoaster/sim.py|19
@@ -109,9 +109,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|25
-README.md|12
-file_versions.txt|178
+changelog.txt|30
+README.md|13
+file_versions.txt|183
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -141,7 +141,7 @@ tests/test_nl2_ride_completion_v169.py|2
 tests/test_nl2_multitrain_v170.py|1
 tests/test_nl2_multistation_v171.py|1
 tests/test_nl2_angular_washout_v172.py|2
-sims/nolimits2/ride_config.py|4
+sims/nolimits2/ride_config.py|5
 sims/nolimits2/angular_cues.py|1
 tests/test_ride_variants_v176.py|1
 docs/NO_LIMITS_RIDE_VARIANTS_V176.md|1
@@ -244,3 +244,28 @@ tests/test_ride_neutral_v182.py|1
 tools/sim_player/tests/test_neutral_v182.py|1
 docs/POC_V182_VERIFICATION.md|1
 docs/POC_V182_CHANGED_FILES.txt|1
+tests/test_nl2_flying_beast_v183.py|1
+docs/FLYING_BEAST_DIAGNOSTICS_V183.md|1
+docs/POC_V183_VERIFICATION.md|1
+docs/POC_V183_CHANGED_FILES.txt|1
+tests/test_nl2_reset_station_v184.py|1
+docs/FLYING_BEAST_RESET_STATION_V184.md|1
+docs/POC_V184_VERIFICATION.md|1
+docs/POC_V184_CHANGED_FILES.txt|1
+tests/test_nl2_flyer_lock_v185.py|2
+docs/FLYING_BEAST_FLYER_LOCK_V185.md|1
+docs/POC_V185_VERIFICATION.md|1
+docs/POC_V185_CHANGED_FILES.txt|1
+tests/test_nl2_flying_beast_diagnostics_v186.py|2
+tests/test_nl2_flyer_value_v187.py|1
+docs/FLYING_BEAST_FLYER_VALUE_V187.md|1
+docs/POC_V187_VERIFICATION.md|1
+docs/POC_V187_CHANGED_FILES.txt|1
+tools/nl2_local_test_harness/README.md|1
+tools/nl2_local_test_harness/__init__.py|1
+tools/nl2_local_test_harness/__main__.py|1
+tools/nl2_local_test_harness/harness.py|1
+tools/nl2_local_test_harness/harness_core.py|1
+tools/nl2_local_test_harness/run_harness.bat|1
+tools/nl2_local_test_harness/run_tests.bat|1
+tools/nl2_local_test_harness/tests/test_harness.py|1

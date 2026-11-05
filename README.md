@@ -1,4 +1,4 @@
-<!-- README.md ver 12 -->
+<!-- README.md ver 13 -->
 # Platform Operators Console
 
 The Platform Operators Console (POC) is the Raspberry Pi operator console for
@@ -170,6 +170,12 @@ For Windows SHS installation and fan COM-port setup, see
 - `raspi/` contains Raspberry Pi installation and appliance configuration.
 - `docs/` contains architecture, handover and technician documentation.
 - `tools/` contains standalone commissioning and diagnostic utilities.
+- `tools/nl2_local_test_harness/` is a **localhost-only NL2 protocol console**
+  with station-state views, explicit controls, raw request editing and response
+  logs. Run `py -3 -m tools.nl2_local_test_harness` on the Windows NL2 PC
+  with **POC stopped** and the physical motion platform disabled. It imports
+  only the POC NL2 protocol module; no Qt or other POC runtime is involved.
+  See its [README](tools/nl2_local_test_harness/README.md).
 - `reference_data/` preserves calibration/source data that is not loaded by
   the runtime.
 

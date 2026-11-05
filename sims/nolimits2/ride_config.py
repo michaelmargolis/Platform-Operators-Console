@@ -1,4 +1,4 @@
-# ride_config.py ver 4 -- shared parks/calibration and variant schema helpers.
+# ride_config.py ver 5 -- shared parks/calibration and variant schema helpers.
 """NL2 park/calibration data and common variant schema validation.
 
 Variant labels are unique IDs within one platform JSON file. No variants live here.
@@ -39,6 +39,15 @@ PARKS = {
     "wilderness": {"name": "Wilderness Park", "path": f"{BASE_RIDE_PATH}/Wilderness Park/Wilderness Park.nl2park",
                    "normalized_height": {"min_height_m": -20.5, "max_height_m": 72.1, "amplitude": 0.90}},
 }
+
+# Explicit opt-in only: reset-time station search for parks proven to expose
+# their viewed train at more than one station. Unknown station indices are NOT
+# scanned or inferred. Other supported parks retain v183 station selection,
+# including GrandNational alternate-arrival and Tilt auxiliary-train logic.
+# Flying Beast station 1 was observed containing a different train in v183;
+# station 0 is a candidate, never assumed to be correct without fresh NL2 flags.
+RESET_VIEW_STATION_CANDIDATES = {"flyingbeast": (0, 1)}
+
 
 # Operator UI only. Full variant labels remain the unique IDs in logs and code.
 # Set False for deployment. Duplicate visible names (after curation filtering)

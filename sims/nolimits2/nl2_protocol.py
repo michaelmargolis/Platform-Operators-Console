@@ -1,4 +1,4 @@
-#nl2_protocol.py  ver 20
+#nl2_protocol.py  ver 22
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -81,6 +81,7 @@ class NL2Protocol:
     N_MSG_SET_MANUAL_MODE = 16
     N_MSG_DISPATCH = 17
     N_MSG_SET_PLATFORM = 20
+    N_MSG_SET_FLYER_CAR = 21
     N_MSG_LOAD_PARK = 24
     N_MSG_CLOSE_PARK = 25
     N_MSG_SET_PAUSE = 27
@@ -105,6 +106,7 @@ class NL2Protocol:
         N_MSG_SET_MANUAL_MODE: "SET_MANUAL_MODE",
         N_MSG_DISPATCH: "DISPATCH",
         N_MSG_SET_PLATFORM: "SET_PLATFORM",
+        N_MSG_SET_FLYER_CAR: "SET_FLYER_CAR",
         N_MSG_LOAD_PARK: "LOAD_PARK",
         N_MSG_CLOSE_PARK: "CLOSE_PARK",
         N_MSG_SET_PAUSE: "SET_PAUSE",
@@ -280,8 +282,38 @@ class NL2Protocol:
         data = struct.pack(">ii?", int(coaster), int(station), bool(enabled))
         self._send(self._message(self.N_MSG_SET_MANUAL_MODE, data))
 
-    def dispatch(self, coaster: int = 0, station: int = 0) -> None:
-        self._send(self._message(self.N_MSG_DISPATCH, struct.pack(">ii", coaster, station)))
+    def dispatch(self, coaster: int = 0, station: int = 0) -> int:
+        # Same wire packet as before; return its request ID for optional
+        # asynchronous acknowledgement diagnostics in Flying Beast only.
+        data = struct.pack(">ii", int(coaster), int(station))
+        request_id = self._request_id()
+        packet = struct.pack(">cHIH", b"N", self.N_MSG_DISPATCH, request_id, len(data)) + data + b"L"
+        self._request_results.pop(request_id, None)
+        self._send(packet)
+        return request_id
+
+    def set_flyer_car(self, locked: bool, coaster: int = 0, station: int = 0) -> int:
+        """Set flyer-seat position via NL2 message 21 (coaster, station, uint8).
+
+        **Verified against Flying Beast / NL2 2.6.4.0:** raw 0 locks seats.
+        Raw 1 is the inverse (unlock); live unlocking is not yet independently
+        verified. The protocol specification calls these values off/on, which
+        is not the same as unlocked/locked. Keep the public ``locked`` argument
+        semantic while converting to the tested raw value at the wire boundary.
+
+        The simulator adapter only invokes this when station-state and
+        viewed-train interlocks allow it; this function itself has no interlocks.
+        """
+        # Earlier versions mistakenly encoded locked=True as 1; NL2 accepted
+        # that packet but the seats did not lock. Raw 0 locks on Flying Beast.
+        raw_state = 0 if locked else 1
+        data = struct.pack(">iiB", int(coaster), int(station), raw_state)
+        request_id = self._request_id()
+        packet = struct.pack(">cHIH", b"N", self.N_MSG_SET_FLYER_CAR,
+                             request_id, len(data)) + data + b"L"
+        self._request_results.pop(request_id, None)
+        self._send(packet)
+        return request_id
 
     def set_platform(self, lowered: bool, coaster: int = 0, station: int = 0) -> None:
         """Lower/raise the NL2 station platform.
@@ -453,6 +485,11 @@ class NL2Protocol:
             if msg_id == self.N_MSG_SET_MANUAL_MODE and len(data) >= 9:
                 coaster, car, enabled = struct.unpack(">ii?", data[:9])
                 return f"coaster={coaster} car={car} manual={bool(enabled)}"
+            if msg_id == self.N_MSG_SET_FLYER_CAR and len(data) >= 9:
+                coaster, station, raw_state = struct.unpack(">iiB", data[:9])
+                action = {0: "LOCK", 1: "UNLOCK"}.get(raw_state, "UNKNOWN")
+                return (f"coaster={coaster} station={station} "
+                        f"raw_state={raw_state} action={action}")
             if msg_id == self.N_MSG_SET_PAUSE and len(data) >= 1:
                 return f"paused={bool(struct.unpack('>?', data[:1])[0])}"
             if msg_id == self.N_MSG_RESET_PARK and len(data) >= 1:

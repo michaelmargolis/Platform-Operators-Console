@@ -1,4 +1,4 @@
-#sim.py  ver 41
+#sim.py  ver 46
 from __future__ import annotations
 
 import logging
@@ -27,6 +27,21 @@ STATION_OBSERVATION_MAX_AGE_S = 1.5
 # Query the nearest station only when the ridden train stops after departing;
 # normal 4 Hz station polling continues to target its pinned departure station.
 ARRIVAL_NEAREST_POLL_S = 0.5
+# Bounded reset-only probe; unchanged rides use their existing nearest/pinned
+# station logic. Two independent, fresh observations per candidate are required.
+RESET_VIEW_STATION_CONFIRMATIONS = 2
+RESET_VIEW_STATION_WARNING_S = 8.0
+# Flying Beast only. A command ACK means NL2 accepted the API request, NOT
+# that the seats have locked or that the train has departed. State flags and
+# subsequent telemetry remain authoritative; never retry a timed-out control
+# command automatically (it may have succeeded despite a lost response).
+FLYER_LOCK_ACK_TIMEOUT_S = 5.0
+FLYER_LOCK_READY_TIMEOUT_S = 30.0
+FLYER_DISPATCH_ACK_TIMEOUT_S = 5.0
+FLYER_DEPARTURE_TIMEOUT_S = 25.0
+# The v185/v186 read-only cross-station and periodic evidence probes are
+# retired: the verified error was the inverted SET_FLYER_CAR value, not station
+# discovery. Retain command/reply IDs, real-motion evidence and timeouts.
 
 
 @dataclass(frozen=True)
@@ -46,7 +61,8 @@ class Sim(SimInterface):
     """Simple NoLimits2 adapter used to prove the POC simulator contract.
 
     The state behaviour follows the tested early coaster controller:
-      * dispatch is accepted only from READY and immediately enters RUNNING;
+      * Start in READY enters preparation; RUNNING begins when DISPATCH is sent;
+        NL2 acknowledgement and actual train departure are separate evidence;
       * pause toggles RUNNING/PAUSED;
       * a returning train becomes READY only after it has left the station;
       * reset enters RESETTING and returns to READY when NL2 is stationary in
@@ -67,6 +83,10 @@ class Sim(SimInterface):
     CAN_DISPATCH_MASK = 0x0004
     HARNESS_CAN_CLOSE_MASK = 0x0020
     PLATFORM_CAN_LOWER_MASK = 0x0100
+    # NoLimits2 station flags (STATION_STATE, message 15). Only Flying Beast
+    # may use CAN_LOCK_FLYER to request a seat lock during operator dispatch.
+    CAN_LOCK_FLYER_MASK = 0x0200
+    CAN_UNLOCK_FLYER_MASK = 0x0400
     TRAIN_IN_STATION_MASK = 0x0800
     CURRENT_RIDE_TRAIN_MASK = 0x1000
 
@@ -121,6 +141,12 @@ class Sim(SimInterface):
         self._aux_dispatch_count = 0
         self._state_events = deque(maxlen=256)
         self._last_station_request = 0.0
+        self._last_station_diagnostic = None
+        self._reset_probe_candidate = None
+        self._reset_probe_confirmations = 0
+        self._reset_probe_seen_at = 0.0
+        self._reset_probe_diagnostic = None
+        self._reset_probe_warned = False
         self._last_connect_attempt = 0.0
         self._previous_quaternion = None
         self._previous_quaternion_time = None
@@ -144,6 +170,7 @@ class Sim(SimInterface):
         self._loading_index = None
         self._queued_ride_index = None
         self._estop_recovery_pending = False
+        self._reset_flyer_dispatch_tracking()
 
     def connect(self) -> None:
         self._last_connect_attempt = time.monotonic()
@@ -202,6 +229,7 @@ class Sim(SimInterface):
         self._manual_mode_requested = False
         self._park_reset_pending = False
         self._ride_load_pending = False
+        self._last_station_diagnostic = None
         self._ride_load_requested_at = 0.0
         self._ride_load_request_id = None
         self._loading_index = None
@@ -223,6 +251,7 @@ class Sim(SimInterface):
 
         self.client.service()
         self._service_dispatch_preparation()
+        self._service_flyer_dispatch_confirmation()
 
         # When normal motion data is unavailable, periodically use GET_VERSION
         # as a benign API health probe. VERSION/OK/ERROR responses all prove the
@@ -248,11 +277,17 @@ class Sim(SimInterface):
         # telemetry being available.  A park loaded paused can legitimately be
         # between telemetry samples while still being fully loaded.
         self._service_ride_load_result()
+        # Surface only station-state transitions. NL2 already associates each
+        # station reply with its request ID; no protocol or dispatch change.
+        self._log_station_diagnostics(self._station_observation())
 
         try:
             self.client.request_telemetry()
             if now - self._last_station_request >= config.STATION_POLL_PERIOD_S:
-                self._request_station_state()
+                if self._needs_reset_station_probe():
+                    self._request_reset_station_probes(now)
+                else:
+                    self._request_station_state()
                 if (self.state is ExperienceState.RUNNING
                         and self._view_train_departed and self._arrival_probe_since):
                     nearest_at = float(getattr(self.client, "current_station_received_at", 0.0) or 0.0)
@@ -279,6 +314,16 @@ class Sim(SimInterface):
         # callers cannot leave the adapter stuck in RESETTING until telemetry
         # happens to arrive.
         self._service_ride_load_result()
+
+        # The operator's selected ride is updated before LOAD_PARK completes.
+        # Until its acknowledgement has applied the new ride's cue/heave mode,
+        # any cached telemetry belongs to an unknown park. In particular, the
+        # old normalized-height mode must not process Flying Beast telemetry.
+        # A failed LOAD_PARK is likewise not a valid loaded ride.
+        if self._ride_load_pending or self._park_load_failed:
+            self._data_connected = False
+            self._telemetry_valid = False
+            return SimSample(self._last_transform, self.state, False)
 
         if self._selected is None:
             self._data_connected = False
@@ -324,7 +369,30 @@ class Sim(SimInterface):
         )
 
     def run(self) -> None:
+        if self._is_flying_beast():
+            # An operator Start after manual locking cannot test automatic
+            # locking. Record what NL2 actually reported at the button press.
+            obs = self._station_observation()
+            tm = self.client.latest_telemetry
+            self._state_event(
+                "flyer_operator_start", state=self.state.name,
+                already_pending=self._dispatch_pending,
+                station=obs.identity, station_valid=obs.valid,
+                status=(f"0x{obs.status:08x}" if obs.valid else None),
+                view_train_here=obs.view_train_here,
+                can_lock_flyer=bool(obs.valid and obs.status & self.CAN_LOCK_FLYER_MASK),
+                can_dispatch=obs.can_dispatch,
+                telemetry_coaster=(int(tm.coaster_index) if tm else None),
+                telemetry_train=(int(tm.train) if tm else None),
+                telemetry_frame=(int(tm.frame) if tm else None),
+                telemetry_speed=(round(float(tm.speed), 3) if tm else None),
+                telemetry_play=(bool(tm.in_play_mode) if tm else None),
+                telemetry_paused=(bool(tm.paused) if tm else None))
         if self.state is not ExperienceState.READY or self._dispatch_pending:
+            if self._is_flying_beast():
+                self._state_event("flyer_operator_start_ignored",
+                                  state=self.state.name,
+                                  already_pending=self._dispatch_pending)
             return
 
         # Match the tested coaster dispatch sequence without blocking POC:
@@ -332,6 +400,7 @@ class Sim(SimInterface):
         # begins only when the actual NL2 DISPATCH command is sent.
         self._pause_target = None
         self._dispatch_pending = True
+        self._last_station_diagnostic = None
         # Keep the last confirmed arrival station through dispatch preparation;
         # it will be pinned as the next departure station at DISPATCH.
         ready_station = self._ready_station
@@ -351,6 +420,9 @@ class Sim(SimInterface):
         self._dispatch_pending = False
         self._dispatch_station_seen_at = 0.0
         self._aux_dispatch_authorized = False
+        # A lock request already transmitted cannot be undone, but cancellation
+        # must prevent a late OK/ready flag from dispatching without permission.
+        self._reset_flyer_dispatch_tracking()
         self._state_event("dispatch_authorization_revoked")
 
     def pause(self) -> None:
@@ -551,6 +623,7 @@ class Sim(SimInterface):
             invalidate_station()
         self._park_reset_pending = False
         self._reset_requested_at = 0.0
+        self._last_station_diagnostic = None
         self._ride_load_pending = True
         self._park_load_failed = False
         self._loading_index = index
@@ -583,16 +656,32 @@ class Sim(SimInterface):
         elif not data_connected:
             text = "NoLimits2 API connected; waiting for sim data"
         elif self._dispatch_pending:
-            text = "Preparing NoLimits2 dispatch"
+            text = ("Flying Beast: locking flyer seats / preparing dispatch"
+                    if self._is_flying_beast() and self._flyer_lock_sent_at
+                    else "Preparing NoLimits2 dispatch")
+        elif self._is_flying_beast() and self._flyer_lock_failure:
+            text = self._flyer_lock_failure
+        elif self._is_flying_beast() and self._flyer_dispatch_failure:
+            text = self._flyer_dispatch_failure
+        elif (self._is_flying_beast() and self.state is ExperienceState.RUNNING
+              and self._flyer_dispatch_sent_at and not self._view_train_departed):
+            text = ("Flying Beast: departure not confirmed — inspect NL2"
+                    if self._flyer_dispatch_departure_warned else
+                    "Flying Beast: motion detected; confirming departure"
+                    if self._departure_motion_seen else
+                    "Flying Beast: NL2 acknowledged dispatch; awaiting train movement"
+                    if self._flyer_dispatch_ack_ok else
+                    "Flying Beast: dispatch sent; awaiting acknowledgement / departure")
         elif self.state is ExperienceState.RESETTING:
-            text = "Resetting NoLimits2 ride"
+            text = ("Resetting NoLimits2 ride: locating viewed train"
+                    if self._needs_reset_station_probe() else "Resetting NoLimits2 ride")
         elif self.is_ready_to_start():
             text = "Ready for dispatch"
         elif self.state is ExperienceState.READY:
             text = "NoLimits2 ride loaded; waiting for activation"
         else:
             text = self.state.name.replace("_", " ").title()
-        if self.client.last_error:
+        if self.client.last_error and not self._flyer_lock_failure:
             text = self.client.last_error
         return SimStatus(
             pc_connected=pc_connected,
@@ -733,6 +822,12 @@ class Sim(SimInterface):
         return events
 
     def _clear_ride_tracking(self):
+        self._reset_flyer_dispatch_tracking()
+        self._reset_probe_candidate = None
+        self._reset_probe_confirmations = 0
+        self._reset_probe_seen_at = 0.0
+        self._reset_probe_diagnostic = None
+        self._reset_probe_warned = False
         self._view_train_departed = False
         self._departure_motion_seen = False
         self._ride_station = None
@@ -744,6 +839,129 @@ class Sim(SimInterface):
         self._aux_dispatch_authorized = False
         self._aux_wait_for_station_clear = False
         self._aux_dispatch_count = 0
+
+    def _reset_flyer_dispatch_tracking(self):
+        self._flyer_lock_request_id = None
+        self._flyer_lock_sent_at = 0.0
+        self._flyer_lock_acknowledged = False
+        self._flyer_lock_station = None
+        self._flyer_lock_failure = ""
+        self._flyer_dispatch_request_id = None
+        self._flyer_dispatch_sent_at = 0.0
+        self._flyer_dispatch_ack_reported = False
+        self._flyer_dispatch_departure_warned = False
+        self._flyer_dispatch_failure = ""
+        self._flyer_dispatch_ack_ok = False
+        self._flyer_lock_gate_diagnostic = None
+
+    def _is_flying_beast(self) -> bool:
+        return bool(self._selected is not None and
+                    0 <= self._selected < len(self._park_keys) and
+                    self._park_keys[self._selected] == "flyingbeast")
+
+    def _flyer_view_train_stopped(self, obs) -> bool:
+        """Safety gate for the seat-control command, not station discovery."""
+        tm = self.client.latest_telemetry
+        now = time.monotonic()
+        return bool(obs.valid and obs.manual and obs.view_train_here and
+                    obs.identity is not None and tm is not None and
+                    tm.in_play_mode and
+                    int(tm.coaster_index) == obs.identity[0] and
+                    0.0 <= now - tm.received_at <= config.TELEMETRY_STALE_S and
+                    abs(float(tm.speed)) < config.STATIONARY_SPEED_MPS)
+
+    def _report_flyer_lock_gate(self, obs) -> None:
+        """Explain a blocked lock command once per changed eligibility reason."""
+        tm = self.client.latest_telemetry
+        now = time.monotonic()
+        fresh = bool(tm is not None and
+                     0 <= now - float(tm.received_at) <= config.TELEMETRY_STALE_S)
+        stopped = bool(tm is not None and
+                       abs(float(tm.speed)) < config.STATIONARY_SPEED_MPS)
+        details = dict(
+            station=obs.identity, station_valid=obs.valid,
+            status=f"0x{obs.status:08x}" if obs.valid else None,
+            manual=obs.manual, view_train_here=obs.view_train_here,
+            telemetry_play=bool(tm.in_play_mode) if tm else None,
+            telemetry_coaster=int(tm.coaster_index) if tm else None,
+            telemetry_train=int(tm.train) if tm else None,
+            telemetry_fresh=fresh, telemetry_stopped=stopped,
+            coaster_matches=bool(tm and obs.identity and
+                                 int(tm.coaster_index) == obs.identity[0]),
+        )
+        signature = tuple(details.values())
+        if signature != self._flyer_lock_gate_diagnostic:
+            self._flyer_lock_gate_diagnostic = signature
+            self._state_event("flyer_lock_gate_waiting", **details)
+
+    def _abort_flyer_lock(self, event: str, detail: str) -> None:
+        """Fail closed: do not dispatch later based on a delayed station flag."""
+        self._dispatch_pending = False
+        self._dispatch_station_seen_at = 0.0
+        self._flyer_lock_failure = "Flying Beast: " + detail
+        self._state_event(event, station=self._flyer_lock_station,
+                          request_id=self._flyer_lock_request_id, detail=detail)
+        log.warning("NL2 Flying Beast flyer lock: %s", detail)
+
+    def _service_flyer_lock_ack(self, now: float) -> None:
+        if not self._flyer_lock_sent_at or self._flyer_lock_acknowledged:
+            return
+        get_result = getattr(self.client, "request_result", None)
+        result = (get_result(self._flyer_lock_request_id)
+                  if callable(get_result) and self._flyer_lock_request_id is not None
+                  else None)
+        if result is not None:
+            if result[0] == "ok":
+                self._flyer_lock_acknowledged = True
+                self._state_event("flyer_lock_acknowledged",
+                                  request_id=self._flyer_lock_request_id,
+                                  station=self._flyer_lock_station)
+                return
+            self._abort_flyer_lock("flyer_lock_rejected",
+                                   f"seat-lock request rejected: {result[1]}")
+        elif now - self._flyer_lock_sent_at >= FLYER_LOCK_ACK_TIMEOUT_S:
+            self._abort_flyer_lock("flyer_lock_ack_timeout",
+                                   "seat-lock acknowledgement timed out; no automatic retry")
+
+    def _service_flyer_dispatch_confirmation(self) -> None:
+        """After Flying Beast DISPATCH, separate API ACK from real departure."""
+        if (not self._is_flying_beast() or not self._flyer_dispatch_sent_at
+                or self.state not in (ExperienceState.RUNNING, ExperienceState.PAUSED)):
+            return
+        now = time.monotonic()
+        if not self._flyer_dispatch_ack_reported:
+            request_id = self._flyer_dispatch_request_id
+            get_result = getattr(self.client, "request_result", None)
+            result = (get_result(request_id) if callable(get_result) and request_id is not None
+                      else None)
+            if result is not None:
+                self._flyer_dispatch_ack_reported = True
+                self._flyer_dispatch_ack_ok = result[0] == "ok"
+                self._state_event("dispatch_command_acknowledged" if result[0] == "ok"
+                                  else "dispatch_command_rejected",
+                                  station=self._ride_station, request_id=request_id,
+                                  detail=result[1])
+                if result[0] != "ok":
+                    # A rejected primary DISPATCH must not authorise the normal
+                    # auxiliary-train dispatch path, even if the viewed train
+                    # later moves for reasons outside POC.
+                    self._aux_dispatch_authorized = False
+                    self._flyer_dispatch_failure = (
+                        "Flying Beast: DISPATCH rejected by NL2: " + result[1])
+                    log.warning("NL2 Flying Beast DISPATCH rejected: %s", result[1])
+            elif now - self._flyer_dispatch_sent_at >= FLYER_DISPATCH_ACK_TIMEOUT_S:
+                self._flyer_dispatch_ack_reported = True
+                self._state_event("dispatch_ack_timeout",
+                                  station=self._ride_station, request_id=request_id)
+                log.warning("NL2 Flying Beast DISPATCH acknowledgement unavailable")
+        if (not self._view_train_departed and not self._flyer_dispatch_departure_warned and
+                now - self._flyer_dispatch_sent_at >= FLYER_DEPARTURE_TIMEOUT_S):
+            self._flyer_dispatch_departure_warned = True
+            self._state_event("dispatch_departure_timeout", station=self._ride_station,
+                              request_id=self._flyer_dispatch_request_id,
+                              seconds=FLYER_DEPARTURE_TIMEOUT_S)
+            log.warning("NL2 Flying Beast: no viewed-train departure confirmed %.0fs after "
+                        "DISPATCH; no automatic retry", FLYER_DEPARTURE_TIMEOUT_S)
 
     def _station_observation(self, now=None, identity=None):
         if now is None:
@@ -778,6 +996,57 @@ class Sim(SimInterface):
             view_train_here=current,
             other_train_here=bool(occupied and not current),
             can_dispatch=bool(bits & self.CAN_DISPATCH_MASK),
+        )
+
+    def _log_station_diagnostics(self, obs: StationObservation) -> None:
+        """Log meaningful station/seat-flag changes, not 20 Hz repetitions.
+
+        The station observation is identity-matched and timestamp-checked by
+        _station_observation(). 'nearest' is shown separately: the nearest
+        station is not necessarily the pinned/dispatch station. This method
+        never changes commands or the dispatch state machine.
+        """
+        if not NL2_STATE_DEBUG or self._ride_load_pending or self._selected is None:
+            return
+        nearest = self._station_indices()
+        signature = (obs.identity, obs.status if obs.valid else None, obs.valid,
+                     nearest, self._ride_station, self._ready_station,
+                     self._dispatch_pending)
+        if signature == self._last_station_diagnostic:
+            return
+        self._last_station_diagnostic = signature
+        if not obs.valid:
+            log.debug(
+                "NL2 station flags: no fresh reply station=%s nearest=%s "
+                "departure=%s ready=%s dispatch_pending=%s",
+                obs.identity, nearest, self._ride_station, self._ready_station,
+                self._dispatch_pending,
+            )
+            return
+        tm = self.client.latest_telemetry
+        view_coaster = (int(tm.coaster_index) if tm is not None and tm.in_play_mode
+                        else None)
+        view_train = (int(tm.train) if tm is not None and tm.in_play_mode
+                      else None)
+        log.debug(
+            "NL2 station flags: station=%s nearest=%s departure=%s ready=%s "
+            "raw=0x%08x manual=%s can_dispatch=%s can_lock_flyer=%s "
+            "can_unlock_flyer=%s can_lower_platform=%s can_close_harness=%s "
+            "occupied=%s view_train_here=%s other_train_here=%s "
+            "telemetry_coaster=%s telemetry_train=%s coaster_matches=%s "
+            "dispatch_pending=%s",
+            obs.identity, nearest, self._ride_station, self._ready_station,
+            obs.status,
+            obs.manual, obs.can_dispatch,
+            bool(obs.status & self.CAN_LOCK_FLYER_MASK),
+            bool(obs.status & self.CAN_UNLOCK_FLYER_MASK),
+            bool(obs.status & self.PLATFORM_CAN_LOWER_MASK),
+            bool(obs.status & self.HARNESS_CAN_CLOSE_MASK),
+            obs.occupied, obs.view_train_here, obs.other_train_here,
+            view_coaster, view_train,
+            view_coaster is not None and obs.identity is not None
+                and view_coaster == obs.identity[0],
+            self._dispatch_pending,
         )
 
     def _arrival_station_observation(self, now):
@@ -850,7 +1119,112 @@ class Sim(SimInterface):
                           status=f"0x{obs.status:08x}",
                           count=self._aux_dispatch_count)
 
+    def _reset_station_candidates(self):
+        """Only explicitly enabled parks can probe alternate reset stations."""
+        if (self._selected is None or self._ride_load_pending or self._park_load_failed):
+            return ()
+        park_key = self._park_keys[self._selected]
+        return tuple(ride_config.RESET_VIEW_STATION_CANDIDATES.get(park_key, ()))
+
+    def _needs_reset_station_probe(self):
+        # Once an identity is proven, normal status/manual/dispatch processing
+        # must use the pinned _ready_station, without further scanning.
+        return bool(self.state is ExperienceState.RESETTING
+                    and self._reset_requested_at > 0.0
+                    and self._ready_station is None
+                    and self._reset_station_candidates())
+
+    def _request_reset_station_probes(self, now):
+        """Read-only STATION_STATE requests, never SET_MANUAL_MODE/DISPATCH."""
+        tm = self.client.latest_telemetry
+        if (tm is None or not tm.in_play_mode
+                or tm.received_at < self._reset_requested_at
+                or now - tm.received_at > config.TELEMETRY_STALE_S):
+            self.client.request_telemetry()
+            return
+        coaster = int(tm.coaster_index)
+        for station_index in self._reset_station_candidates():
+            self.client.request_station_state(coaster, station_index)
+
+    def _confirm_reset_station(self, telemetry, now):
+        """Choose a reset station only on two full, unambiguous response sets.
+
+        A nearest-station reply or a train-present bit alone is NOT evidence of
+        the viewed train. Request-ID-associated station snapshots must all be
+        fresh, belong to the viewed coaster and postdate RESET_PARK. If either
+        station is unknown or both claim the viewed train, remain RESETTING.
+        """
+        if (not telemetry.in_play_mode
+                or telemetry.received_at < self._reset_requested_at
+                or now - telemetry.received_at > config.TELEMETRY_STALE_S
+                or abs(float(telemetry.speed)) >= config.STATIONARY_SPEED_MPS):
+            self._reset_probe_candidate = None
+            self._reset_probe_confirmations = 0
+            return False
+        coaster = int(telemetry.coaster_index)
+        observations = tuple(self._station_observation(
+            now=now, identity=(coaster, station))
+            for station in self._reset_station_candidates())
+        signature = tuple((obs.identity, obs.status if obs.valid else None,
+                           bool(obs.valid and obs.received_at >= self._reset_requested_at))
+                          for obs in observations)
+        if signature != self._reset_probe_diagnostic:
+            self._reset_probe_diagnostic = signature
+            if NL2_STATE_DEBUG:
+                log.debug('NL2 reset station search: viewed_coaster=%d stations=%s',
+                          coaster, signature)
+        if not all(obs.valid and obs.received_at >= self._reset_requested_at
+                   for obs in observations):
+            self._reset_probe_candidate = None
+            self._reset_probe_confirmations = 0
+            return False
+        matching = [obs for obs in observations if obs.view_train_here]
+        if len(matching) != 1:
+            self._reset_probe_candidate = None
+            self._reset_probe_confirmations = 0
+            return False
+        chosen = matching[0].identity
+        # Require a strictly newer correlated reply for EACH station before
+        # counting another round. Comparing only the minimum timestamp is
+        # unsafe: refreshing the previously older station could falsely count
+        # a second observation without hearing from the other station.
+        observation_round = tuple(obs.received_at for obs in observations)
+        if chosen != self._reset_probe_candidate:
+            self._reset_probe_candidate = chosen
+            self._reset_probe_confirmations = 1
+            self._reset_probe_seen_at = observation_round
+            return False
+        if not all(new > old for new, old in
+                   zip(observation_round, self._reset_probe_seen_at)):
+            return False
+        self._reset_probe_seen_at = observation_round
+        self._reset_probe_confirmations += 1
+        if self._reset_probe_confirmations < RESET_VIEW_STATION_CONFIRMATIONS:
+            return False
+        self._ready_station = chosen
+        self._manual_mode_requested = False  # now request manual for correct station
+        self._state_event('reset_view_station_confirmed', station=chosen,
+                          status=f'0x{matching[0].status:08x}',
+                          confirmations=self._reset_probe_confirmations)
+        self._last_station_diagnostic = None
+        return True
+
     def _update_state(self, telemetry: NL2Telemetry) -> None:
+        # Flying Beast only: do not enter READY or enable manual/dispatch
+        # controls for the nearest station when it contains ANOTHER train.
+        # No change to any other ride's reset/departure/arrival logic.
+        if self._needs_reset_station_probe():
+            now = time.monotonic()
+            if not self._confirm_reset_station(telemetry, now):
+                if (not self._reset_probe_warned
+                        and now - self._reset_requested_at >= RESET_VIEW_STATION_WARNING_S):
+                    self._reset_probe_warned = True
+                    log.warning('NL2 reset: no uniquely confirmed viewed-train station '
+                                'in %s; remaining RESETTING without station commands',
+                                self._reset_station_candidates())
+                    self._state_event('reset_station_search_waiting',
+                                      candidates=self._reset_station_candidates())
+                return
         obs = self._station_observation()
         stationary = abs(float(telemetry.speed)) < config.STATIONARY_SPEED_MPS
 
@@ -917,6 +1291,12 @@ class Sim(SimInterface):
             if not self._view_train_identity_matches(telemetry):
                 return
             if not stationary:
+                if self._is_flying_beast() and not self._departure_motion_seen:
+                    self._state_event("flyer_dispatch_motion_detected",
+                                      station=self._ride_station,
+                                      frame=telemetry.frame,
+                                      train=self._ride_train,
+                                      speed=round(float(telemetry.speed), 3))
                 self._departure_motion_seen = True
                 self._arrival_probe_since = 0.0
                 self._arrival_probe_last_request = 0.0
@@ -963,8 +1343,20 @@ class Sim(SimInterface):
         """Non-blocking equivalent of the old prepare_for_dispatch() loop."""
         if not self._dispatch_pending or not self._sim_connected():
             return
+        flying_beast = self._is_flying_beast()
+        now = time.monotonic()
+        if flying_beast and self._flyer_lock_sent_at:
+            self._service_flyer_lock_ack(now)
+            if not self._dispatch_pending:
+                return
+            if (self._flyer_lock_acknowledged and
+                    now - self._flyer_lock_sent_at >= FLYER_LOCK_READY_TIMEOUT_S):
+                self._abort_flyer_lock("flyer_lock_ready_timeout",
+                                       "seats did not become dispatchable within timeout")
+                return
 
         obs = self._station_observation()
+        self._log_station_diagnostics(obs)
         if not obs.valid or obs.received_at <= self._dispatch_station_seen_at:
             return
         self._dispatch_station_seen_at = obs.received_at
@@ -990,6 +1382,38 @@ class Sim(SimInterface):
             self._request_station_state()
             return
 
+        if flying_beast:
+            # A prior lock command must receive an OK before the resulting
+            # CAN_DISPATCH state can authorise an NL2 dispatch. A late OK or
+            # status after cancellation is never sufficient on its own.
+            if self._flyer_lock_sent_at and not self._flyer_lock_acknowledged:
+                self._request_station_state()
+                return
+            if not (status & self.CAN_DISPATCH_MASK) and status & self.CAN_LOCK_FLYER_MASK:
+                if not self._flyer_lock_sent_at:
+                    # The lock flag may belong to another station/train. Never
+                    # act without identified, recent, stationary view telemetry.
+                    if not self._flyer_view_train_stopped(obs):
+                        self._report_flyer_lock_gate(obs)
+                        self._request_station_state()
+                        return
+                    sender = getattr(self.client, "set_flyer_car", None)
+                    if not callable(sender):
+                        self._abort_flyer_lock("flyer_lock_unavailable",
+                                               "NL2 client has no flyer-seat command")
+                        return
+                    # Send semantic locked=True; NL2Protocol maps this to the
+                    # field-verified raw value 0 (NOT the former raw value 1).
+                    request_id = sender(True, *obs.identity)
+                    self._flyer_lock_sent_at = time.monotonic()
+                    self._flyer_lock_request_id = request_id
+                    self._flyer_lock_station = obs.identity
+                    self._state_event("flyer_lock_command_sent",
+                                      station=obs.identity, request_id=request_id,
+                                      raw_state=0, status=f"0x{status:08x}")
+                self._request_station_state()
+                return
+
         if status & self.CAN_DISPATCH_MASK:
             if NL2_STATE_DEBUG:
                 log.debug("NL2 dispatch preparation complete: verifying view train before DISPATCH")
@@ -997,7 +1421,8 @@ class Sim(SimInterface):
             tm = self.client.latest_telemetry
             if not (obs.valid and obs.view_train_here and tm is not None
                     and tm.in_play_mode and obs.identity is not None
-                    and int(tm.coaster_index) == obs.identity[0]):
+                    and int(tm.coaster_index) == obs.identity[0]
+                    and (not flying_beast or self._flyer_view_train_stopped(obs))):
                 self._request_station_state()
                 return
             self._ride_station = obs.identity
@@ -1008,8 +1433,13 @@ class Sim(SimInterface):
             self._aux_wait_for_station_clear = False
             # Authorise auxiliary departure only AFTER the primary command has
             # actually been transmitted. A socket error cannot arm that path.
-            self._dispatch()
+            dispatch_request_id = self._dispatch()
             self._ride_dispatch_at = time.monotonic()
+            if flying_beast:
+                self._flyer_dispatch_request_id = dispatch_request_id
+                self._flyer_dispatch_sent_at = self._ride_dispatch_at
+                self._state_event("dispatch_command_sent", station=self._ride_station,
+                                  request_id=dispatch_request_id, train=self._ride_train)
             self._aux_dispatch_authorized = True
             self._dispatch_pending = False
             self.state = ExperienceState.RUNNING
@@ -1018,8 +1448,8 @@ class Sim(SimInterface):
             self._request_station_state()
             return
 
-        if NL2_STATE_DEBUG:
-            log.debug("NL2 dispatch preparation: station not yet dispatchable (0x%08x)", status)
+        # The change-triggered station-flags diagnostic above includes the
+        # reason for waiting. Do not repeat this message at polling frequency.
         self._request_station_state()
 
     def _start_park_reset(self) -> None:
@@ -1088,12 +1518,12 @@ class Sim(SimInterface):
             return
         self.client.set_platform(bool(lowered), *indices)
 
-    def _dispatch(self) -> None:
+    def _dispatch(self):
         indices = self._ride_station or self._ready_station or self._station_indices()
         if indices is None:
             self._request_station_state()
-            return
-        self.client.dispatch(*indices)
+            return None
+        return self.client.dispatch(*indices)
 
     def _manual_mode_is_set(self) -> bool:
         return self._station_observation().manual

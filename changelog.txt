@@ -1,4 +1,113 @@
-# changelog.txt ver 25
+# changelog.txt ver 30
+v187 | Verified NL2 flyer-seat lock polarity and reusable local protocol console
+-------------------------------------------------------------------------------
+- Flying Beast operator independently confirmed on NL2 2.6.4.0 that
+  SET_FLYER_CAR (message 21) with raw byte **0** LOCKS the flyer seats;
+  the station becomes dispatchable a few seconds later. v185-v186 wrongly
+  encoded semantic locked=True as raw **1**. Correct POC's protocol method:
+  locked=True now transmits 0, locked=False transmits 1. No auto-unlock is
+  introduced; the inverse unlocking value is not yet field-verified.
+- Retain existing Flying Beast safety: correct/fresh stationary viewed train,
+  pinned station/manual mode, command request-ID ACK, fresh CAN_DISPATCH before
+  DISPATCH, command rejection and 5/30/25s timeouts; no automatic control
+  retry. Add explicit raw_state=0 to lock-sent event and clearer protocol logs.
+- Remove temporary v185-v186 cross-station telemetry polls during lock/after
+  dispatch, periodic post-dispatch evidence snapshots and inferred rearm event.
+  These diagnostics were based on a now-disproven command/station hypothesis;
+  keep v184's verified reset station discovery and v186 Start/gate logging.
+- Integrate generic localhost NoLimits 2 protocol test harness as
+  tools/nl2_local_test_harness; it imports the production NL2Protocol directly,
+  has configurable station/command and raw payload editor, read-only poll,
+  status/reply log, and explicitly labelled Lock seats (0)/Unlock seats (1)
+  buttons. No duplicated protocol module or external third-party code.
+- Other rides, Raspberry Pi I/O, platform motion, SHS, ride variants and the
+  entire sim_player subtree unchanged. Headless tests use fake NL2 and TCP;
+  final live POC and physical motion validation remain outstanding.
+
+v186 | Flying Beast post-dispatch evidence and explicit operator-Start tracing
+-------------------------------------------------------------------------------
+- Analyze live v185 trace from 4 November (18:18–18:21): NL2 confirms Flying
+  Beast station (0,0), and POC DISPATCH gets OK. Within 19s no viewed-train
+  departure is confirmed; CAN_DISPATCH clears then reappears. This does NOT
+  establish why NL2 ignored/delayed dispatch. Operator Start was recorded only
+  after manual flyer-seat locking, so auto-lock was not exercised in that log.
+- For Flying Beast only, log every Sim.run() invocation (including ignored
+  requests), with current station/train/telemetry and CAN_LOCK_FLYER/
+  CAN_DISPATCH. Log changing safety-gate conditions when auto-lock is blocked.
+- After a Flying Beast DISPATCH, query the OTHER configured station read-only
+  at <=1.34 Hz and log its changes; preserve request-ID-correlated station data.
+  Record bounded evidence snapshots at 2, 5, 10, 15, and 25 seconds, including
+  primary/other station, telemetry speed/frame/play/pause, and DISPATCH ACK.
+  Flag a dispatchable-again station without confirmed motion, and report the
+  first viewed-train motion separately from actual station departure.
+- Clarify the operator-visible pending status: DISPATCH sent vs acknowledged,
+  first motion, actual departure, and existing 25s departure timeout.
+- No additional NL2 control commands, retries, auto-unlocking, multi-station
+  selection changes, platform/muscle changes, or sim_player modifications.
+  All nine other parks follow their exact v185 control path. Live NL2 testing
+  is required; this is a DIAGNOSTIC release, not a claimed dispatch fix.
+- Add 18 parametrized/focused headless checks and operator test instructions.
+
+v185 | Flying Beast automatic flyer-seat locking and command/departure diagnostics
+--------------------------------------------------------------------------------
+- Following verified v184 reset station selection, POC Start can now send the
+  documented NL2 SET_FLYER_CAR (message 21; coaster, station, 1=lock) on Flying
+  Beast ONLY when a fresh station observation confirms the stationary viewed
+  train, manual mode, and the CAN_LOCK_FLYER bit. The operator initiates Start;
+  seat locking is NOT automatic merely on reaching READY.
+- Correlate the seat-lock request with its OK/ERROR response. Never equate OK
+  with physically locked seats; a fresh CAN_DISPATCH flag is still required.
+  Do not issue repeated lock commands. Error or ACK timeout cancels the pending
+  dispatch; after an acknowledged lock, a 30s readiness timeout also cancels.
+- When waiting for the lock, poll the other known Flying Beast station read-only
+  and log relevant changes, without changing station selection or control.
+- Correlate the Flying Beast DISPATCH command with its OK/ERROR response, log
+  actual viewed-train departure separately, and warn after 25s with no departure
+  (never auto-retry). An explicitly rejected dispatch revokes auxiliary
+  authorization. Previous view_train_dispatched event remains for compatibility
+  but denotes command sent, not actual departure.
+- All other rides keep their existing station/manual/dispatch state machine and
+  dispatch wire format. No automatic flyer unlock, changes to muscle controls,
+  platform geometry, other park settings, or sim_player logic.
+- Add protocol-byte/ACK, correct/other train, cancellation, error/timeout,
+  manual pre-lock, both-station and non-Flying-Beast regression tests.
+  Real NoLimits2 and physical platform validation are still required.
+
+v184 | Flying Beast opt-in reset-station identification, guarded against regressions
+-------------------------------------------------------------------------------
+- Investigate the 4 November Flying Beast log: after RESET_PARK POC polled
+  nearest station (0,1), which contained an OTHER train, not the view train.
+- Allow reset-time probing of stations (0,0)/(0,1) ONLY for Flying Beast.
+  Require fresh request-ID-associated station replies for both stations,
+  exactly one viewed-train status and two complete successive observations
+  before pinning the candidate station to the existing READY/dispatch path.
+- No speculative station selection, no manual/dispatch/flyer-control commands
+  during search. Missing/ambiguous status remains RESETTING with clear warning.
+- Keep all nine other supported parks unchanged (including GrandNational's
+  alternate arrivals and Tilt Coaster's auxiliary dispatch). Preserve the
+  normal dispatch authorization and physical/platform settings.
+- Add dedicated regression tests and reproduction/verification documents;
+  unified POC delta still contains the complete unchanged sim_player tree.
+  Live NL2/Windows/Pi/physical testing remains necessary.
+
+v183 | Flying Beast load-race guard and change-triggered station diagnostics
+--------------------------------------------------------------------------
+- Fix ride-switch race: a new selected park may be visible before LOAD_PARK
+  confirmation has applied its heave/cue variant. Suppress telemetry decoding
+  and report data invalid until LOAD_PARK succeeds. Failed loads also hold
+  data invalid. Prevent Flying Beast missing-normalized-height ValueError.
+- Log station identity, nearest station, pinned departure/ready station,
+  raw STATION_STATE flags, CAN_LOCK_FLYER/CAN_UNLOCK_FLYER, CAN_DISPATCH,
+  occupancy/current-view train bit, and current telemetry coaster/train.
+  Report only changes, not every 4 Hz poll or 20 Hz service iteration.
+- Keep the existing request-ID-correlated per-station NL2 protocol and its
+  dispatch logic unchanged. Do not send SET_FLYER_CAR, close harness, change
+  dispatch authorization, or alter motion/actuator output. Suppress repetitive
+  'station not yet dispatchable' log lines in favor of richer state changes.
+- Add five independent headless regression tests, operator reproduction steps
+  and verification guidance. Include full sim_player tree in unified POC ZIP.
+  Windows NL2 UI, physical hardware and Qt5/Qt6 GUI remain to be tested.
+
 v182 | Chair V3 limits and per-variant ride-neutral height adjustment
 --------------------------------------------------------------------
 - Set Chair V3 instance motion limits to Surge/Sway/Heave 90/90/100 mm and
