@@ -1,5 +1,5 @@
-#file_versions.txt  ver 183
-# Application baseline: v187 (field-verified flyer lock polarity and NL2 local console)
+#file_versions.txt  ver 187
+# Application baseline: v191 (NL2 reset transition play-mode retry fix)
 # Relative path | expected version
 config/platforms.py|6
 controls/__init__.py|1
@@ -40,8 +40,8 @@ sim_host_service/windows/configure_shs_firewall.ps1|1
 sim_host_service/windows/install_shs_startup.ps1|3
 sim_host_service/windows/start_shs.cmd|3
 sims/nolimits2/config.py|18
-sims/nolimits2/nl2_protocol.py|22
-sims/nolimits2/sim.py|46
+sims/nolimits2/nl2_protocol.py|23
+sims/nolimits2/sim.py|47
 sims/spacecoaster/config.py|13
 sims/spacecoaster/control.py|4
 sims/spacecoaster/sim.py|19
@@ -109,9 +109,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|30
-README.md|13
-file_versions.txt|183
+changelog.txt|34
+README.md|14
+file_versions.txt|187
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -138,8 +138,8 @@ tests/test_mdx_roll_channels_v166.py|2
 tests/test_nl2_angular_scaling_v167.py|1
 tests/test_nl2_park_selection_v168.py|1
 tests/test_nl2_ride_completion_v169.py|2
-tests/test_nl2_multitrain_v170.py|1
-tests/test_nl2_multistation_v171.py|1
+tests/test_nl2_multitrain_v170.py|2
+tests/test_nl2_multistation_v171.py|2
 tests/test_nl2_angular_washout_v172.py|2
 sims/nolimits2/ride_config.py|5
 sims/nolimits2/angular_cues.py|1
@@ -261,11 +261,21 @@ tests/test_nl2_flyer_value_v187.py|1
 docs/FLYING_BEAST_FLYER_VALUE_V187.md|1
 docs/POC_V187_VERIFICATION.md|1
 docs/POC_V187_CHANGED_FILES.txt|1
-tools/nl2_local_test_harness/README.md|1
+tools/nl2_local_test_harness/README.md|2
 tools/nl2_local_test_harness/__init__.py|1
 tools/nl2_local_test_harness/__main__.py|1
-tools/nl2_local_test_harness/harness.py|1
+tools/nl2_local_test_harness/harness.py|2
+tools/nl2_local_test_harness/dispatch_capture.py|1
 tools/nl2_local_test_harness/harness_core.py|1
 tools/nl2_local_test_harness/run_harness.bat|1
 tools/nl2_local_test_harness/run_tests.bat|1
+tools/nl2_local_test_harness/tests/test_dispatch_capture.py|1
 tools/nl2_local_test_harness/tests/test_harness.py|1
+
+docs/POC_V188_CHANGED_FILES.txt|1
+docs/POC_V188_VERIFICATION.md|1
+sims/nolimits2/station_modes.py|3
+tests/test_nl2_station_modes_v189.py|3
+docs/NL2_MULTI_STATION_MANUAL_V189.md|1
+docs/POC_V189_CHANGED_FILES.txt|1
+docs/POC_V189_VERIFICATION.md|1

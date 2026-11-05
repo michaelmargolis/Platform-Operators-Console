@@ -1,4 +1,4 @@
-# test_nl2_multistation_v171.py ver 1
+# test_nl2_multistation_v171.py ver 2
 """NL2 arrival at a different station without losing departure-station dispatch."""
 import struct
 import time
@@ -125,13 +125,13 @@ def test_moving_through_station_cannot_terminate():
     assert sim.state == ExperienceState.RUNNING
 
 
-def test_auxiliary_dispatch_remains_pinned_while_nearest_changes():
+def test_no_unwatched_dispatch_while_moving_and_nearest_changes():
     sim, c = running()
     c.current_station_index = 1
     c.put(0, OTHER)
     tick(sim, c, 11, 2)
     dispatches = [v for v in c.commands if v[0] == 'dispatch']
-    assert dispatches == [('dispatch', 0, 0), ('dispatch', 0, 0)]
+    assert dispatches == [('dispatch', 0, 0)]
     assert sim.state == ExperienceState.RUNNING
 
 

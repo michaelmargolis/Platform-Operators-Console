@@ -1,4 +1,4 @@
-#sim.py  ver 46
+#sim.py  ver 47
 from __future__ import annotations
 
 import logging
@@ -13,6 +13,7 @@ from core.types import ExperienceState, SimSample, SimStatus
 from sims.nolimits2 import config, ride_config, angular_cues
 from sims.nolimits2.variant_store import VariantStore
 from sims.nolimits2.nl2_protocol import NL2Protocol, NL2Telemetry
+from sims.nolimits2.station_modes import StationModeManager
 
 log = logging.getLogger(__name__)
 
@@ -161,6 +162,7 @@ class Sim(SimInterface):
         self._heartbeat_connected = False
         self._last_api_probe = 0.0
         self._manual_mode_requested = False
+        self._station_modes = StationModeManager()
         self._park_reset_pending = False
         self._ride_load_pending = False
         self._ride_load_requested_at = 0.0
@@ -227,6 +229,7 @@ class Sim(SimInterface):
         self._connected_sync_started = False
         self._data_connected = False
         self._manual_mode_requested = False
+        self._station_modes.reset()
         self._park_reset_pending = False
         self._ride_load_pending = False
         self._last_station_diagnostic = None
@@ -277,6 +280,13 @@ class Sim(SimInterface):
         # telemetry being available.  A park loaded paused can legitimately be
         # between telemetry samples while still being fully loaded.
         self._service_ride_load_result()
+        try:
+            self._service_station_modes(now)
+        except ConnectionError:
+            self.state = ExperienceState.DISCONNECTED
+            self._data_connected = False
+            self._telemetry_valid = False
+            return
         # Surface only station-state transitions. NL2 already associates each
         # station reply with its request ID; no protocol or dispatch change.
         self._log_station_diagnostics(self._station_observation())
@@ -618,6 +628,7 @@ class Sim(SimInterface):
         # manual-mode request belongs to the previous park and must not suppress
         # a fresh SET_MANUAL_MODE command after the new park is loaded.
         self._manual_mode_requested = False
+        self._station_modes.reset()
         invalidate_station = getattr(self.client, "invalidate_current_station", None)
         if callable(invalidate_station):
             invalidate_station()
@@ -653,8 +664,14 @@ class Sim(SimInterface):
         elif self._ride_load_pending:
             loading = self._loading_index if self._loading_index is not None else self._selected
             text = f"Loading NoLimits2 ride: {self._experiences[loading]}"
+        elif self._station_modes_supported() and self._station_modes.error:
+            text = "NoLimits2 station setup failed: " + self._station_modes.error
         elif not data_connected:
             text = "NoLimits2 API connected; waiting for sim data"
+        elif (self._station_modes_supported()
+              and self.state in (ExperienceState.READY, ExperienceState.RESETTING)
+              and not self._all_station_modes_ready()):
+            text = "Preparing NoLimits2 station manual modes"
         elif self._dispatch_pending:
             text = ("Flying Beast: locking flyer seats / preparing dispatch"
                     if self._is_flying_beast() and self._flyer_lock_sent_at
@@ -695,6 +712,9 @@ class Sim(SimInterface):
                 or self._park_reset_pending
                 or self._reset_requested_at > 0.0
                 or self._manual_mode_requested
+                or (self._station_modes_supported()
+                    and self.state in (ExperienceState.READY, ExperienceState.RESETTING)
+                    and not self._all_station_modes_ready())
                 or self._dispatch_pending
             ),
             ready_to_start=self.is_ready_to_start(),
@@ -779,6 +799,7 @@ class Sim(SimInterface):
         invalidate_station = getattr(self.client, "invalidate_current_station", None)
         if callable(invalidate_station):
             invalidate_station()
+        self._station_modes.reset()
         self._reset_requested_at = 0.0
         self._park_reset_pending = False
         # Normal ride loads may settle in READY while waiting for later operator
@@ -1093,13 +1114,28 @@ class Sim(SimInterface):
         return (int(telemetry.coaster_index), int(telemetry.train)) == self._ride_train
 
     def _consider_auxiliary_dispatch(self, obs, telemetry):
+        # Do NOT launch an unwatched train just because one becomes ready at
+        # our station. This is allowed only when the viewed train has departed,
+        # is now stopped near that same station for a sustained interval, and
+        # a different train occupies it. This is a conservative indication of
+        # an obstruction, not a proof of NL2 internal block occupancy.
+        now = time.monotonic()
+        nearest_received = float(getattr(self.client, "current_station_received_at", 0.0) or 0.0)
         if not (self._aux_dispatch_authorized
                 and self._view_train_departed
                 and self.state is ExperienceState.RUNNING
                 and self._pause_target is None
                 and not telemetry.paused
                 and self._view_train_identity_matches(telemetry)
-                and obs.valid and obs.manual):
+                and abs(float(telemetry.speed)) < config.STATIONARY_SPEED_MPS
+                and self._arrival_probe_since > 0.0
+                and now - self._arrival_probe_since >= 3.0
+                and nearest_received >= self._arrival_probe_since
+                and nearest_received <= now
+                and now - nearest_received <= STATION_OBSERVATION_MAX_AGE_S
+                and self._station_indices() == self._ride_station
+                and obs.valid and obs.manual
+                and self._all_station_modes_ready()):
             return
         if not obs.occupied:
             if self._aux_wait_for_station_clear:
@@ -1112,6 +1148,9 @@ class Sim(SimInterface):
         # The command targets the pinned departure station, NOT the nearest
         # station to the moving ride train. One send per observed occupancy;
         # require a fresh EMPTY station observation before another dispatch.
+        self._state_event("aux_blocker_identified", station=obs.identity,
+                          view_train=self._ride_train, nearest=self._station_indices(),
+                          stopped_seconds=round(now - self._arrival_probe_since, 2))
         self.client.dispatch(*self._ride_station)
         self._aux_wait_for_station_clear = True
         self._aux_dispatch_count += 1
@@ -1120,8 +1159,16 @@ class Sim(SimInterface):
                           count=self._aux_dispatch_count)
 
     def _reset_station_candidates(self):
-        """Only explicitly enabled parks can probe alternate reset stations."""
+        """Use dynamically discovered stations; retain the legacy fallback."""
         if (self._selected is None or self._ride_load_pending or self._park_load_failed):
+            return ()
+        if self._station_modes_supported():
+            if not self._all_station_modes_ready():
+                return ()
+            tm = self.client.latest_telemetry
+            if tm is not None and self._station_modes.coaster == int(tm.coaster_index):
+                stations = tuple(identity[1] for identity in self._station_modes.stations)
+                return stations if len(stations) > 1 else ()
             return ()
         park_key = self._park_keys[self._selected]
         return tuple(ride_config.RESET_VIEW_STATION_CANDIDATES.get(park_key, ()))
@@ -1210,9 +1257,16 @@ class Sim(SimInterface):
         return True
 
     def _update_state(self, telemetry: NL2Telemetry) -> None:
-        # Flying Beast only: do not enter READY or enable manual/dispatch
-        # controls for the nearest station when it contains ANOTHER train.
-        # No change to any other ride's reset/departure/arrival logic.
+        # Before RESET_PARK and before READY, put every discovered station of
+        # the viewed coaster into manual mode. Otherwise a second automatic
+        # station can prevent the primary station becoming dispatchable.
+        if (self._station_modes_supported()
+                and self.state in (ExperienceState.READY, ExperienceState.RESETTING)
+                and not self._all_station_modes_ready()):
+            return
+        # Never enter READY based on the nearest station when it contains
+        # another train. Multi-station candidates are dynamically discovered
+        # for production clients and must identify the viewed train uniquely.
         if self._needs_reset_station_probe():
             now = time.monotonic()
             if not self._confirm_reset_station(telemetry, now):
@@ -1357,6 +1411,8 @@ class Sim(SimInterface):
 
         obs = self._station_observation()
         self._log_station_diagnostics(obs)
+        if not self._all_station_modes_ready():
+            return
         if not obs.valid or obs.received_at <= self._dispatch_station_seen_at:
             return
         self._dispatch_station_seen_at = obs.received_at
@@ -1481,11 +1537,42 @@ class Sim(SimInterface):
         invalidate_station = getattr(self.client, "invalidate_current_station", None)
         if callable(invalidate_station):
             invalidate_station()
+        self._station_modes.reset()
         self._reset_requested_at = time.monotonic()
         self._park_reset_pending = False
         self.state = ExperienceState.RESETTING
         self.client.request_telemetry()
         self._request_station_state()
+
+    def _station_modes_supported(self) -> bool:
+        # Production NL2Protocol correlates every requested station with its
+        # reply ID. Legacy test adapters retain their original single-station
+        # behaviour unless they explicitly implement that contract.
+        return bool(getattr(self.client, "supports_station_discovery", False))
+
+    def _service_station_modes(self, now=None) -> None:
+        if (not self._station_modes_supported() or not self.client.is_connected
+                or self._selected is None
+                or self._ride_load_pending or self._park_load_failed):
+            return
+        tm = self.client.latest_telemetry
+        now = time.monotonic() if now is None else now
+        if (tm is None or not tm.in_play_mode
+                or tm.received_at > now
+                or now - tm.received_at > config.TELEMETRY_STALE_S
+                or (self._reset_requested_at > 0.0
+                    and tm.received_at < self._reset_requested_at)):
+            return
+        # Freeze the controlled coaster while a viewed train is running.
+        coaster = (self._ride_train[0] if self._ride_train is not None and
+                   self.state in (ExperienceState.RUNNING, ExperienceState.PAUSED)
+                   else int(tm.coaster_index))
+        self._station_modes.step(self.client, coaster, now, self._state_event)
+
+    def _all_station_modes_ready(self) -> bool:
+        if not self._station_modes_supported():
+            return self._station_observation().manual
+        return self._station_modes.ready(self.client)
 
     def _station_indices(self):
         coaster = getattr(self.client, "current_coaster_index", None)
@@ -1526,9 +1613,14 @@ class Sim(SimInterface):
         return self.client.dispatch(*indices)
 
     def _manual_mode_is_set(self) -> bool:
-        return self._station_observation().manual
+        return self._all_station_modes_ready()
 
     def _request_manual_mode(self) -> None:
+        if self._station_modes_supported():
+            # No speculative station commands during discovery: service() will
+            # issue SET_MANUAL_MODE only for stations whose existence is proven.
+            self._request_station_state()
+            return
         if self._manual_mode_requested:
             return
         if NL2_STATE_DEBUG:

@@ -1,4 +1,4 @@
-# test_nl2_multitrain_v170.py ver 1
+# test_nl2_multitrain_v170.py ver 2
 """Ridden-train state, pinned station, auxiliary dispatch, and safety gates."""
 import io
 import struct
@@ -49,25 +49,25 @@ def observe(sim, client, bits, speed, frame, time_stamp=True):
     sim._update_state(t)
 
 
-def test_another_train_stationary_at_tilt_dispatches_once_without_completing():
+def test_unwatched_train_not_dispatched_while_viewed_train_is_moving():
     sim, c = running_setup()
     observe(sim, c, OTHER, 12.0, 2)
     assert sim._view_train_departed
     assert sim.state is ExperienceState.RUNNING
-    assert [x for x in c.commands if x[0] == 'dispatch'] == [('dispatch', 0, 0), ('dispatch', 0, 0)]
+    assert [x for x in c.commands if x[0] == 'dispatch'] == [('dispatch', 0, 0)]
     observe(sim, c, OTHER, 0.0, 3)  # actual Tilt Coaster status 0x0856
     assert sim.state is ExperienceState.RUNNING
-    assert len([x for x in c.commands if x[0] == 'dispatch']) == 2
+    assert len([x for x in c.commands if x[0] == 'dispatch']) == 1
     observe(sim, c, OTHER, 0.0, 4)
-    assert len([x for x in c.commands if x[0] == 'dispatch']) == 2
+    assert len([x for x in c.commands if x[0] == 'dispatch']) == 1
 
 
-def test_new_train_can_dispatch_after_station_observed_empty():
+def test_unwatched_train_not_auto_dispatched_after_station_reoccupied():
     sim, c = running_setup()
     observe(sim, c, OTHER, 12.0, 2)
     observe(sim, c, EMPTY, 10.0, 3)
     observe(sim, c, OTHER, 0.0, 4)
-    assert len([x for x in c.commands if x[0] == 'dispatch']) == 3
+    assert len([x for x in c.commands if x[0] == 'dispatch']) == 1
 
 
 def test_only_current_train_return_completes_ride():
@@ -101,14 +101,14 @@ def test_pause_prevents_auxiliary_dispatch():
     sim.pause()
     observe(sim, c, OTHER, 15.0, 2)
     assert len([x for x in c.commands if x[0] == 'dispatch']) == 1
-    # Explicit resume after confirmed pause restores permission, unless cancelled.
+    # Resume alone does not authorise auxiliary departure without an actual blocker.
     sim.state = ExperienceState.PAUSED
     sim._pause_target = None
     sim.pause()
     sim._pause_target = None
     sim.state = ExperienceState.RUNNING
     observe(sim, c, OTHER, 15.0, 3)
-    assert len([x for x in c.commands if x[0] == 'dispatch']) == 2
+    assert len([x for x in c.commands if x[0] == 'dispatch']) == 1
 
 
 def test_stale_station_replies_do_not_dispatch_or_complete():
@@ -120,7 +120,7 @@ def test_stale_station_replies_do_not_dispatch_or_complete():
     observe(sim, c, OTHER, 15.0, 3, time_stamp=False)
     assert len([x for x in c.commands if x[0] == 'dispatch']) == 1
     observe(sim, c, OTHER, 15.0, 4)
-    assert len([x for x in c.commands if x[0] == 'dispatch']) == 2
+    assert len([x for x in c.commands if x[0] == 'dispatch']) == 1
     c.station_status_station = (0, 1)
     observe(sim, c, VIEW, 0.0, 5)
     assert sim.state is ExperienceState.RUNNING
@@ -167,7 +167,7 @@ def test_state_monitor_reports_only_changes():
     assert len(stream.getvalue().splitlines()) == baseline
     observe(sim, c, OTHER, 12.0, 2)
     monitor.observe(sim, telemetry(speed=12.0))
-    assert 'aux_dispatch_sent' in stream.getvalue()
+    assert 'aux_dispatch_sent' not in stream.getvalue()
     assert 'view_train_departed' in stream.getvalue()
 
 

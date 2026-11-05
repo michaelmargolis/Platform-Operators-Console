@@ -1,4 +1,4 @@
-# harness.py ver 1
+# harness.py ver 2
 """Independent NL2 TCP diagnostic console (Tkinter; no POC state machine).
 
 Run from the POC repository: py -3 tools/nl2_local_test_harness/harness.py
@@ -10,16 +10,19 @@ from datetime import datetime
 from pathlib import Path
 import struct
 import time
+from types import SimpleNamespace
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 
 if __package__:
+    from .dispatch_capture import DispatchRecorder
     from .harness_core import (
         CLIENT_MESSAGE_NAMES, HEAVY_ACTION_IDS, READ_ONLY_IDS,
         DiagnosticProtocol, pair_payload, parse_hex_bytes,
         reply_summary, station_flags, station_summary, toggle_payload,
     )
 else:
+    from dispatch_capture import DispatchRecorder
     from harness_core import (
         CLIENT_MESSAGE_NAMES, HEAVY_ACTION_IDS, READ_ONLY_IDS,
         DiagnosticProtocol, pair_payload, parse_hex_bytes,
@@ -38,10 +41,14 @@ class HarnessApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title('NoLimits 2 - Local Protocol Console')
-        self.root.minsize(1070, 750)
-        self.root.geometry('1300x870')
+        self.root.minsize(1070, 790)
+        self.root.geometry('1300x950')
         self.client = None
         self._closing = False
+        self.recorder = None
+        self._poll_requests = {}
+        self.capture_state = tk.StringVar(value="Capture stopped")
+        self.marker_text = tk.StringVar(value="")
         self._last_station_status = {}
         self._last_send = {'station': 0.0, 'telemetry': 0.0, 'nearest': 0.0, 'version': 0.0}
 
@@ -95,11 +102,27 @@ class HarnessApp:
         ttk.Label(info, textvariable=self.telemetry_text).pack(anchor='w')
         ttk.Label(info, textvariable=self.nearest_text).pack(anchor='w')
 
+        cap = ttk.LabelFrame(self.root, text='Dispatch investigation (read-only recording; no automatic control)')
+        cap.pack(fill='x', padx=9, pady=4)
+        caprow = ttk.Frame(cap)
+        caprow.pack(fill='x', padx=6, pady=4)
+        ttk.Button(caprow, text='Start capture', command=self._start_capture).pack(side='left', padx=2)
+        ttk.Button(caprow, text='Stop and summarise', command=self._stop_capture).pack(side='left', padx=2)
+        ttk.Label(caprow, textvariable=self.capture_state, foreground='#265B70').pack(side='left', padx=10)
+        marker = ttk.Frame(cap)
+        marker.pack(fill='x', padx=6, pady=(0, 4))
+        ttk.Button(marker, text='NL2 panel READY', command=lambda: self._mark('NL2 panel READY')).pack(side='left', padx=2)
+        ttk.Button(marker, text='NL2 panel NOT READY', command=lambda: self._mark('NL2 panel NOT READY')).pack(side='left', padx=2)
+        ttk.Button(marker, text='Other train moves', command=lambda: self._mark('OTHER TRAIN MOVES (visual observation)')).pack(side='left', padx=2)
+        ttk.Label(marker, text='Note:').pack(side='left', padx=(12, 3))
+        ttk.Entry(marker, textvariable=self.marker_text, width=38).pack(side='left', fill='x', expand=True)
+        ttk.Button(marker, text='Mark observation', command=self._mark_note).pack(side='left', padx=3)
+
         watch = ttk.LabelFrame(self.root, text='Live station status (command-availability flags, not position sensors)')
         watch.pack(fill='x', padx=9, pady=5)
         head = ttk.Frame(watch)
         head.pack(fill='x', padx=4, pady=3)
-        ttk.Checkbutton(head, text='Poll automatically (2 Hz)', variable=self.poll_enabled).pack(side='left', padx=4)
+        ttk.Checkbutton(head, text='Poll automatically (2 Hz; 4 Hz during capture)', variable=self.poll_enabled).pack(side='left', padx=4)
         ttk.Label(head, text='Station A').pack(side='left', padx=(30, 4))
         ttk.Entry(head, width=5, textvariable=self.station_a).pack(side='left')
         ttk.Label(head, text='Station B').pack(side='left', padx=(12, 4))
@@ -162,6 +185,58 @@ class HarnessApp:
         ttk.Label(self.root, text='No automatic control commands, seat locking, dispatch, park reset or retry. '
                   'Stop POC and disconnect the physical platform before testing.', foreground='#8B4E00').pack(anchor='w', padx=10, pady=(1, 6))
 
+    def _start_capture(self):
+        if self.recorder is not None:
+            self._log('CAPTURE already running')
+            return
+        if self.client is None or not self.client.is_connected:
+            messagebox.showerror('Capture', 'Connect to NL2 first')
+            return
+        try:
+            targets=self._two_stations()
+            coaster=int(self.coaster.get())
+            self.recorder=DispatchRecorder(LOG_DIR, coaster, (s for _,s in targets))
+            self._poll_requests.clear()
+            self.poll_enabled.set(True)
+            self._last_send=dict.fromkeys(self._last_send, 0.0)
+            self.capture_state.set('Recording at 4 Hz (station A/B and viewed train)')
+            self._log('CAPTURE START %s; station identities=%s' % (self.recorder.csv_path, targets))
+            self._log('Use manual markers for the NL2 panel and other trains: block occupancy is NOT available from the API.')
+        except (ValueError,OSError) as exc:
+            self._log('CAPTURE START ERROR %s'%exc)
+            messagebox.showerror('Capture failed',str(exc))
+
+    def _stop_capture(self):
+        rec=self.recorder
+        if rec is None:
+            return
+        self.recorder=None
+        rec.close()
+        self.capture_state.set('Stopped; CSV and summary saved')
+        self._log('CAPTURE STOP CSV=%s SUMMARY=%s'%(rec.csv_path,rec.summary_path))
+
+    def _mark(self, message):
+        if self.recorder is None:
+            self._log('MARK ignored: start a capture first')
+            return
+        self.recorder.marker(message)
+        self._log('MARK: '+message)
+
+    def _mark_note(self):
+        note=self.marker_text.get().strip()
+        if note:
+            self._mark(note)
+            self.marker_text.set('')
+
+    def _diag_poll(self,client,msgid,payload=b''):
+        request_id=client.send_command(msgid,payload)
+        self._poll_requests[request_id]=time.monotonic()
+        while len(self._poll_requests)>512:
+            self._poll_requests.pop(next(iter(self._poll_requests)))
+        if self.recorder is not None:
+            self.recorder.command(msgid,request_id,payload,automatic=True)
+        return request_id
+
     def _action_row(self, parent, row, title, options):
         frame = ttk.Frame(parent)
         frame.grid(row=row, column=0, columnspan=2, sticky='we', padx=4, pady=3)
@@ -200,6 +275,8 @@ class HarnessApp:
             messagebox.showerror('NL2 connection failed', str(exc))
 
     def _disconnect(self, quiet=False):
+        self._stop_capture()
+        self._poll_requests.clear()
         if self.client is not None:
             self.client.disconnect()
             self.client = None
@@ -266,6 +343,8 @@ class HarnessApp:
         request_id = self.client.send_command(msgid, payload)
         text = 'TX %s id=%d req=%d payload=%s' % (title, msgid, request_id, payload.hex(' ') or '(empty)')
         self._log(text)
+        if self.recorder is not None:
+            self.recorder.command(msgid,request_id,payload)
         self.last_action.set('Last command: %s request %d (awaiting response)' % (title, request_id))
 
     def _read_now(self):
@@ -273,7 +352,10 @@ class HarnessApp:
             if self.client is None or not self.client.is_connected:
                 raise ConnectionError('Not connected')
             for coaster, station in self._two_stations():
-                self.client.request_station_state(coaster, station)
+                if self.recorder is not None:
+                    self._diag_poll(self.client,14,pair_payload(coaster,station))
+                else:
+                    self.client.request_station_state(coaster, station)
             self._log('QUERY station status requested for %s' % self._two_stations())
         except (ValueError, OSError, ConnectionError) as exc:
             self._log('READ ERROR: %s' % exc)
@@ -291,7 +373,7 @@ class HarnessApp:
                     self._disconnect()
                 else:
                     self.connection_text.set('Connected: NL2 %s' % (client.version or 'version pending'))
-                    if self.poll_enabled.get():
+                    if self.poll_enabled.get() or self.recorder is not None:
                         self._automatic_poll(client)
                     self._refresh_display(client)
             except (ValueError, OSError, ConnectionError) as exc:
@@ -299,36 +381,81 @@ class HarnessApp:
         self.root.after(100, self._tick)
 
     def _automatic_poll(self, client):
-        now = time.monotonic()
-        if now - self._last_send['version'] >= VERSION_PERIOD_S:
-            client.request_version()
-            self._last_send['version'] = now
-        if now - self._last_send['telemetry'] >= TELEM_PERIOD_S:
-            client.request_telemetry()
-            self._last_send['telemetry'] = now
-        if now - self._last_send['nearest'] >= NEAREST_PERIOD_S:
-            client.request_current_coaster_and_station()
-            self._last_send['nearest'] = now
-        if now - self._last_send['station'] >= POLL_PERIOD_S:
-            for coaster, station in self._two_stations():
-                client.request_station_state(coaster, station)
-            self._last_send['station'] = now
+        now=time.monotonic()
+        capturing=self.recorder is not None
+        telem_period=0.25 if capturing else TELEM_PERIOD_S
+        station_period=0.25 if capturing else POLL_PERIOD_S
+        nearest_period=1.0 if capturing else NEAREST_PERIOD_S
+        if now-self._last_send['version']>=VERSION_PERIOD_S:
+            if capturing:
+                self._diag_poll(client,3)
+            else:
+                client.request_version()
+            self._last_send['version']=now
+        if now-self._last_send['telemetry']>=telem_period:
+            if capturing:
+                self._diag_poll(client,5)
+            else:
+                client.request_telemetry()
+            self._last_send['telemetry']=now
+        if now-self._last_send['nearest']>=nearest_period:
+            if capturing:
+                self._diag_poll(client,11)
+            else:
+                client.request_current_coaster_and_station()
+            self._last_send['nearest']=now
+        if now-self._last_send['station']>=station_period:
+            for coaster,station in self._two_stations():
+                if capturing:
+                    self._diag_poll(client,14,pair_payload(coaster,station))
+                else:
+                    client.request_station_state(coaster,station)
+            self._last_send['station']=now
 
     def _process_events(self, client):
         while client.events:
-            received, msg_id, request_id, payload = client.events.popleft()
-            action = client.raw_requests.get(request_id)
-            if action is not None:
-                req_type, req_data = action
+            received,msg_id,request_id,payload=client.events.popleft()
+            action=client.raw_requests.get(request_id)
+            is_poll=request_id in self._poll_requests
+            if is_poll:
+                self._poll_requests.pop(request_id,None)
+                if action is not None:
+                    req_type,req_data=action
+                    if self.recorder is not None:
+                        if msg_id==15 and req_type==14 and len(payload)>=4 and len(req_data)>=8:
+                            coaster,station=struct.unpack('>ii',req_data[:8])
+                            self.recorder.reply(msg_id,request_id,req_type,payload,
+                                                when=received,coaster=coaster,station=station)
+                        elif msg_id==6 and req_type==5 and len(payload)==76:
+                            data=struct.unpack('>IIIIIIIIfffffffffff',payload)
+                            tm=SimpleNamespace(frame=data[1],coaster_index=data[3],
+                                train=data[5],speed=data[8],state=data[0])
+                            self.recorder.telemetry_sample(tm,when=received,request_id=request_id)
+                        elif msg_id==12 and req_type==11 and len(payload)>=8:
+                            coaster,station=struct.unpack('>ii',payload[:8])
+                            self.recorder.nearest_sample(coaster,station,when=received,request_id=request_id)
+                        else:
+                            self.recorder.reply(msg_id,request_id,req_type,payload,when=received)
+                    if self.trace_poll_replies.get() or msg_id==2:
+                        self._log('RX polling req=%d (%s) %s'%(
+                            request_id,CLIENT_MESSAGE_NAMES.get(req_type,str(req_type)),
+                            reply_summary(msg_id,payload)))
+                    client.raw_requests.pop(request_id,None)
+            elif action is not None:
+                req_type,req_data=action
                 self._log('RX req=%d (%s) %s' % (
-                    request_id, CLIENT_MESSAGE_NAMES.get(req_type, 'ID_%d' % req_type),
-                    reply_summary(msg_id, payload)))
-                self.last_action.set('Request %d: %s' % (request_id, reply_summary(msg_id, payload)))
-                client.raw_requests.pop(request_id, None)
-            elif msg_id == 2 and self.trace_poll_replies.get():
-                self._log('RX polling request=%d %s' % (request_id, reply_summary(msg_id, payload)))
-            elif self.trace_poll_replies.get():
-                self._log('RX polling req=%d %s' % (request_id, reply_summary(msg_id, payload)))
+                    request_id,CLIENT_MESSAGE_NAMES.get(req_type,'ID_%d'%req_type),
+                    reply_summary(msg_id,payload)))
+                if self.recorder is not None:
+                    coaster=station=''
+                    if len(req_data)>=8 and req_type in (14,16,17,18,19,20,21):
+                        coaster,station=struct.unpack('>ii',req_data[:8])
+                    self.recorder.reply(msg_id,request_id,req_type,payload,when=received,
+                                        coaster=coaster,station=station)
+                self.last_action.set('Request %d: %s'%(request_id,reply_summary(msg_id,payload)))
+                client.raw_requests.pop(request_id,None)
+            elif msg_id==2 or self.trace_poll_replies.get():
+                self._log('RX unmatched req=%d %s'%(request_id,reply_summary(msg_id,payload)))
 
         # Status changes are written even with verbose polling disabled.
         try:
@@ -412,6 +539,7 @@ class HarnessApp:
 
     def _close(self):
         self._closing = True
+        self._stop_capture()
         self._disconnect(quiet=True)
         self._log('Harness closed')
         self.log_file.close()

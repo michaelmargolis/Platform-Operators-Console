@@ -1,4 +1,4 @@
-#nl2_protocol.py  ver 22
+#nl2_protocol.py  ver 23
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -67,6 +67,8 @@ class NL2Protocol:
 
     Higher-level ride state interpretation belongs in sim.py.
     """
+
+    supports_station_discovery = True  # Correlated per-station replies and request IDs.
 
     N_MSG_OK = 1
     N_MSG_ERROR = 2
@@ -261,7 +263,7 @@ class NL2Protocol:
         """Return (status, monotonic reception time) for an identified station."""
         return self._station_status_by_identity.get(tuple(identity))
 
-    def request_station_state(self, coaster: int = 0, station: int = 0) -> None:
+    def request_station_state(self, coaster: int = 0, station: int = 0) -> int:
         # Requests may overlap. Match the reply ID to its requested station;
         # the most recently cached nearest station is NOT proof of identity.
         identity = (int(coaster), int(station))
@@ -274,6 +276,7 @@ class NL2Protocol:
         packet = struct.pack(">cHIH", b"N", self.N_MSG_GET_STATION_STATE,
                              request_id, len(data)) + data + b"L"
         self._send(packet)
+        return request_id
 
     def set_manual_mode(self, enabled: bool = True, coaster: int = 0, station: int = 0) -> None:
         # Match the tested attraction/manual-mode interface: coaster index,

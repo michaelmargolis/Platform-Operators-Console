@@ -1,4 +1,4 @@
-<!-- README.md ver 13 -->
+<!-- README.md ver 14 -->
 # Platform Operators Console
 
 The Platform Operators Console (POC) is the Raspberry Pi operator console for
@@ -170,6 +170,16 @@ For Windows SHS installation and fan COM-port setup, see
 - `raspi/` contains Raspberry Pi installation and appliance configuration.
 - `docs/` contains architecture, handover and technician documentation.
 - `tools/` contains standalone commissioning and diagnostic utilities.
+- **NL2 v189 station control:** POC discovers stations of the currently viewed
+  coaster from request-ID-matched telemetry replies and verifies all discovered
+  station modes are manual before reset completion or operator dispatch. This
+  prevents an automatic second station from inhibiting Flying Beast dispatch
+  without editing `.nl2park` files. Station indices must be zero-based and
+  contiguous; an unknown/error/timeout blocks operator dispatch rather than
+  guessing. POC does not normally dispatch unwatched trains. A guarded exception
+  can clear an occupied departure station if the viewed train has actually
+  departed, remains stopped nearby, and a fresh nearest-station reply identifies
+  that same station. See `docs/NL2_MULTI_STATION_MANUAL_V189.md`.
 - `tools/nl2_local_test_harness/` is a **localhost-only NL2 protocol console**
   with station-state views, explicit controls, raw request editing and response
   logs. Run `py -3 -m tools.nl2_local_test_harness` on the Windows NL2 PC

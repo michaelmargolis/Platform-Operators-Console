@@ -1,4 +1,88 @@
-# changelog.txt ver 30
+# changelog.txt ver 34
+v191 | Recover NL2 multi-station discovery from temporary post-reset play-mode errors
+-------------------------------------------------------------------------------------
+- Fix RESETTING deadlock observed on GrandNational after RESET_PARK (5 Nov 2026,
+  14:16). After finding stations (0,0)/(0,1) and confirming both manual, POC
+  restarted its scan while NL2 briefly returned "Not in play mode" for (0,0).
+  Previous v190 code permanently latched station_manual_setup_failed, despite
+  resumed valid telemetry and viewed-train occupancy at station (0,1).
+- A correlated "Not in play mode" GET_STATION_STATE error now defers and retries
+  the same station after 0.75 seconds. Preserve already discovered stations;
+  reset probe timeout attempts for that transition; log waiting/resumed once.
+  Do not interpret this error as end-of-list, and never send station-control
+  commands until each index is confirmed and manual-mode readback succeeds.
+- Invalid index still ends discovery ONLY after confirmed station zero, and
+  other errors/timeouts still fail closed. Indefinite play-mode unavailability
+  remains RESETTING and is visible in diagnostic events; no dispatch bypass.
+- Regression: error on station 0 and at terminal station 2; real Grand National
+  post-reset flow with the viewed train at station (0,1), requiring two fresh
+  observation rounds before READY. Existing Flying Beast and other NL2 paths
+  left unchanged. Hardware/park files and auxiliary train policy unchanged.
+- Offline NL2 and harness tests pass; live NL2 confirmation required.
+- Update tracked changelog and manifest self-versions for release consistency.
+
+v190 | Correct NL2 end-of-station scan for actual "Invalid index" response
+----------------------------------------------------------------------------
+- Fix v189 regression found in live log (5 Nov 2026, 13:43): after POC
+  discovers station 0 of Mdx Logo Coaster, or stations 0/1 of Flying Beast,
+  NL2 answers the FIRST absent GET_STATION_STATE index with "Invalid index".
+  The v189 parser did not recognise that wording, falsely raised
+  station_manual_setup_failed, and permanently blocked the RESETTING -> READY
+  transition for that park load.
+- sims/nolimits2/station_modes.py now recognises this exact NL2 response as
+  successful completion of the contiguous station scan, only after at least
+  one station was confirmed. It then requests/verifies manual mode on every
+  discovered station before allowing READY/dispatch.
+- Unknown errors, missing replies, and an invalid first station still fail
+  closed; no fallback station guessing, dispatch bypass, timeout extension,
+  changes to auxiliary-train policy, or park-specific exception.
+- Update simulation tests to use NL2's exact "Invalid index" text, verify
+  the real protocol preserves it, and test station discovery plus transition
+  from RESETTING to READY for 1- and 2-station parks.
+- Offline NL2 tests and harness tests pass; live NL2 verification required.
+
+v189 | Generic NL2 multi-station manual preparation and selective obstruction clearance
+------------------------------------------------------------------------------------
+- Diagnose Flying Beast v188 trace and operator's controlled experiment: station
+  (0,0) manual + station (0,1) auto never becomes dispatchable after flyer lock;
+  switching BOTH stations to manual makes CAN_DISPATCH available in ~9 seconds.
+- Discover all stations on the currently viewed coaster using correlated
+  GET_STATION_STATE replies (0..N-1; only invalid-index ERROR terminates;
+  bounded to 16). Never issue a station-control command to an undiscovered
+  index. A missing reply or unverified manual bit blocks dispatch; no park
+  file edits or ride-specific multi-station listing are required in production.
+- Require fresh manual-mode confirmation on all discovered stations before
+  RESET_PARK, again after reset/reload, before READY and before the selected
+  train's operator-initiated dispatch. Reuse proven two-round viewed-train
+  reset-station identification for any coaster with multiple stations.
+- Stop automatically launching unwatched trains merely because they occupy the
+  pinned departure station. The only auxiliary exception requires an earlier
+  authorised viewed-train dispatch, confirmed departure, viewed train stopped
+  for >=3 seconds near the SAME occupied departure station, fresh matching
+  nearest-station telemetry, CAN_DISPATCH and manual-mode flags. One send per
+  occupancy, re-arm only after station clears; cancellation/pause disable it.
+- New regression tests and updated v170/v171 expectations explicitly enforce
+  this conservative policy. POC hardware, Festo, SHS, variants, simulator
+  player, and v188 local harness are unchanged. Live NL2 verification pending.
+- If the NL2 API does not answer a probe of an invalid station with ERROR, the
+  discovery fails closed; inspect the new diagnostic before enabling hardware.
+
+v188 | NL2 local test harness: dispatch-readiness capture
+------------------------------------------------------
+- Add optional read-only dispatch capture to tools/nl2_local_test_harness;
+  sample station 0/1 and viewed-train telemetry at approximately 4 Hz,
+  retaining all raw station flags, request IDs, command/ACK pairs, and
+  timestamped operator markers for NL2's control-panel readiness and
+  second-train movement.
+- Log CSV traces and a text timeline reporting lock-command-to-observed
+  station flag availability. Explicitly distinguish telemetry from observed
+  train movement and prohibit automatic dispatch, reset, or interlock changes.
+- New recorder tests plus GUI smoke run against the existing fake NL2 TCP
+  server. No changes to NL2 protocol, POC runtime, motion control, SHS,
+  station-interlock logic, or the 30-second POC timeout. No live test yet.
+- This is a diagnostic tool intended to investigate Flying Beast dispatch
+  delays before proposing any operational code changes.
+
 v187 | Verified NL2 flyer-seat lock polarity and reusable local protocol console
 -------------------------------------------------------------------------------
 - Flying Beast operator independently confirmed on NL2 2.6.4.0 that
