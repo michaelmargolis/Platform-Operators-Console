@@ -1,4 +1,4 @@
-# test_nl2_normalized_height_v157.py ver 2
+# test_nl2_normalized_height_v157.py ver 3
 """Phase 2 NL2 heave mapping: calibrated ride height, per-ride amplitudes, safety."""
 import math
 
@@ -24,7 +24,9 @@ EXPECTED_AMPLITUDES = {
 def _at_ride(sim, name):
     # Pure heave mapping helper: adopt the configured variant for the park.
     # Production selection is separately tested using LOAD_PARK acknowledgements.
-    sim._selected = sim.get_experiences().index(name)
+    # This mapping test includes hidden research parks and uses stable internal
+    # indices; operator menu indices are intentionally filtered in v192.
+    sim._selected = sim._experiences.index(name)
     sim._apply_loaded_variant(sim._selected)
 
 

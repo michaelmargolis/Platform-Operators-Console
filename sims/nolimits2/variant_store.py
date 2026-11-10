@@ -1,4 +1,4 @@
-# variant_store.py ver 1
+# variant_store.py ver 3
 """Shared, Qt-independent per-platform NL2 variant catalog and durable reviews.
 
 Working files: ride_variants/<platform_key>.json (or POC_RIDE_VARIANTS_DIR).
@@ -119,12 +119,13 @@ def _encoded(data):
 
 
 class VariantStore:
-    def __init__(self, platform_key, data, *, path=None, raw=None):
+    def __init__(self, platform_key, data, *, path=None, raw=None, operator_filter=True):
         validate_document(data, platform_key)
         self.platform_key = platform_key
         self.path = Path(path) if path is not None else None
         self._data = deepcopy(data)
         self._raw = raw
+        self._operator_filter = bool(operator_filter)
 
     @classmethod
     def load(cls, platform_key, *, directory=None):
@@ -148,6 +149,21 @@ class VariantStore:
             raise VariantStoreError(f"{path}: {exc}") from exc
 
     @classmethod
+    def load_readonly(cls, platform_key, *, directory=None):
+        """Read working/default settings without seeding files or taking a lock.
+
+        Offline batch tools must not create or modify operational catalogs.
+        A malformed working catalog is an error, never replaced by defaults.
+        """
+        if platform_key not in PLATFORMS:
+            raise VariantStoreError(f"Unknown platform key: {platform_key!r}")
+        path = working_directory(directory) / (platform_key + ".json")
+        if not path.exists():
+            path = DEFAULT_DIRECTORY / "defaults" / (platform_key + ".json")
+        raw = path.read_bytes()
+        return cls(platform_key, _decode(raw))
+
+    @classmethod
     def create(cls, platform_key, data, *, directory=None):
         """Create an explicitly supplied catalog; never overwrite an existing one."""
         validate_document(data, platform_key)
@@ -166,7 +182,7 @@ class VariantStore:
         return cls(platform_key, {
             'schema_version': 1, 'platform_key': platform_key,
             'variants': [{'label': p['name'], 'park': key} for key, p in ride_config.PARKS.items()],
-        })
+        }, operator_filter=False)
 
     def entries(self):
         return tuple(deepcopy(self._data['variants']))
@@ -186,6 +202,7 @@ class VariantStore:
                      if v.get('status', 'candidate') == 'preferred'}
         return tuple(v['label'] for v in self._data['variants']
                      if (park_key is None or v['park'] == park_key)
+                     and (not self._operator_filter or v['park'] not in ride_config.OPERATOR_HIDDEN_PARKS)
                      and (v.get('status', 'candidate') == 'preferred'
                           or (v.get('status', 'candidate') == 'candidate' and v['park'] not in preferred)))
 
@@ -260,15 +277,27 @@ class VariantStore:
         updated.validate_display()
         self._commit(updated._data)
 
-    def add_candidate(self, entry):
-        entry = deepcopy(entry)
-        entry['status'] = 'candidate'
+    def add_candidates(self, entries):
+        """Commit one or several new trial variants atomically.
+
+        A/B save must not commit A and then fail while checking B.
+        Full catalogue validation runs before the single safe write.
+        """
+        entries = list(entries)
+        if not entries:
+            raise VariantStoreError("Select at least one candidate to save")
         updated = deepcopy(self._data)
-        updated['variants'].append(entry)
-        # POC-only duplicate display validation is intentionally deferred to
-        # POC startup. A researcher can save multiple candidates with full IDs.
+        labels = []
+        for supplied in entries:
+            entry = deepcopy(supplied)
+            entry['status'] = 'candidate'
+            updated['variants'].append(entry)
+            labels.append(entry['label'])
         self._commit(updated)
-        return entry['label']
+        return tuple(labels)
+
+    def add_candidate(self, entry):
+        return self.add_candidates((entry,))[0]
 
     @property
     def fingerprint(self):

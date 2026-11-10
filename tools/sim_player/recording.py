@@ -1,4 +1,4 @@
-# recording.py ver 2
+# recording.py ver 3
 """Recording and analysis adapter for sim_player.
 
 No Qt, network, SHS or Festo dependencies. Reuses the existing POC offline
@@ -85,6 +85,7 @@ class RideRecording:
     platform_config_module: str = ""
     platform_config_sha256: str = ""
     platform_neutral_height_mm: float | None = None
+    global_settings_snapshot: dict[str, Any] | None = None
 
     @property
     def duration(self) -> float:
@@ -258,15 +259,39 @@ def load_recording(csv_path, *, platform="platform_v2", heave="Recorded heave",
                    amplitude=80, intensity=100, apply_filters=True,
                    cue_mode=EULER, gain_percent=DEFAULT_GAINS,
                    variant_label=None, variant_snapshot=None,
-                   default_standard_variant=False, variant_store=None):
+                   default_standard_variant=False, variant_store=None, global_settings=None):
     """Load raw ride, compute POC-equivalent muscle commands, align events/video.
 
     The existing analyse_nl2_csv module is the numerical authority. This
     function only adapts its result for the UI; it does not implement another
     copy of kinematics or workspace limiting.
     """
+    csv_path = Path(csv_path).resolve()
+    study_note = ""
+    if default_standard_variant:
+        from .study_bundle import read_candidate_bundle
+        study = read_candidate_bundle(csv_path)
+        if study is not None:
+            if variant_label is not None or variant_snapshot is not None:
+                raise ValueError("Cannot combine candidate defaults with an explicit variant")
+            platform = study["platform_key"]
+            cue_mode = study["angular_cue"]
+            gain_percent = tuple(study["relative_gains_percent"])
+            variant_label = study["variant_snapshot"]["label"]
+            variant_snapshot = study["variant_snapshot"]
+            global_settings = study["poc_global_settings_snapshot"]
+            default_standard_variant = False
+            study_note = "Optimiser study: archived settings; full POC recalculation"
+            if study["_model_changed"]:
+                study_note += "; MODEL CHANGED: previous qualification no longer applies"
+            if variant_store is not None and variant_store.platform_key != platform:
+                variant_store = None
+    from .tuning import current_poc_global_settings
+    from copy import deepcopy
+    settings_snapshot = deepcopy(global_settings if global_settings is not None
+                                 else current_poc_global_settings())
     metadata = platform_metadata(platform)
-    catalog = variant_store if variant_store is not None else VariantStore.load(platform)
+    catalog = variant_store if variant_store is not None else VariantStore.load_readonly(platform)
     if catalog.platform_key != platform:
         raise ValueError("Variant catalog belongs to another platform")
     if cue_mode not in MODES:
@@ -345,11 +370,11 @@ def load_recording(csv_path, *, platform="platform_v2", heave="Recorded heave",
     raw_rows = scale_capture_rows(raw_rows, gain_percent)
     if variant_snapshot is None:
         calculated, stats = analyze(raw_rows, platform, heave, amplitude, intensity,
-                                    apply_filters, ride_name=ride)
+                                    apply_filters, ride_name=ride, global_settings=settings_snapshot)
     else:
         calculated, stats = analyze(raw_rows, platform, heave, amplitude, intensity,
                                     apply_filters, ride_name=ride,
-                                    variant_snapshot=variant_snapshot)
+                                    variant_snapshot=variant_snapshot, global_settings=settings_snapshot)
     if len(raw_rows) != len(calculated):
         raise RuntimeError("Motion analysis returned a different number of frames")
     samples = tuple(PlaybackFrame(
@@ -373,7 +398,7 @@ def load_recording(csv_path, *, platform="platform_v2", heave="Recorded heave",
     if calibrated is not None:
         video_offset = calibrated
         sync_source = "Saved user-calibrated video offset"
-    problems = [p for p in (sync_warning, event_warning, video_warning) if p]
+    problems = [p for p in (study_note, sync_warning, event_warning, video_warning) if p]
     return RideRecording(
         csv_path=csv_path, ride=ride, frames=samples, times=times,
         events=events, video_path=video_path,
@@ -392,4 +417,5 @@ def load_recording(csv_path, *, platform="platform_v2", heave="Recorded heave",
         platform_neutral_height_mm=stats["platform_neutral_height_mm"],
         cue_mode=cue_mode, gain_percent=gain_percent,
         variant_label=variant_label, variant_snapshot=variant_snapshot,
+        global_settings_snapshot=settings_snapshot,
     )

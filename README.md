@@ -1,4 +1,4 @@
-<!-- README.md ver 14 -->
+<!-- README.md ver 16 -->
 # Platform Operators Console
 
 The Platform Operators Console (POC) is the Raspberry Pi operator console for
@@ -8,6 +8,34 @@ telemetry processing, platform kinematics, Festo pressure output and
 
 The live Raspberry Pi installation is `/home/poc/Runtime` and starts as a
 desktop-autostart application. It is not installed as a system service.
+
+## v193 - Sim Player optimiser candidate browser and independent A/B tuning
+
+Use **Review candidates…** to browse the optimiser result runs by platform and
+park. All available Strict and 5% candidates appear, and any two can be selected
+as independent A/B working copies for the same capture. Change DOF gains,
+angular cue and neutral offset subjectively, then explicitly save one or both
+under new unique trial names in the selected platform's candidate catalogue.
+Strict/relaxed remain provenance labels only. A/B review sessions can be saved
+and reopened. No live ride, default/preferred variant, source capture, optimiser
+CSV or NL2 control behaviour is modified. See
+[Sim Player candidate review v193](docs/SIM_PLAYER_CANDIDATE_REVIEW_V193.md).
+
+## v192 - Offline ride optimiser and self-describing player studies
+
+Run `py -m tools.sim_player.optimizer "captures\nl2_ride_study" --output "studies\optimizer"`
+from the repository root. It searches Chair V3 and MDX independently for strict
+and <=5%-stroke-request-excess candidates, prioritising Roll/Pitch/Heave, then
+Yaw, then Surge/Sway. Full-turn captures can compare existing angular cues.
+All exported finalists receive full-frame normal-player validation.
+
+Open a generated CSV normally in Sim Player; keep its `_optimizer.json` beside
+it. Platform, midpoint, cue, gains and archived global settings are restored
+without double-processing, then can be manually tuned. The batch tool writes
+only its output folder. Original captures, operational INI and live variant
+catalogues remain unchanged. Grand National is hidden from normal POC selection
+but retained for research/capture. See
+[the optimiser guide](docs/SIM_PLAYER_OPTIMIZER_V192.md) for commands and limits.
 
 ## Supported simulators
 

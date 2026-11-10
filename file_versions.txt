@@ -1,5 +1,5 @@
-#file_versions.txt  ver 187
-# Application baseline: v191 (NL2 reset transition play-mode retry fix)
+#file_versions.txt  ver 189
+# Application baseline: v193 (Sim Player candidate review and A/B tuning)
 # Relative path | expected version
 config/platforms.py|6
 controls/__init__.py|1
@@ -109,9 +109,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|34
-README.md|14
-file_versions.txt|187
+changelog.txt|36
+README.md|16
+file_versions.txt|189
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -122,7 +122,7 @@ tools/nl2_obs_recorder.py|3
 tests/test_nl2_obs_capture_v173.py|3
 tests/test_capture_nl2_rides_v153.py|5
 tests/test_nl2_request_ids_v156.py|1
-tests/test_nl2_normalized_height_v157.py|2
+tests/test_nl2_normalized_height_v157.py|3
 tests/test_poc_performance_v158.py|1
 tests/test_transform_bars_v159.py|1
 tests/test_transform_bars_v160.py|1
@@ -133,7 +133,7 @@ output/fstlib/POSE_SENDER_README.md|3
 tests/test_pose_sender_v163.py|1
 tests/test_pose_sender_v164.py|1
 tests/test_pose_sender_v165.py|1
-tools/analyze_nl2_csv.py|14
+tools/analyze_nl2_csv.py|15
 tests/test_mdx_roll_channels_v166.py|2
 tests/test_nl2_angular_scaling_v167.py|1
 tests/test_nl2_park_selection_v168.py|1
@@ -141,39 +141,44 @@ tests/test_nl2_ride_completion_v169.py|2
 tests/test_nl2_multitrain_v170.py|2
 tests/test_nl2_multistation_v171.py|2
 tests/test_nl2_angular_washout_v172.py|2
-sims/nolimits2/ride_config.py|5
+sims/nolimits2/ride_config.py|6
 sims/nolimits2/angular_cues.py|1
-tests/test_ride_variants_v176.py|1
+tests/test_ride_variants_v176.py|2
 docs/NO_LIMITS_RIDE_VARIANTS_V176.md|1
 tests/test_ride_labels_v177.py|1
 docs/NO_LIMITS_RIDE_VARIANTS_V177.md|1
 core/platform_geometry.py|2
 docs/NO_LIMITS_VARIANT_CURATION_V178.md|1
 sims/nolimits2/ride_variants/.gitignore|1
-sims/nolimits2/variant_store.py|1
+sims/nolimits2/variant_store.py|3
 tests/conftest.py|1
 tests/test_floor_policy_v178.py|1
 tests/test_review_dialog_gui_v178.py|1
 tests/test_review_encoder_v178.py|1
 tests/test_variant_migration_v178.py|1
-tests/test_variant_selection_v178.py|2
-tests/test_variant_store_v178.py|1
+tests/test_variant_selection_v178.py|3
+tests/test_variant_store_v178.py|2
 tools/migrate_nl2_variants.py|1
-tools/sim_player/README.md|5
+tools/sim_player/README.md|7
 tools/sim_player/__init__.py|1
 tools/sim_player/__main__.py|1
 tools/sim_player/angular_cues.py|1
 tools/sim_player/anomaly_detection.py|1
 tools/sim_player/anomaly_panel.py|1
-tools/sim_player/app.py|4
+tools/sim_player/app.py|6
+tools/sim_player/candidate_browser.py|1
+tools/sim_player/candidate_review.py|1
+tools/sim_player/candidate_workflow.py|1
+tools/sim_player/review_save_dialog.py|1
+tools/sim_player/tests/test_candidate_review_v193.py|1
 tools/sim_player/loop_range.py|1
 tools/sim_player/metrics.py|1
 tools/sim_player/muscle_extrema.py|2
 tools/sim_player/options_dialog.py|1
 tools/sim_player/panels.py|3
 tools/sim_player/platform_selection.py|2
-tools/sim_player/player_ui.py|2
-tools/sim_player/recording.py|2
+tools/sim_player/player_ui.py|3
+tools/sim_player/recording.py|3
 tools/sim_player/settings.py|1
 tools/sim_player/tests/conftest.py|1
 tools/sim_player/tests/test_angular_cues_v7.py|1
@@ -213,7 +218,7 @@ tools/sim_player/theme.py|1
 tools/sim_player/tuning.py|2
 tools/sim_player/tuning_panel.py|2
 tools/sim_player/twin_output.py|1
-tools/sim_player/variant_presets.py|2
+tools/sim_player/variant_presets.py|3
 tools/sim_player/video_backend.py|1
 tools/sim_player/video_sync.py|1
 ui/variant_review.py|1
@@ -279,3 +284,12 @@ tests/test_nl2_station_modes_v189.py|3
 docs/NL2_MULTI_STATION_MANUAL_V189.md|1
 docs/POC_V189_CHANGED_FILES.txt|1
 docs/POC_V189_VERIFICATION.md|1
+
+# v192 offline ride optimiser additions
+docs/POC_V192_CHANGED_FILES.txt|1
+docs/POC_V192_VERIFICATION.md|1
+docs/SIM_PLAYER_OPTIMIZER_V192.md|1
+tools/sim_player/optimization_search.py|1
+tools/sim_player/optimizer.py|1
+tools/sim_player/study_bundle.py|1
+tools/sim_player/tests/test_optimizer_v192.py|1

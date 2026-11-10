@@ -1,4 +1,4 @@
-# test_ride_variants_v176.py ver 1
+# test_ride_variants_v176.py ver 2
 """v176 regression: labels are IDs; park reloads only for different park keys.
 
 Tests are offline. They send no SHS/Festo output or physical platform commands.
@@ -40,8 +40,15 @@ def test_no_duplicated_park_calibration_and_recorder_indices():
     assert len(config.RIDES) == 10
     assert tuple(name for name, _ in config.RIDES) == tuple(p['name'] for p in ride_config.PARKS.values())
     for i, (name, _) in enumerate(config.RIDES):
-        j = ride_config.variant_index_for_park_index(i)
-        assert ride_config.labels()[j] == name
+        park_key = tuple(ride_config.PARKS)[i]
+        if park_key in ride_config.OPERATOR_HIDDEN_PARKS:
+            with pytest.raises(ValueError, match='No available variant'):
+                ride_config.variant_index_for_park_index(i)
+        else:
+            j = ride_config.variant_index_for_park_index(i)
+            assert Sim(client=FakeNL2Client()).get_experiences()[j] == name
+    capture = Sim(client=FakeNL2Client(), capture_mode=True)
+    assert capture.get_experiences() == tuple(name for name, _ in config.RIDES)
     assert ride_config.variant_index_for_park_index(2) == ride_config.labels().index('Fenrir')
     assert ride_config.PARKS['blackbird']['normalized_height'] == config.NORMALIZED_HEIGHT_PROFILES['Blackbird']
 
@@ -91,13 +98,13 @@ def test_latest_variant_during_pending_same_park_does_not_queue_reload():
 def test_different_park_while_loading_is_queued_and_not_duplicated():
     sim, client = connected()
     sim.select_experience(idx(sim, 'Blackbird [Sine]'))
-    sim.select_experience(idx(sim, 'GrandNational'))
+    sim.select_experience(idx(sim, 'Fenrir'))
     assert load_count(client) == 1
     completed(sim, client)
     assert load_count(client) == 2
-    assert sim._loading_index == idx(sim, 'GrandNational')
+    assert sim._loading_index == idx(sim, 'Fenrir')
     completed(sim, client)
-    assert sim._loaded_index == idx(sim, 'GrandNational')
+    assert sim._loaded_index == idx(sim, 'Fenrir')
     assert sim._angular_cue_mode == 'euler'
 
 

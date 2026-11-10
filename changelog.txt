@@ -1,4 +1,62 @@
-# changelog.txt ver 34
+# changelog.txt ver 36
+v193 | Sim Player: four-candidate browser, A/B working copies, named trial variants
+----------------------------------------------------------------------------------
+- Add a results browser selecting run/platform/park and ANY two indexed optimiser
+  candidates, including both strict and both relaxed alternatives. Compare only
+  candidate CSVs derived from the same source capture digest; choose common
+  capture when a group has multiple recordings. No file-picker folder navigation.
+- Keep A/B full-replay working states independent, with video time/loop preserved
+  when switching. Tune all six gains, midpoint and cue using the existing player
+  analysis, restore each original optimiser setting independently. Source CSVs,
+  video/events, archived sidecars and original optimiser qualifications are
+  never edited or automatically copied into the live ride catalogue.
+- Save one or two current working states with NEW user-specified unique labels,
+  not auto-labelled Strict/Relaxed. Show live kinematic warning metrics but do
+  not equate the original category with later manual tuning. Save both entries
+  atomically as platform-specific unapproved candidates; retain preferred ride.
+- Add optional save/reopen of A/B research sessions. Preserve original model and
+  CSV checksum verification; reject changed/missing study companions, wrong
+  platform/park/capture and unsafe index-relative paths. Read Windows-generated
+  index.csv backslash paths as well as forward slashes.
+- Leave POC motion processing, live ride selection rules and NL2 dispatch logic
+  unchanged. Existing file-picker playback and Qt docks are preserved.
+- v193 headless browser/state/catalogue tests and existing non-Qt player suite
+  pass. PyQt6 is unavailable in the CI container; Windows GUI smoke test needed.
+- Documentation: docs/SIM_PLAYER_CANDIDATE_REVIEW_V193.md and
+  docs/POC_V193_VERIFICATION.md.
+
+v192 | Offline multi-ride optimiser, player-ready studies, Grand National suppression
+-------------------------------------------------------------------------------------
+- Add a deterministic headless batch search under tools/sim_player. Run shared
+  production telemetry/cue/kinematics for Chair V3 and MDX, varying midpoint and
+  six relative gains; compare Euler/Sine/Gravity only on full-turn recordings by
+  default. Rank Roll/Pitch/Heave, then Yaw, then Surge/Sway; freeze global settings,
+  heave calibration and angular washout overrides. No new live motion algorithm.
+- Offer strict no-length/workspace/clamp-error and <=5%-usable-stroke request-
+  excess targets, with floor clearance always hard and physical outputs clamped.
+  Coarse/multi-start refinement plus active-set screening; check EVERY frame of
+  every finalist, independently replay in Sim Player and reopen exported CSVs.
+  Default one alternate per target; bounded search, not guaranteed global optimum.
+- Group multiple recordings per ride for common settings by default; export each
+  recording separately. Provide --per-capture and CLI controls, missing-capture
+  reports, baselines, metrics, result index, hashes and completion/error status.
+- Keep original telemetry in candidate CSVs; append opt_* audit columns and an
+  _optimizer.json companion carrying platform/cue/gains/midpoint/global settings.
+  Normal player opening restores these defaults exactly once. Preserve ordinary
+  manual tuning, experiments, original video links, events and calibrated offsets.
+  Missing/tampered companions fail clearly; changed model source invalidates prior
+  qualification. Archived globals do not overwrite INI; refuse live promotion
+  when globals differ because a ride variant cannot encode those differences.
+- Add read-only variant loading: batch analysis never seeds/edits live catalogues,
+  opens a network output, modifies captures, or replaces geometry/pressure maps.
+- Hide Grand National from operator choices, retaining configuration, capture and
+  player research access. Exclude it from batch by default, with explicit offline
+  opt-in. Do not alter the working v191 station/reset/dispatch implementation.
+- Add optimiser regressions and adjust generic selection tests to distinguish
+  visible operator indices from stable internal/capture indices. Bundle the
+  full player subtree; no standalone player version or README_vXXX release files.
+- Verification details and limitations: docs/POC_V192_VERIFICATION.md.
+
 v191 | Recover NL2 multi-station discovery from temporary post-reset play-mode errors
 -------------------------------------------------------------------------------------
 - Fix RESETTING deadlock observed on GrandNational after RESET_PARK (5 Nov 2026,

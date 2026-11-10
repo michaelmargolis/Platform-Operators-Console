@@ -1,4 +1,4 @@
-# app.py ver 4
+# app.py ver 6
 """MDX sim_player: offline replay controller (PyQt6 only).
 
 UI layout is in player_ui.py; presentation panels in panels.py. This module
@@ -43,11 +43,12 @@ class LoadWorker(QThread):
     def __init__(self, csv_path, *, cue_mode=EULER, gain_percent=DEFAULT_GAINS,
                  variant_label=None, variant_snapshot=None,
                  default_standard_variant=False, platform_key="platform_v2",
-                 variant_store=None, parent=None):
+                 variant_store=None, global_settings=None, parent=None):
         super().__init__(parent)
         self.csv_path = csv_path
         self.platform_key = platform_key
         self.variant_store = variant_store
+        self.global_settings = global_settings
         self.cue_mode = cue_mode
         self.gain_percent = validate_gain_percent(gain_percent)
         self.variant_label = variant_label
@@ -61,7 +62,8 @@ class LoadWorker(QThread):
                                     gain_percent=self.gain_percent,
                                     variant_label=self.variant_label,
                                     variant_snapshot=self.variant_snapshot,
-                                    default_standard_variant=self.default_standard_variant)
+                                    default_standard_variant=self.default_standard_variant,
+                                    global_settings=getattr(self, "global_settings", None))
         except Exception as exc:
             self.failed.emit(f"{type(exc).__name__}: {exc}")
         else:
@@ -105,6 +107,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.muscle_plot_bounds = (735.0, 1015.0)
         self.worker = None
         self.loading = False
+        self._init_review_state()
         self.has_video = False
         self.video_offset_s = 0.0
         self.settings = QSettings("MDXSAT", "sim_player")
@@ -118,6 +121,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self._create_central()
         self._create_docks()
         self._create_menus()
+        self._update_candidate_ui()
         self._update_twin_indicator()
         self.statusBar().showMessage("Offline replay • no NoLimits2, SHS or Festo connections")
         geometry = self.settings.value("geometry")
@@ -172,7 +176,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
 
     def about(self):
         QMessageBox.information(self, "About sim_player",
-            "sim_player — POC v182 — Qt6/FFmpeg video + telemetry replay.\n\n"
+            "sim_player — POC v193 — Qt6/FFmpeg video + telemetry replay.\n\n"
             "A/B playback markers, Full/Range/Loop modes and adjustable loop hold.\n"
             "One selectable ride/kinematic marker lane and grouped anomaly replay.\n"
             "Manual 6DOF gains and ride-neutral height, baseline and experiment JSON.\n"
@@ -180,6 +184,8 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             "Muscle minimum/maximum requested markers persist until replay restart.\n"
             "Playback controls stay fixed-height; resize the window to resize video.\n"
             "Angular cues: current Euler, sine Roll and quaternion gravity vector.\n"
+            "Review any two optimiser candidates as independent A/B working copies.\n"
+            "Save new named variant(s) without replacing original optimiser outputs.\n"
             "Per-platform JSON candidates can be saved explicitly for live POC review.\n"
             "All candidate cues are offline research only, not validated for rides.\n"
             "Motion lengths use existing POC offline analysis; no new kinematics.\n"
@@ -192,9 +198,13 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
     def _variant_cache_token(recording):
         # Snapshot is relevant even when a label was renamed or removed later.
         import json
-        return json.dumps({"platform": recording.platform_key,
-                           "geometry": getattr(recording, "platform_config_sha256", ""),
-                           "variant": recording.variant_snapshot}, sort_keys=True, default=str)
+        identity = {"platform": recording.platform_key,
+                    "geometry": getattr(recording, "platform_config_sha256", ""),
+                    "variant": recording.variant_snapshot}
+        globals_snapshot = getattr(recording, "global_settings_snapshot", None)
+        if globals_snapshot is not None:
+            identity["global_settings"] = globals_snapshot
+        return json.dumps(identity, sort_keys=True, default=str)
 
     def _cache_recording(self, recording):
         key = (recording.cue_mode, recording.gain_percent,
@@ -324,7 +334,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.tuning_panel.set_neutral_offset(snapshot.get("neutral_height_delta_mm", 0.0))
         self.tuning_panel.set_neutral_enabled(recording.variant_snapshot is not None)
 
-    def _apply_experiment_values(self, mode, gains, *, variant_label="keep", variant_snapshot=None, platform_key=None):
+    def _apply_experiment_values(self, mode, gains, *, variant_label="keep", variant_snapshot=None, platform_key=None, global_settings=None):
         if platform_key is not None and platform_key != self.platform_key:
             try:
                 self._stage_platform(platform_key)
@@ -336,8 +346,9 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.cue_box.blockSignals(True)
         self.cue_box.setCurrentIndex(self.cue_box.findData(mode))
         self.cue_box.blockSignals(False)
+        settings = {} if global_settings is None else {"global_settings": global_settings}
         self._request_reanalysis(mode, gains, variant_label=variant_label,
-                                 variant_snapshot=variant_snapshot)
+                                 variant_snapshot=variant_snapshot, **settings)
 
     def _save_experiment(self):
         if self.recording is None or self.loading:
@@ -356,7 +367,8 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
                 gain_percent=self.recording.gain_percent,
                 variant_label=self.recording.variant_label,
                 variant_snapshot=self.recording.variant_snapshot,
-                global_settings=current_poc_global_settings(),
+                global_settings=(getattr(self.recording, "global_settings_snapshot", None)
+                                 or current_poc_global_settings()),
                 platform_key=self.recording.platform_key,
                 platform_config_module=self.recording.platform_config_module,
                 platform_config_sha256=self.recording.platform_config_sha256,
@@ -378,6 +390,9 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             return
         try:
             values = load_experiment(path)
+            if values.global_settings is not None:
+                from .study_bundle import checked_global_settings
+                checked_global_settings(values.global_settings)
         except (OSError, ValueError, KeyError, TypeError) as exc:
             QMessageBox.warning(self, "Experiment not loaded", str(exc))
             return
@@ -397,7 +412,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             choice = QMessageBox.question(
                 self, "POC global gains/washout differ",
                 "This experiment was saved with different global POC gains or washout. "
-                "Playback currently uses the installed values, so results may differ. Continue?",
+                "Replay will use the archived values offline; live POC settings will not change. Continue?",
             )
             if choice != QMessageBox.StandardButton.Yes:
                 return
@@ -419,7 +434,8 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self._apply_experiment_values(values.cue_mode, values.gain_percent,
                                       variant_label=values.variant_label,
                                       variant_snapshot=values.variant_snapshot,
-                                      platform_key=target_platform)
+                                      platform_key=target_platform,
+                                      global_settings=values.global_settings)
         self._refresh_anomalies()
         self.statusBar().showMessage(f"Experiment settings selected: {path} — recalculating motion", 6000)
 
@@ -521,7 +537,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
 
     def _platform_changed(self, *_args):
         key = self.platform_box.currentData()
-        if self.loading or (self.worker is not None and self.worker.isRunning()):
+        if self.loading or self._candidate_session is not None or (self.worker is not None and self.worker.isRunning()):
             self._sync_platform_selector()
             return
         if key == self.platform_key:
@@ -550,6 +566,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.platform_box.setEnabled(False)
         self.variant_box.setEnabled(False)
         self.save_variant_action.setEnabled(False)
+        self._update_candidate_ui()
 
     def _fill_variant_choices(self, recording):
         """Only show variants for the captured physical park."""
@@ -563,13 +580,14 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             index = self.variant_box.count() - 1
         self.variant_box.setCurrentIndex(max(0, index))
         busy = self.loading or (self.worker is not None and self.worker.isRunning())
-        self.variant_box.setEnabled(not busy and bool(recording.frames) and self.variant_box.count() > 1)
+        self.variant_box.setEnabled(not busy and getattr(self, "_candidate_session", None) is None
+                                    and bool(recording.frames) and self.variant_box.count() > 1)
         self.save_variant_action.setEnabled(not busy and bool(recording.variant_snapshot))
         self.tuning_panel.set_neutral_enabled(bool(recording.variant_snapshot))
         self.variant_box.blockSignals(False)
 
     def _variant_changed(self, *_args):
-        if self.recording is None or self.loading:
+        if self.recording is None or self.loading or self._candidate_session is not None:
             return
         label = self.variant_box.currentData()
         if label is None:
@@ -594,12 +612,22 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
 
     def save_variant_entry(self):
         """Append a new candidate, never overwrite another variant or accept it."""
+        if self._candidate_session is not None:
+            return self.save_review_variants()
         recording = self.recording
         if recording is None or self.loading or (self.worker is not None and self.worker.isRunning()):
             return
         if recording.variant_snapshot is None:
             QMessageBox.information(self, "Named configuration required",
                 "Select a named ride configuration first. Raw replay has no reproducible live heave preset.")
+            return
+        globals_snapshot = getattr(recording, "global_settings_snapshot", None)
+        if globals_snapshot is not None and globals_snapshot != current_poc_global_settings():
+            QMessageBox.warning(self, "Study globals differ from live POC",
+                "This study uses archived global gains/washout that differ from the installed INI. "
+                "A ride variant cannot store those global settings. Align or deliberately reanalyse "
+                "with the live global settings before saving a physical-test candidate. "
+                "No configuration has been changed.")
             return
         proposed = str(recording.variant_label or recording.variant_snapshot['label']) + " [Trial]"
         label, confirmed = QInputDialog.getText(
@@ -621,14 +649,30 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             f"Candidate saved: {entry['label']} -> {self.variant_store.path}. "
             "POC reads added/tuned variants on restart." + note, 15000)
 
-    def open_capture(self, path):
+    def open_capture(self, path, *, review_session=None, skip_discard=False):
         path = Path(path)
+        if not skip_discard and not self._confirm_replace_review():
+            return
         if not is_ride_telemetry_csv(path.name):
             QMessageBox.warning(self, "Invalid capture", "Select a ride telemetry CSV, not an event log.")
             return
         if self.loading or (self.worker is not None and self.worker.isRunning()):
             self.statusBar().showMessage("Capture loading already in progress", 3000)
             return
+        try:
+            from .study_bundle import read_candidate_bundle
+            study = read_candidate_bundle(path)
+            if study is not None and study["platform_key"] != self.platform_key:
+                target_store = VariantStore.load(study["platform_key"])
+                self.platform_key = study["platform_key"]
+                self.variant_store = target_store
+                self._sync_platform_selector()
+        except (OSError, ValueError, KeyError) as exc:
+            QMessageBox.warning(self, "Invalid optimiser study", str(exc))
+            return
+        self._candidate_session = review_session
+        self._candidate_switch_previous = None
+        self._update_candidate_ui()
         self._set_playing(False)
         self.scrub_seek_timer.stop()
         self.video_seek_guard.reset()
@@ -676,6 +720,8 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
     def _load_success(self, recording):
         self.loading = False
         self.recording = recording
+        self.platform_key = recording.platform_key
+        self._previous_platform_store = None
         self._fill_variant_choices(recording)
         self._reset_muscle_extrema()
         self.gain_percent = recording.gain_percent
@@ -689,6 +735,8 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self._refresh_baseline_label()
         self._refresh_cue_comparison()
         self._update_tuning_feedback()
+        if self._candidate_session is not None:
+            self._review_recording_applied(recording)
         # Wait for QThread.finished before re-enabling mode selection: a user
         # must not start a new worker while the previous thread is still live.
         self._update_twin_indicator()
@@ -731,6 +779,9 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
 
     def _load_failure(self, message):
         self.loading = False
+        self._candidate_session = None
+        self._review_resume_target = None
+        self._update_candidate_ui()
         self.cue_box.setEnabled(True)
         self.tuning_panel.set_analysis_enabled(False)
         self.info_badge.setText("LOAD FAILED")
@@ -745,12 +796,13 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             self.worker = None
             if not self.loading:
                 self.cue_box.setEnabled(self.recording is not None)
-                self.platform_box.setEnabled(True)
+                self.platform_box.setEnabled(self._candidate_session is None)
                 if self.recording is not None:
                     self._fill_variant_choices(self.recording)
                 self.tuning_panel.set_analysis_enabled(self.recording is not None)
         if worker is not None:
             worker.deleteLater()
+        self._after_review_worker_finished()
 
     def _cue_changed(self, *_args):
         if self.recording is None or self.loading:
@@ -762,7 +814,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             return
         self._request_reanalysis(self.cue_box.currentData(), self.tuning_panel.gain_percent())
 
-    def _request_reanalysis(self, mode, gains, *, variant_label="keep", variant_snapshot=None):
+    def _request_reanalysis(self, mode, gains, *, variant_label="keep", variant_snapshot=None, global_settings=None):
         """Re-run entire capture through unchanged POC washout and kinematics.
 
         No video load or decoder seek; the current playback position is retained.
@@ -782,9 +834,16 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
                 self._fill_variant_choices(self.recording)
                 return
         import json
-        key_snapshot = json.dumps({"platform": self.platform_key,
-                                   "geometry": platform_metadata(self.platform_key)['platform_config_sha256'],
-                                   "variant": variant_snapshot}, sort_keys=True, default=str)
+        identity = {"platform": self.platform_key,
+                    "geometry": platform_metadata(self.platform_key)['platform_config_sha256'],
+                    "variant": variant_snapshot}
+        globals_snapshot = (global_settings if global_settings is not None else
+                            getattr(self.recording, "global_settings_snapshot", None))
+        if globals_snapshot is not None:
+            from .study_bundle import checked_global_settings
+            globals_snapshot = checked_global_settings(globals_snapshot)
+            identity["global_settings"] = globals_snapshot
+        key_snapshot = json.dumps(identity, sort_keys=True, default=str)
         if (mode == self.recording.cue_mode and gains == self.recording.gain_percent
                 and key_snapshot == self._variant_cache_token(self.recording)):
             self.tuning_panel.set_gains(gains)
@@ -804,7 +863,9 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.worker = LoadWorker(self.recording.csv_path, cue_mode=mode,
                                  gain_percent=gains, variant_label=variant_label,
                                  variant_snapshot=variant_snapshot, platform_key=self.platform_key,
-                                 variant_store=self.variant_store, parent=self)
+                                 variant_store=self.variant_store,
+                                 global_settings=globals_snapshot,
+                                 parent=self)
         self.worker.loaded.connect(self._reanalysis_success)
         self.worker.failed.connect(self._reanalysis_failure)
         self.worker.finished.connect(self._worker_finished)
@@ -829,12 +890,22 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self._fill_variant_choices(calculated)
         self._reset_muscle_extrema()
         self.gain_percent = calculated.gain_percent
+        # Fake controller tests and embedders may expose only a minimal cue
+        # selector; the full Qt combo is synchronised without emitting signals.
+        if hasattr(self.cue_box, "findData"):
+            self.cue_box.blockSignals(True)
+            cue_index = self.cue_box.findData(calculated.cue_mode)
+            if cue_index >= 0:
+                self.cue_box.setCurrentIndex(cue_index)
+            self.cue_box.blockSignals(False)
         self.current_s = min(current_seconds, calculated.duration)
         self.tuning_panel.set_gains(calculated.gain_percent)
         self._sync_neutral_panel(calculated)
         self._refresh_cue_comparison()
         self._refresh_anomalies()
         self._update_tuning_feedback()
+        if getattr(self, "_candidate_session", None) is not None:
+            self._review_recording_applied(calculated)
         self._display_current()
         self._send_twin(force=True)
         self.statusBar().showMessage(
@@ -844,6 +915,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
 
     def _reanalysis_failure(self, error):
         self.loading = False
+        self._review_analysis_failed()
         self._restore_platform_selection()
         # Revert any speculative UI change to the last successfully analysed ride.
         self.cue_box.blockSignals(True)

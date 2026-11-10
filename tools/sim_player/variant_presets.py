@@ -1,4 +1,4 @@
-# variant_presets.py ver 2
+# variant_presets.py ver 3
 """Pure helpers for loading shared NL2 ride variants in offline sim_player.
 
 Shared presets are resolved from the selected platform JSON; raw captures remain immutable.  An explicit
@@ -29,7 +29,19 @@ def choices_for_capture(ride_name, store=None, *, platform_key="platform_v2"):
 
 def default_label_for_capture(ride_name, store=None, *, platform_key="platform_v2"):
     park_key = ride_config.park_key_for_capture(ride_name)
-    return _store(store, platform_key).default_label(park_key) if park_key is not None else None
+    if park_key is None:
+        return None
+    catalog = _store(store, platform_key)
+    selected = catalog.default_label(park_key)
+    if selected is not None:
+        return selected
+    # Suppression is an operator-menu policy, not loss of research access.
+    labels = catalog.player_labels(park_key)
+    for label in labels:
+        if catalog.entry(label).get("status") == "preferred":
+            return label
+    standard = ride_config.PARKS[park_key]["name"]
+    return standard if standard in labels else labels[0] if labels else None
 
 
 def raw_label_for_capture(ride_name):

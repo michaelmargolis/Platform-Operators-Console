@@ -1,4 +1,4 @@
-# test_variant_store_v178.py ver 1
+# test_variant_store_v178.py ver 2
 """Per-platform persistence and curation invariants, including failed writes."""
 from copy import deepcopy
 import json
@@ -10,12 +10,14 @@ from sims.nolimits2 import variant_store as mod
 from sims.nolimits2.variant_store import VariantStore, VariantStoreError, VariantConflictError
 
 
+# Use an operator-supported park for general review tests. Grand National
+# suppression and research/capture retention are tested separately in v192.
 def document(key='platform_v2'):
     return {'schema_version': 1, 'platform_key': key, 'variants': [
         {'label':'Blackbird', 'park':'blackbird'},
         {'label':'Blackbird [Sine]', 'park':'blackbird', 'angular_cue':'sine'},
         {'label':'Blackbird [Gravity]', 'park':'blackbird', 'angular_cue':'gravity'},
-        {'label':'GrandNational', 'park':'grandnational'},
+        {'label':'Hybris', 'park':'hybris'},
     ]}
 
 
@@ -44,7 +46,7 @@ def test_missing_status_is_candidate_and_rejection_only_changes_one_entry(tmp_pa
     assert 'Blackbird' not in s.visible_labels()
     assert s.entry('Blackbird [Sine]') == before
     assert s.default_label('blackbird') == 'Blackbird [Sine]'
-    assert s.default_label('grandnational') == 'GrandNational'
+    assert s.default_label('hybris') == 'Hybris'
 
 
 def test_review_is_platform_local_and_persists_with_backup(tmp_path):
@@ -71,10 +73,10 @@ def test_no_visible_variants_is_valid_and_no_default(tmp_path):
 def test_last_remaining_preview_does_not_mutate_anything(tmp_path):
     s = writable(tmp_path)
     old = s.path.read_bytes()
-    preview = s.review_preview('GrandNational', 'rejected')
-    assert preview.visible_labels('grandnational') == ()
+    preview = s.review_preview('Hybris', 'rejected')
+    assert preview.visible_labels('hybris') == ()
     assert s.path.read_bytes() == old
-    assert s.visible_labels('grandnational') == ('GrandNational',)
+    assert s.visible_labels('hybris') == ('Hybris',)
 
 
 def test_duplicate_display_checked_only_after_filtering(tmp_path):
@@ -122,9 +124,9 @@ def test_stale_writer_is_rejected_instead_of_losing_another_apps_changes(tmp_pat
     a.review('Blackbird [Sine]', 'preferred')
     after = a.path.read_bytes()
     with pytest.raises(VariantConflictError, match='changed outside'):
-        b.review('GrandNational', 'rejected')
+        b.review('Hybris', 'rejected')
     assert a.path.read_bytes() == after
-    assert 'GrandNational' in b.visible_labels()
+    assert 'Hybris' in b.visible_labels()
 
 
 def test_lock_conflict_is_explicit(tmp_path):

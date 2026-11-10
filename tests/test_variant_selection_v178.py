@@ -1,4 +1,4 @@
-# test_variant_selection_v178.py ver 2
+# test_variant_selection_v178.py ver 3
 """Real NL2 adapter with a fake network client: no hardware and no live NL2."""
 from types import SimpleNamespace
 import ast
@@ -62,9 +62,9 @@ def test_visible_index_maps_correctly_after_removing_prior_items(tmp_path):
     sim.select_experience(0)
     assert sim.loaded_variant_label=='Blackbird [Sine]'
     assert len(client.commands)==commands  # Same underlying park, no reload.
-    load(sim,client,'GrandNational')
-    assert sim.loaded_variant_label=='GrandNational'
-    assert sim.get_selected_experience_index()==sim.get_experiences().index('GrandNational')
+    load(sim,client,'Hybris')
+    assert sim.loaded_variant_label=='Hybris'
+    assert sim.get_selected_experience_index()==sim.get_experiences().index('Hybris')
 
 
 def test_preferred_rejects_competitors_no_station_reset(tmp_path):
@@ -73,7 +73,7 @@ def test_preferred_rejects_competitors_no_station_reset(tmp_path):
     sim._ride_station=(7,2)
     commands=list(client.commands)
     sim.review_current_variant('preferred','Blackbird [Gravity]')
-    assert sim.get_experiences()==('Blackbird [Gravity]','GrandNational')
+    assert sim.get_experiences()==('Blackbird [Gravity]','Hybris')
     assert sim.get_selected_experience_index()==0
     assert sim._ride_station==(7,2)
     assert client.commands==commands
@@ -83,7 +83,7 @@ def test_preferred_rejects_competitors_no_station_reset(tmp_path):
 
 def test_no_review_while_loading_or_with_old_confirmation_label(tmp_path):
     sim,client=connected(tmp_path)
-    sim.select_experience(sim.get_experiences().index('GrandNational'))
+    sim.select_experience(sim.get_experiences().index('Hybris'))
     old=sim.variant_store.path.read_bytes()
     with pytest.raises(RuntimeError):
         sim.review_current_variant('rejected','Blackbird')
@@ -160,7 +160,7 @@ def test_core_refuses_review_if_platform_no_longer_parked_and_inactive(tmp_path,
 
 def test_core_warns_last_variant_and_retains_loaded_tuning_after_rejection(tmp_path):
     core,client=fake_core(tmp_path)
-    load(core.sim,client,'GrandNational')
+    load(core.sim,client,'Hybris')
     assert core.variant_review_info()['last_for_park'] is True
     load(core.sim,client,'Blackbird [Sine]')
     assert core.variant_review_info()['last_for_park'] is False

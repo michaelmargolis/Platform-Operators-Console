@@ -1,4 +1,4 @@
-# player_ui.py ver 2
+# player_ui.py ver 3
 """Construction of sim_player's dockable Qt6 main window.
 
 Only widgets, menus, layouts and signal wiring live here.  ReplayWindow in
@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QSlider, QStackedWidget, QToolButton, QVBoxLayout, QWidget, QSizePolicy,
 )
 from .video_backend import QVideoWidget, Qt6VideoBackend
+from .candidate_workflow import CandidateReviewMixin
 from .panels import ResponsiveBars, TimelineMarkers, RangeJumpSlider, CueComparisonPanel, clock_label
 from .anomaly_panel import AnomalyPanel
 from .tuning_panel import MotionTuningPanel
@@ -33,7 +34,7 @@ class CompactVideoStack(QStackedWidget):
         return QSize(800, 410)
 
 
-class PlayerUiMixin:
+class PlayerUiMixin(CandidateReviewMixin):
     """Qt6 UI builder; mixed into ReplayWindow before QMainWindow."""
 
     def _create_central(self):
@@ -53,6 +54,40 @@ class PlayerUiMixin:
         self.info_badge.setObjectName("badge")
         heading.addWidget(self.info_badge)
         layout.addLayout(heading)
+
+        # Opening a raw capture and reviewing optimiser candidates are two
+        # different selection workflows; they share the same replay panels.
+        source_row = QHBoxLayout()
+        source_row.setSpacing(7)
+        self.open_capture_button = QPushButton("Open capture…")
+        self.open_capture_button.clicked.connect(self.pick_capture)
+        source_row.addWidget(self.open_capture_button)
+        self.open_candidates_button = QPushButton("Review candidates…")
+        self.open_candidates_button.clicked.connect(self.pick_review_candidates)
+        source_row.addWidget(self.open_candidates_button)
+        source_row.addSpacing(8)
+        self.candidate_box = QComboBox()
+        self.candidate_box.setObjectName("candidateABChoice")
+        self.candidate_box.setFixedWidth(225)
+        self.candidate_box.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.candidate_box.setMinimumContentsLength(12)
+        self.candidate_box.setToolTip("Switch independent A/B copies, preserving video time and edits")
+        self.candidate_box.currentIndexChanged.connect(self._candidate_slot_changed)
+        source_row.addWidget(self.candidate_box)
+        self.candidate_status_label = QLabel("")
+        self.candidate_status_label.setObjectName("candidateReviewState")
+        self.candidate_status_label.setMaximumWidth(120)
+        source_row.addWidget(self.candidate_status_label, 1)
+        self.reset_candidate_button = QPushButton("Reset")
+        self.reset_candidate_button.clicked.connect(self.reset_review_candidate)
+        source_row.addWidget(self.reset_candidate_button)
+        self.save_review_button = QPushButton("Save variant(s)…")
+        self.save_review_button.clicked.connect(self.save_review_variants)
+        source_row.addWidget(self.save_review_button)
+        self.save_review_session_button = QPushButton("Save review…")
+        self.save_review_session_button.clicked.connect(self.save_review_session)
+        source_row.addWidget(self.save_review_session_button)
+        layout.addLayout(source_row)
 
         self.video_stack = CompactVideoStack()
         self.video_message = QLabel("Open a NoLimits2 telemetry CSV to begin\n\nFile → Open capture")
@@ -374,6 +409,17 @@ class PlayerUiMixin:
         open_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Open))
         open_action.triggered.connect(self.pick_capture)
         file_menu.addAction(open_action)
+        review_action = QAction("Review optimiser candidates…", self)
+        review_action.triggered.connect(self.pick_review_candidates)
+        file_menu.addAction(review_action)
+        open_review_action = QAction("Open saved candidate review…", self)
+        open_review_action.triggered.connect(self.open_review_session)
+        file_menu.addAction(open_review_action)
+        self.save_review_session_action = QAction("Save candidate review…", self)
+        self.save_review_session_action.triggered.connect(self.save_review_session)
+        self.save_review_session_action.setEnabled(False)
+        file_menu.addAction(self.save_review_session_action)
+        file_menu.addSeparator()
         self.save_variant_action = QAction("Save current settings as a ride variant…", self)
         self.save_variant_action.setToolTip(
             "Save a new candidate to the selected platform JSON; existing entries are never overwritten")

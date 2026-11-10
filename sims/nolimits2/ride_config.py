@@ -1,4 +1,4 @@
-# ride_config.py ver 5 -- shared parks/calibration and variant schema helpers.
+# ride_config.py ver 6 -- shared parks/calibration and variant schema helpers.
 """NL2 park/calibration data and common variant schema validation.
 
 Variant labels are unique IDs within one platform JSON file. No variants live here.
@@ -53,6 +53,10 @@ RESET_VIEW_STATION_CANDIDATES = {"flyingbeast": (0, 1)}
 # Set False for deployment. Duplicate visible names (after curation filtering)
 # are a POC startup configuration error; the player always shows full labels.
 SHOW_VARIANT_MODIFIERS = True
+
+# Operator menu only: keep configuration, capture and research access intact.
+# Grand National block-occupancy investigation is deferred (5 Nov 2026).
+OPERATOR_HIDDEN_PARKS = frozenset(("grandnational",))
 
 DEFAULT_VARIANT_LABEL = "Mdx Logo Coaster"
 

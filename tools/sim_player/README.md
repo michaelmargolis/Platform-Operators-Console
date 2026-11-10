@@ -1,9 +1,66 @@
-<!-- README.md ver 5 -->
-# sim_player - bundled with POC v182
+<!-- README.md ver 7 -->
+# sim_player - bundled with POC v193
 
 The player is released as part of POC. Install the relevant POC delta in release order;
 no separate player ZIP is published. Earlier standalone release notes below
 remain as historical references only.
+
+## v193 — Choose any two optimiser candidates, tune and save named trials
+
+Start Sim Player (`py -m tools.sim_player`) and choose **Review candidates…**,
+or use **File → Review optimiser candidates…**. Point the dialog at
+`studies/optimizer`, or directly at a `run_*` folder containing `index.csv`.
+Choose a run, platform and park. The inventory shows **all four** outputs
+(Strict 01/02 and 5% 01/02) when they exist. Assign **any two** to A/B,
+or leave B empty. For multiple recordings, choose a capture common to both.
+
+The player opens the selected recording and restores A's original optimiser
+settings. Switch the A/B selector above the video to compare at the same time
+and replay loop; each slot retains its own edits. Use the existing tuning panel
+to change all six DOFs (including Surge/Sway), neutral height and angular cue.
+**Reset candidate** restores the optimiser origin for only the selected slot.
+The strict/relaxed labels describe only their sources: you are not required to
+preserve those gains or that error classification after tuning.
+
+**Save named variant(s)…** offers separate unique names, such as
+`Blackbird [Trial A]`, for A and/or B. These are new `candidate` entries in the
+selected platform's existing variant JSON, written atomically; neither the
+optimiser CSV nor existing ride variants are overwritten or made preferred.
+The save dialog displays current anomalies and asks for confirmation when
+requested lengths exceed limits or workspace interventions occur; it does NOT
+claim that modified studies remain Strict or 5%. POC global settings must match
+archived settings before the candidate can be saved for live review.
+
+**Save review…** preserves both working copies in a JSON file. Restore later
+with **File → Open saved candidate review…**. Original optimiser CSVs and
+sidecars are validated again on reopening; stale model files invalidate the
+original qualification. The standard **Open capture…** file picker is unchanged.
+
+**Important:** A park with a preferred variant may hide other candidate variants
+from the ordinary POC operator menu. Use the existing POC variant-review
+procedure to make test candidates available; do not assume saving a candidate
+has changed the preferred live ride. Review against the correct physical
+platform configuration and test with the platform isolated first.
+
+This is an offline selection/tuning UI update, not a change to the production
+motion-processing or dispatch algorithms. Qt6 GUI operation still needs a
+Windows smoke test; the test container lacks PyQt6.
+
+## v192 - Offline ride optimiser and self-describing player studies
+
+Run `py -m tools.sim_player.optimizer "captures\nl2_ride_study" --output "studies\optimizer"`
+from the repository root. It searches Chair V3 and MDX independently for strict
+and <=5%-stroke-request-excess candidates, prioritising Roll/Pitch/Heave, then
+Yaw, then Surge/Sway. Full-turn captures can compare existing angular cues.
+All exported finalists receive full-frame normal-player validation.
+
+Open a generated CSV normally in Sim Player; keep its `_optimizer.json` beside
+it. Platform, midpoint, cue, gains and archived global settings are restored
+without double-processing, then can be manually tuned. The batch tool writes
+only its output folder. Original captures, operational INI and live variant
+catalogues remain unchanged. Grand National is hidden from normal POC selection
+but retained for research/capture. See
+[the optimiser guide](../../docs/SIM_PLAYER_OPTIMIZER_V192.md) for commands and limits.
 
 ## v182 — Variant-specific ride-neutral height and Chair V3 limits
 
