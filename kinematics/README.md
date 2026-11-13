@@ -1,4 +1,4 @@
-<!-- README.md ver 8 -->
+<!-- README.md ver 9 -->
 # Kinematics
 
 `kinematics_V3.py` implements the suspended-platform geometry used by the POC
@@ -9,7 +9,7 @@ are accepted temporarily and are treated as Z=0.
 
 The intended configuration modules are:
 
-- `cfg_SuspendedPlatformMdx.py` — current MDX suspended platform, 1000 mm muscles.
+- `cfg_SuspendedPlatformMdx.py` — current Ground-Loading Platform, 1000 mm muscles.
   Its six attachment pairs come from the current CAD export. CAD Z is shifted
   down by 84 mm so the nominal moving-attachment reference plane is local Z=0.
   The platform underside is local Z=-80, placing it 4 mm above the floor at the
@@ -26,12 +26,12 @@ are no longer selected by POC. Existing `chair_v2` saved selector values are
 kept compatible by mapping that selector to `cfg_SuspendedChair.py`.
 
 The neutral reference-plane height is calculated automatically. Legacy configs
-retain their clearance-offset sweep. The MDX platform instead uses
+retain their clearance-offset sweep. The Ground-Loading Platform instead uses
 `MUSCLE_EXTENSION_RESERVE=60`: the lower level-platform boundary is calculated
 from a 940 mm active muscle length (1140 mm total actuator), the upper boundary
 from the 950 mm minimum total actuator length, and their midpoint is neutral.
 
-MDX runtime motion normally uses `WORKSPACE_LIMIT_MODE="geometry"`. A compact
+Ground-Loading Platform runtime motion normally uses `WORKSPACE_LIMIT_MODE="geometry"`. A compact
 precomputed convex hull of the moving-platform underside is checked against a
 15 mm floor-clearance requirement. Heave is corrected directly when floor
 clearance alone is limiting. Physical actuator limits remain 950..1200 mm; only
@@ -56,7 +56,7 @@ height: zero correctly means no floor collision on Chair V3.
 POC sends calculated pressures through the Festo UDP interface. Simulator code
 must not import kinematics or Festo modules directly.
 
-The suspended chair uses `output/chair_DtoP_synthesized.csv`. The 1000 mm MDX
+The suspended chair uses `output/chair_DtoP_synthesized.csv`. The 1000 mm Ground-Loading Platform
 and Falcon configurations use `output/wheelchair_DtoP.csv`.
 
 ## v182: Chair V3 1-DOF limits and ride-only neutral adjustment

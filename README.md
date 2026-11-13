@@ -1,4 +1,4 @@
-<!-- README.md ver 16 -->
+<!-- README.md ver 17 -->
 # Platform Operators Console
 
 The Platform Operators Console (POC) is the Raspberry Pi operator console for
@@ -8,6 +8,13 @@ telemetry processing, platform kinematics, Festo pressure output and
 
 The live Raspberry Pi installation is `/home/poc/Runtime` and starts as a
 desktop-autostart application. It is not installed as a system service.
+
+## v194 - Ground-Loading Platform display name
+
+The human-facing name of the `platform_v2` physical platform is now
+**Ground-Loading Platform** throughout POC, Sim Player and current documentation.
+The stable `platform_v2` key, `wheelchair_platform` protocol identity, catalogue
+filenames, geometry, limits and motion processing are unchanged.
 
 ## v193 - Sim Player optimiser candidate browser and independent A/B tuning
 
@@ -24,7 +31,7 @@ CSV or NL2 control behaviour is modified. See
 ## v192 - Offline ride optimiser and self-describing player studies
 
 Run `py -m tools.sim_player.optimizer "captures\nl2_ride_study" --output "studies\optimizer"`
-from the repository root. It searches Chair V3 and MDX independently for strict
+from the repository root. It searches Chair V3 and Ground-Loading Platform independently for strict
 and <=5%-stroke-request-excess candidates, prioritising Roll/Pitch/Heave, then
 Yaw, then Surge/Sway. Full-turn captures can compare existing angular cues.
 All exported finalists receive full-frame normal-player validation.
@@ -132,14 +139,14 @@ configured IPv4 address; `"address": "-"` disables this output.
 Physical platforms are registered in `config/platforms.py`.
 
 The supplied `poc_config.json` explicitly selects `platform_v2`, which is the
-MDX Suspended Platform. Its platform/protocol name remains `wheelchair_platform`
+Ground-Loading Platform. Its platform/protocol name remains `wheelchair_platform`
 for wire compatibility, while its geometry comes from
 `kinematics/cfg_SuspendedPlatformMdx.py`. The six fixed and moving
 attachment points are CAD-derived XYZ coordinates using the current 84 mm CAD
 reference-plane datum. Existing configurations containing the old `wheelchair`
 key are migrated automatically.
 
-The MDX platform uses a 60 mm muscle-extension reserve to establish neutral
+The Ground-Loading Platform uses a 60 mm muscle-extension reserve to establish neutral
 height, then normally runs with `WORKSPACE_LIMIT_MODE="geometry"`: a precomputed
 moving-platform underside hull enforces 15 mm minimum floor clearance while the
 physical actuator envelope remains 950..1200 mm. This avoids imposing the 60 mm

@@ -1,4 +1,4 @@
-# optimizer.py ver 1
+# optimizer.py ver 2
 """Batch offline NL2 ride optimisation; no Qt, simulator or hardware output.
 
 From the POC root:
@@ -354,7 +354,7 @@ def optimise_group(captures: list[Capture], platform: str, output: Path,
     except (ValueError, RuntimeError) as exc:
         report["baseline_error"] = str(exc)
     entries = []
-    short_platform = "Chair" if platform == "chair_v3" else "MDX"
+    short_platform = "Chair" if platform == "chair_v3" else "Ground-Loading"
     for target in ("strict", "relaxed5"):
         allowance = (0.0 if target == "strict" else .05 * evaluator.stroke_mm)
         if not results[target]:

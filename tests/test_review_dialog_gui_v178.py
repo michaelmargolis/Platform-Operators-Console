@@ -1,4 +1,4 @@
-# test_review_dialog_gui_v178.py ver 1
+# test_review_dialog_gui_v178.py ver 2
 """Qt5 visual-contract tests; run on Pi/Windows with PyQt5 installed."""
 import os
 os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
@@ -13,6 +13,9 @@ def test_dialog_fits_compact_screen_and_cancel_is_default():
     dialog=VariantReviewDialog({'label':'Blackbird [Sine Roll 120%]', 'platform_key':'platform_v2',
                                'park_name':'Blackbird','last_for_park':True})
     dialog.show();app.processEvents()
+    labels=[w.text() for w in dialog.findChildren(QtWidgets.QLabel)]
+    assert any('Ground-Loading Platform' in text for text in labels)
+    assert not any('platform_v2' in text for text in labels)
     assert dialog.width()<=780 and dialog.height()<=450
     assert dialog.buttons[2].isDefault()
     assert dialog.warning.isVisible()

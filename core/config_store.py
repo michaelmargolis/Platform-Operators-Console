@@ -1,4 +1,4 @@
-#config_store.py  ver 7
+#config_store.py  ver 8
 from __future__ import annotations
 
 import ipaddress
@@ -61,7 +61,7 @@ class ConfigStore:
                 loaded.pop("virtual_output", None)
                 migrated = True
             # The original wheelchair key is retained only as a migration alias.
-            # platform_v2 is the current MDX suspended-platform selection.
+            # platform_v2 is the current Ground-Loading Platform selection.
             if loaded.get("selected_platform") == "wheelchair":
                 loaded["selected_platform"] = "platform_v2"
                 migrated = True

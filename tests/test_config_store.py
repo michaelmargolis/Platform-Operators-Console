@@ -1,4 +1,4 @@
-#test_config_store.py  ver 6
+#test_config_store.py  ver 7
 import json
 
 import pytest
@@ -15,17 +15,17 @@ def test_defaults_have_single_shs_address():
 
 
 
-def test_platform_v2_maps_to_mdx_suspended_platform():
+def test_platform_v2_maps_to_ground_loading_platform():
     from config.platforms import PLATFORMS
 
     definition = PLATFORMS["platform_v2"]
-    assert definition["name"] == "MDX Suspended Platform"
+    assert definition["name"] == "Ground-Loading Platform"
     assert definition["platform_name"] == "wheelchair_platform"
     assert definition["sop_config_module"] == "kinematics.cfg_SuspendedPlatformMdx"
 
     module = __import__(definition["sop_config_module"], fromlist=["PlatformConfig"])
     cfg = module.PlatformConfig()
-    assert cfg.PLATFORM_NAME == "MDX Suspended Platform"
+    assert cfg.PLATFORM_NAME == "Ground-Loading Platform"
     assert cfg.WORKSPACE_LIMIT_MODE == "geometry"
     assert cfg.MUSCLE_EXTENSION_RESERVE == 60.0
 

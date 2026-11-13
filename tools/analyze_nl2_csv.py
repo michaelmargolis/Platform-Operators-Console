@@ -1,4 +1,4 @@
-# analyze_nl2_csv.py ver 15
+# analyze_nl2_csv.py ver 16
 """Standalone NL2 CSV playback / muscle-length study; no POC outputs are created.
 
 Place in POC/tools; run: python tools/analyze_nl2_csv.py PATH_TO_CAPTURE.csv
@@ -516,6 +516,8 @@ class AnalyzerApp:
         self.batch_paths = []
         self.path = tk.StringVar(value="")
         self.platform = tk.StringVar(value="platform_v2")
+        self.platform_display = tk.StringVar(value=PLATFORMS[self.platform.get()]["name"])
+        self._platform_display_to_key = {cfg["name"]: key for key, cfg in PLATFORMS.items()}
         self.mode = tk.StringVar(value="Normalized height")
         self.amplitude = tk.DoubleVar(value=80)
         self.intensity = tk.DoubleVar(value=100)
@@ -541,8 +543,14 @@ class AnalyzerApp:
         )
 
         ttk.Label(controls, text="Platform").grid(row=2, column=0, sticky="w", pady=4)
-        ttk.Combobox(controls, textvariable=self.platform, values=list(PLATFORMS),
-                     state="readonly", width=14).grid(row=2, column=1, columnspan=3, sticky="ew", pady=4)
+        platform_combo = ttk.Combobox(
+            controls, textvariable=self.platform_display, values=list(self._platform_display_to_key),
+            state="readonly", width=22)
+        platform_combo.grid(row=2, column=1, columnspan=3, sticky="ew", pady=4)
+        platform_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda _event: self.platform.set(self._platform_display_to_key[self.platform_display.get()]),
+        )
 
         ttk.Label(controls, text="Heave").grid(row=3, column=0, sticky="w", pady=4)
         ttk.Combobox(controls, textvariable=self.mode, values=["Recorded heave", "Normalized height", "Vertical G"],

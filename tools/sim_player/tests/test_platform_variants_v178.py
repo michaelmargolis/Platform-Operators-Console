@@ -1,4 +1,4 @@
-# test_platform_variants_v178.py ver 3
+# test_platform_variants_v178.py ver 4
 """Platform propagation and JSON candidate saving without Qt or physical I/O."""
 from dataclasses import replace
 from types import SimpleNamespace
@@ -24,6 +24,7 @@ def test_platform_selector_uses_all_configured_platform_names():
     assert len({name.casefold() for _, name in choices}) == len(choices)
     assert dict(choices)['chair_v3'] == 'Chair V3'
     assert dict(choices)['chair_v2'] == 'V2 Chair'
+    assert dict(choices)['platform_v2'] == 'Ground-Loading Platform'
     for key,name in choices:
         # The legacy chair_v2 key retains its old kinematics source; v181
         # gives Chair V3 its own midpoint tuning module and catalog.

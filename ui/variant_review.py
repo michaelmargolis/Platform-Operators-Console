@@ -1,6 +1,7 @@
-# variant_review.py ver 1
+# variant_review.py ver 2
 """Touch/encoder variant review dialog; deliberately no undo/editor controls."""
 from PyQt5 import QtCore, QtWidgets
+from config.platforms import PLATFORMS
 
 
 class VariantReviewDialog(QtWidgets.QDialog):
@@ -16,7 +17,8 @@ class VariantReviewDialog(QtWidgets.QDialog):
         self.setMinimumWidth(360)
         self.setMaximumWidth(590)
         layout = QtWidgets.QVBoxLayout(self)
-        text = QtWidgets.QLabel(f"{info['label']}\n{info['platform_key']}", self)
+        platform_name = PLATFORMS.get(info['platform_key'], {}).get('name', info['platform_key'])
+        text = QtWidgets.QLabel(f"{info['label']}\n{platform_name}", self)
         text.setWordWrap(True)
         text.setTextFormat(QtCore.Qt.PlainText)
         layout.addWidget(text)

@@ -1,20 +1,20 @@
-#file_versions.txt  ver 190
-# Application baseline: v193 + Sim Player Task Workspace v0.2.10
+#file_versions.txt  ver 191
+# Application baseline: v194 + Sim Player Task Workspace v0.2.10
 # Relative path | expected version
-config/platforms.py|6
+config/platforms.py|7
 controls/__init__.py|1
 controls/serial_remote.py|1
 controls/buttons.py|1
 controls/rotary_encoder.py|1
 controls/physical_controls.py|7
-core/config_store.py|7
+core/config_store.py|8
 core/digital_twin.py|2
 core/poc_core.py|56
 core/platform_controller.py|19
-kinematics/cfg_SuspendedPlatformMdx.py|4
+kinematics/cfg_SuspendedPlatformMdx.py|5
 kinematics/cfg_SuspendedChairFalcon.py|1
 kinematics/cfg_SuspendedChair.py|6
-kinematics/README.md|8
+kinematics/README.md|9
 output/__init__.py|1
 output/d_to_p.py|2
 output/chair_DtoP_synthesized.csv|1
@@ -53,7 +53,7 @@ sims/xplane/transport.py|1
 sims/xplane/plugin/PI_Mdx_telemetry_ui.py|2
 sims/xplane/plugin/PI_Mdx_telemetry.py|3
 tests/__init__.py|1
-tests/test_config_store.py|6
+tests/test_config_store.py|7
 tests/test_digital_twin.py|3
 tests/test_serial_remote.py|1
 tests/test_physical_controls.py|6
@@ -95,7 +95,7 @@ raspi/network-config.conf|2
 raspi/network_check.py|1
 raspi/README.md|16
 raspi/assets/README.md|3
-docs/ARCHITECTURE.md|4
+docs/ARCHITECTURE.md|5
 docs/digital_twin/POC_DIGITAL_TWIN_UDP_HANDOVER_v1.md|3
 docs/digital_twin/UNITY_DIGITAL_TWIN_DEVELOPMENT_HANDOFF.md|7
 docs/raspberry_pi/POC_Raspberry_Pi_Technician_Guide.md|10
@@ -108,14 +108,14 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|36
-README.md|16
-file_versions.txt|190
+changelog.txt|37
+README.md|17
+file_versions.txt|191
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
 docs/PARKING_OPERATION_V149.md|1
-docs/Project Ideas.md|2
+docs/Project Ideas.md|3
 tools/capture_nl2_rides.py|9
 tools/nl2_obs_recorder.py|3
 tests/test_nl2_obs_capture_v173.py|3
@@ -132,7 +132,7 @@ output/fstlib/POSE_SENDER_README.md|3
 tests/test_pose_sender_v163.py|1
 tests/test_pose_sender_v164.py|1
 tests/test_pose_sender_v165.py|1
-tools/analyze_nl2_csv.py|15
+tools/analyze_nl2_csv.py|16
 tests/test_mdx_roll_channels_v166.py|2
 tests/test_nl2_angular_scaling_v167.py|1
 tests/test_nl2_park_selection_v168.py|1
@@ -149,7 +149,7 @@ sims/nolimits2/ride_variants/.gitignore|1
 sims/nolimits2/variant_store.py|3
 tests/conftest.py|1
 tests/test_floor_policy_v178.py|1
-tests/test_review_dialog_gui_v178.py|1
+tests/test_review_dialog_gui_v178.py|2
 tests/test_review_encoder_v178.py|1
 tests/test_variant_migration_v178.py|1
 tests/test_variant_selection_v178.py|3
@@ -160,7 +160,7 @@ tools/sim_player/__main__.py|1
 tools/sim_player/angular_cues.py|1
 tools/sim_player/anomaly_detection.py|2
 tools/sim_player/anomaly_panel.py|1
-tools/sim_player/app.py|8
+tools/sim_player/app.py|9
 tools/sim_player/candidate_browser.py|1
 tools/sim_player/candidate_review.py|1
 tools/sim_player/candidate_workflow.py|2
@@ -172,7 +172,7 @@ tools/sim_player/muscle_extrema.py|2
 tools/sim_player/options_dialog.py|1
 tools/sim_player/panels.py|3
 tools/sim_player/platform_selection.py|2
-tools/sim_player/player_ui.py|5
+tools/sim_player/player_ui.py|6
 tools/sim_player/recording.py|4
 tools/sim_player/settings.py|1
 tools/sim_player/tests/conftest.py|1
@@ -181,7 +181,7 @@ tools/sim_player/tests/test_anomaly_detection_v10.py|1
 tools/sim_player/tests/test_loop_range_v8.py|1
 tools/sim_player/tests/test_muscle_extrema_v12.py|1
 tools/sim_player/tests/test_paused_video_preview.py|1
-tools/sim_player/tests/test_platform_variants_v178.py|3
+tools/sim_player/tests/test_platform_variants_v178.py|4
 tools/sim_player/tests/test_qt6_api_migration_v5.py|1
 tools/sim_player/tests/test_qt6_backend_contract.py|1
 tools/sim_player/tests/test_qt6_gui_smoke.py|1
@@ -216,7 +216,7 @@ tools/sim_player/twin_output.py|2
 tools/sim_player/variant_presets.py|3
 tools/sim_player/video_backend.py|1
 tools/sim_player/video_sync.py|2
-ui/variant_review.py|1
+ui/variant_review.py|2
 tools/sim_player/tests/test_muscle_scale_v179.py|1
 tools/sim_player/marker_intervals.py|1
 tools/sim_player/tests/test_marker_intervals_v180.py|1
@@ -245,6 +245,6 @@ sims/nolimits2/station_modes.py|3
 tests/test_nl2_station_modes_v189.py|3
 # v192 offline ride optimiser additions
 tools/sim_player/optimization_search.py|1
-tools/sim_player/optimizer.py|1
+tools/sim_player/optimizer.py|2
 tools/sim_player/study_bundle.py|1
 tools/sim_player/tests/test_optimizer_v192.py|1

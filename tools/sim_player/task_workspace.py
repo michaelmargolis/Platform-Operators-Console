@@ -20,6 +20,7 @@ from .tuning import tuning_metrics, muscle_flags
 from .angular_cues import MODES, MODE_LABELS
 from .panels import ResponsiveBars
 from .panel_state import candidate_label, comparison_pair, event_description
+from .platform_selection import platform_metadata
 
 PLOT_CHOICES = (
     ('all_axes', '6-DOF motion'),
@@ -763,7 +764,8 @@ class TaskInspector(QScrollArea):
         dynamic=rec.dynamic_profile
         label=dynamic.get('label','Dynamic') if isinstance(dynamic,dict) else rec.variant_label or 'Static baseline'
         compact = f'{rec.ride} · {label}'
-        detail = f'Platform: {rec.platform_key}\nCandidate: {label}\n{summary}'
+        platform_name = platform_metadata(rec.platform_key)['platform_name']
+        detail = f'Platform: {platform_name}\nCandidate: {label}\n{summary}'
         self.context_section.set_context(compact, detail, expandable=True)
 
     def _refresh_tuning(self):

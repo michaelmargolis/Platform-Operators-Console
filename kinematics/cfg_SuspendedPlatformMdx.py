@@ -1,9 +1,9 @@
-#cfg_SuspendedPlatformMdx.py  ver 4
+#cfg_SuspendedPlatformMdx.py  ver 5
 from math import radians
 
 
 class PlatformConfig(object):
-    PLATFORM_NAME = "MDX Suspended Platform"
+    PLATFORM_NAME = "Ground-Loading Platform"
     PLATFORM_TYPE = "Inverted Stewart Platform"
     PLATFORM_INVERTED = True
     # MDX rider-frame transform: +roll means right side down (CAD -Y down).

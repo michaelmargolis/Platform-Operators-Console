@@ -68,7 +68,7 @@ class DynamicProfileBrowserDialog(QDialog):
             self.choices=[];errors=[str(exc)]
         self.platform.blockSignals(True);self.platform.clear()
         for key in sorted({c.platform for c in self.choices}):
-            self.platform.addItem({'chair_v3':'Chair V3','platform_v2':'MDX suspended'}.get(key,key),key)
+            self.platform.addItem({'chair_v3':'Chair V3','platform_v2':'Ground-Loading Platform'}.get(key,key),key)
         self.platform.blockSignals(False)
         self.note.setText(f'{len(self.choices)} profiles found.' + (' Invalid entries: '+str(len(errors)) if errors else ''))
         self.note.setToolTip('\n'.join(errors))

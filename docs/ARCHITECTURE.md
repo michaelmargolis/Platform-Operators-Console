@@ -1,4 +1,4 @@
-<!-- ARCHITECTURE.md ver 4 -->
+<!-- ARCHITECTURE.md ver 5 -->
 # Platform Operators Console — Architecture and Hardware Guide
 
 **Audience:**  maintainers, Engineering students and researchers extending the motion-platform system  
@@ -23,18 +23,18 @@ The muscles are arranged such that contracting combinations of actuators creates
 
 | POC selector | Configuration | Muscle nominal maximum | Key differences |
 | --- | --- | ---: | --- |
-| `platform_v2` | `kinematics/cfg_SuspendedPlatformMdx.py` | 1,000 mm | MDX suspended/wheelchair-oriented platform; CAD-derived XYZ joint geometry; no prop piston; floor/actuator workspace limiter enabled |
+| `platform_v2` | `kinematics/cfg_SuspendedPlatformMdx.py` | 1,000 mm | Ground-Loading Platform; suspended/wheelchair-oriented design; CAD-derived XYZ joint geometry; no prop piston; floor/actuator workspace limiter enabled |
 | `chair_v3` | `kinematics/cfg_SuspendedChair.py` | 800 mm | Suspended chair geometry; commanded prop piston sequence; workspace limiter currently off |
 | `chair_v2` | Same `cfg_SuspendedChair.py` | 800 mm | Legacy selection retained for configuration compatibility; not a separate current geometry model |
 | `Falcon` | `kinematics/cfg_SuspendedChairFalcon.py` | 1,000 mm | Separate Falcon geometry; no prop piston in configuration |
 
 Configuration is chosen using `config/platforms.py`; changes to the selected physical platform are persisted and applied **after POC restarts**, not while active. Do not assume that the configured platform is the one physically connected without commissioning checks.
 
-For platform_v2, the model specifies 1,000 mm maximum and 750 mm minimum muscle length plus 200 mm nominal fixed attachment hardware per actuator, giving 1,200..950 mm total attachment-to-attachment lengths. Its CAD-derived geometry is in millimetres, with **84 mm subtracted from CAD Z** to define the POC reference. The configured underside and floor are at local Z = -80 and -84 mm respectively. The software uses an approximate moving-platform underside hull to enforce a nominal 15 mm active floor-clearance requirement. Those are **software geometry assumptions**, not independent collision sensors.
+For the Ground-Loading Platform, the model specifies 1,000 mm maximum and 750 mm minimum muscle length plus 200 mm nominal fixed attachment hardware per actuator, giving 1,200..950 mm total attachment-to-attachment lengths. Its CAD-derived geometry is in millimetres, with **84 mm subtracted from CAD Z** to define the POC reference. The configured underside and floor are at local Z = -80 and -84 mm respectively. The software uses an approximate moving-platform underside hull to enforce a nominal 15 mm active floor-clearance requirement. Those are **software geometry assumptions**, not independent collision sensors.
 
-The `platform_v2` design targets wheelchair accessibility: the moving structure rests at floor level when parked, permitting level boarding without a ramp or lift. Actual boarding clearances and safeguarding must be verified on the physical installation.
+The Ground-Loading Platform targets wheelchair accessibility: the moving structure rests at floor level when parked, permitting level boarding without a ramp or lift. Actual boarding clearances and safeguarding must be verified on the physical installation.
 
-The suspended-chair config has a separate 800 mm muscle model and prop/piston sequencing (`HAS_PISTON=True`). The Falcon and MDX configs use 1,000 mm muscles. Configured payload classes and pressure tables differ among platforms; do not transfer calibration or actuator limits without validation.
+The suspended-chair config has a separate 800 mm muscle model and prop/piston sequencing (`HAS_PISTON=True`). The Falcon and Ground-Loading Platform configs use 1,000 mm muscles. Configured payload classes and pressure tables differ among platforms; do not transfer calibration or actuator limits without validation.
 
 The Falcon platform was developed for the Royal Aeronautical Society.
 
@@ -105,7 +105,7 @@ POC should remain usable with test adapters and a receiver emulator even when th
 
 Critical conventions: muscle indices **0–5 must retain the same upper/lower attachment pairing throughout**; platform-local lower coordinates move rigidly with the deck; the code's axis flips and neutral-height calculation are part of the established kinematic convention. Do not interchange CAD positions, normalized POC transforms or real-world pose without explicit conversion and regression checks.
 
-The MDX `WORKSPACE_LIMIT_MODE` is normally `geometry` (underside floor hull plus physical actuator envelope). `reserve` and `off` exist for specific testing/fallback, not as general alternatives to safe operation. Chair workspace limiting is currently off, which does **not** mean every theoretical pose is physically safe.
+The Ground-Loading Platform `WORKSPACE_LIMIT_MODE` is normally `geometry` (underside floor hull plus physical actuator envelope). `reserve` and `off` exist for specific testing/fallback, not as general alternatives to safe operation. Chair workspace limiting is currently off, which does **not** mean every theoretical pose is physically safe.
 
 ## 5. State machines and the operating sequence
 

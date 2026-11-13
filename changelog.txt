@@ -1,4 +1,18 @@
-# changelog.txt ver 36
+# changelog.txt ver 37
+v194 | Rename human-facing platform to Ground-Loading Platform
+----------------------------------------------------------------
+- Rename the user-facing `platform_v2` physical-platform name from MDX Suspended
+  Platform / MDX suspended to Ground-Loading Platform in POC, Sim Player and
+  current documentation.
+- Keep the stable `platform_v2` configuration/catalogue key, `wheelchair_platform`
+  protocol identity, filenames and saved-data keys unchanged for compatibility.
+- Update optimiser-generated platform wording and dynamic-profile selection text.
+- Replace raw `platform_v2` text in normal graphical UI surfaces (variant review,
+  Sim Player tooltips/Inspector and standalone analyzer selector) with the human
+  name; technical CLI tokens and real catalogue paths remain unchanged.
+- No geometry, kinematic limits, ride processing, Festo output, simulator control
+  or variant data are changed.
+
 v193 | Sim Player: four-candidate browser, A/B working copies, named trial variants
 ----------------------------------------------------------------------------------
 - Add a results browser selecting run/platform/park and ANY two indexed optimiser

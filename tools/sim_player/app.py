@@ -1,4 +1,4 @@
-# app.py ver 8
+# app.py ver 9
 """MDX sim_player: offline replay controller (PyQt6 only).
 
 UI layout is in player_ui.py; presentation panels in panels.py. This module
@@ -847,7 +847,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.platform_box.setCurrentIndex(self.platform_box.findData(self.platform_key))
         metadata = platform_metadata(self.platform_key)
         self.platform_box.setToolTip(
-            f"{self.platform_key}: {metadata['platform_config_module']}\nVariants: {self.variant_store.path}")
+            f"{metadata['platform_name']}: {metadata['platform_config_module']}\nVariants: {self.variant_store.path}")
         self.platform_box.blockSignals(False)
         if hasattr(self, 'workspace_platform_box'):
             self.workspace_platform_box.blockSignals(True)

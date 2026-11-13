@@ -1,4 +1,4 @@
-# player_ui.py ver 5
+# player_ui.py ver 6
 """Construction of sim_player's dockable Qt6 main window.
 
 Only widgets, menus, layouts and signal wiring live here.  ReplayWindow in
@@ -313,7 +313,7 @@ class PlayerUiMixin(CanonicalVideoMixin, DynamicProfileWorkflowMixin, CandidateR
         for key, name in platform_choices():
             self.platform_box.addItem(name, key)
             self.platform_box.setItemData(self.platform_box.count()-1,
-                key + " | " + platform_metadata(key)['platform_config_module'], Qt.ItemDataRole.ToolTipRole)
+                name + " | " + platform_metadata(key)['platform_config_module'], Qt.ItemDataRole.ToolTipRole)
         self.platform_box.setCurrentIndex(self.platform_box.findData(self.platform_key))
         self.platform_box.currentIndexChanged.connect(self._platform_changed)
         experiment_row.addWidget(self.platform_box)

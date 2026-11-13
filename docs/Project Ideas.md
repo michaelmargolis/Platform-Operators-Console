@@ -1,4 +1,4 @@
-<!-- Project Ideas.md ver 2 -->
+<!-- Project Ideas.md ver 3 -->
 # Platform Operators Console — Final-Year Project Ideas
 
 **Audience:** Design, Engineering, mechanical, mechatronics, electronics, robotics, computing, HCI and interdisciplinary students  
@@ -84,7 +84,7 @@ Challenges are indicative, not prerequisites. Several teams could use the same d
 
 **Question:** Do the current kinematic limits accurately predict floor clearance and actuator limits across coupled motions?
 
-**Build:** CAD model and independent numerical geometry checker for the MDX moving-platform underside and six actuator paths. Compare the configured `WORKSPACE_LIMIT_MODE="geometry"` results against actual clearances at safely chosen test poses.
+**Build:** CAD model and independent numerical geometry checker for the Ground-Loading Platform moving-platform underside and six actuator paths. Compare the configured `WORKSPACE_LIMIT_MODE="geometry"` results against actual clearances at safely chosen test poses.
 
 **Deliverables:** Verified collision/clearance model, worst-case pose study and test fixtures or non-contact measurements. **Evaluate:** minimum clearance margin, coverage, conservatism and runtime cost. Never use the student model as the sole live safety protection.
 
