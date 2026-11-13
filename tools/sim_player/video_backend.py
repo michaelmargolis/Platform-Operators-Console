@@ -19,9 +19,56 @@ from pathlib import Path
 # Qt 6's FFmpeg backend was validated on the user's Windows installation.
 os.environ["QT_MEDIA_BACKEND"] = "ffmpeg"
 
-from PyQt6.QtCore import QObject, QTimer, QUrl, pyqtSignal
-from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PyQt6.QtCore import QObject, QTimer, QUrl, Qt, QRectF, pyqtSignal
+from PyQt6.QtGui import QColor, QPainter
+from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoFrame
 from PyQt6.QtMultimediaWidgets import QVideoWidget
+from PyQt6.QtWidgets import QWidget, QSizePolicy
+
+
+class VideoFrameMirror(QWidget):
+    """Paint QVideoWidget sink frames as ordinary QWidget content.
+
+    QVideoWidget may use a native video surface on Windows, which can sit above
+    sibling widgets even when a QStackedLayout requests StackAll.  Overlay mode
+    therefore mirrors the already-decoded frame into this QWidget and lets the
+    existing PlotCanvas paint normally above it.  Video-only playback continues
+    to use QVideoWidget unchanged.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._frame = QVideoFrame()
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+
+    def set_frame(self, frame) -> None:
+        if not frame.isValid():
+            return
+        # QVideoFrame is implicitly shared; retaining a value copy avoids a full
+        # image conversion while Overlay is not visible.
+        self._frame = QVideoFrame(frame)
+        if self.isVisible():
+            self.update()
+
+    def clear(self) -> None:
+        self._frame = QVideoFrame()
+        self.update()
+
+    def paintEvent(self, _event) -> None:
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor('black'))
+        if not self._frame.isValid():
+            return
+        image = self._frame.toImage()
+        if image.isNull() or image.width() <= 0 or image.height() <= 0:
+            return
+        scale = min(self.width() / image.width(), self.height() / image.height())
+        width = image.width() * scale
+        height = image.height() * scale
+        target = QRectF((self.width() - width) / 2.0,
+                        (self.height() - height) / 2.0, width, height)
+        painter.drawImage(target, image)
 
 
 class Qt6VideoBackend(QObject):

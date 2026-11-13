@@ -100,7 +100,10 @@ def test_only_one_visible_dock_is_not_resized():
 
 
 def test_default_layout_has_no_spacer_or_forced_window_resizing():
-    assert 'self.tabifyDockWidget(muscle, tuning)' in UI
+    # Legacy tabs still exist in Advanced; the task default shows one Inspector.
+    assert 'self.tabifyDockWidget(lengths, tuning)' in UI
+    assert "if key != 'inspector':" in UI
+    assert 'self._activate_task_layout()' in APP
     assert 'self.dock_space' not in UI
     assert 'self.resize(self.width(), old_height + delta)' not in APP
     assert 'self._initialize_video_splitter' not in APP

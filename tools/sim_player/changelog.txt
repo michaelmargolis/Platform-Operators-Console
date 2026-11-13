@@ -1,0 +1,95 @@
+Sim Player Task Workspace v0.2.10 - 12 November 2026
+- Make inspector section QToolButtons visually part of their section frames by using one outer frame for title and body with zero internal gap.
+- Apply the same attached treatment to the compact Ride and candidate context section.
+- Change inspector dock title separator from `/` to `:` (`Inspector : Review/Tune/Validate`).
+- No workflow, plotting, overlay, canonical-video, playback or motion-processing logic changed.
+
+Sim Player Task Workspace v0.2.9 - 12 November 2026
+- Compress the Task Workspace inspector header: remove the duplicate internal `Inspector / <workflow>` row and use the dock title itself as `Inspector / Review`, `Inspector / Tune` or `Inspector / Validate`.
+- Move the former Expand all / Collapse all commands to the inspector right-click menu so they remain available without consuming a permanent row.
+- Replace the two-row Ride and candidate block with a compact one-line summary. With no capture loaded it simply reports `No capture loaded`; once a capture/candidate is loaded it becomes expandable to show platform/candidate/washout details.
+- Preserve all existing workflow, plotting, overlay, canonical-video, playback and motion-processing behaviour.
+
+v0.2.8 - 2026-11-12
+- UI refinement: Task Workspace inspector now sits on a single subtle background surface from the 'Inspector / <workflow>' header downward, making the right-hand content read as one cohesive panel.
+- Implementation detail: added a lightweight `inspectorSurface` container in `task_workspace.py` and matching style rule in `player_ui.py`.
+- No workflow, plotting, overlay or canonical-video logic changed in this update.
+
+Sim Player Task Workspace v0.2.7 - 12 November 2026
+- Make Pitch plot traces bright red and Yaw yellow through the shared axis palette used by all workspace plot families.
+- Visually group Review/Tune/Validate with a subtle framed Workflow treatment while retaining the existing selected-button accent.
+- Replace the generic workflow hover text with Review-, Tune- and Validate-specific hints.
+- Add right-click workflow help: a concise purpose sentence plus ordered high-level process for each workflow.
+- Keep workflow context menus local to workflow help/full Workspace help; panel/layout actions remain in their established menus.
+- Retain v0.2.6 canonical pre-video wording and Windows Overlay composition fixes unchanged. No motion, matching, timeline, kinematics or output changes.
+
+Sim Player Task Workspace v0.2.6 - 12 November 2026
+- Distinguish a known pre-video lead-in from a failed canonical match.
+- Show "Reference video available - begins at mm:ss.s" and a live "Video starts in x.x s" viewer message before the first usable mapped frame.
+- Label genuine later gaps "Reference video temporarily unavailable - telemetry alignment gap".
+- Fix Windows Overlay composition by retaining QVideoWidget for Video mode and mirroring its decoded frames into an ordinary QWidget for the transparent PlotCanvas.
+- Plot-only mode, reference matching/calibration, playback timeline and motion processing are unchanged; no video-availability timeline marker added.
+
+Sim Player Task Workspace v0.2.5 - 12 November 2026
+- Canonical reference registration now asks for only the video file.
+- The original telemetry CSV is resolved automatically from the same basename and directory; missing telemetry is reported immediately.
+- Removed the setup-page same-run confirmation checkbox.
+- Visual offset/calibration verification now appears only in the Calibration tab after a reference exists; estimated calibration can be saved without falsely marking it checked.
+- Existing saved visual calibration remains marked verified on import.
+
+Sim Player Task Workspace v0.2.4 - 12 November 2026
+
+- Add player-owned canonical_rides library; import one existing video and its
+  original unsuffixed telemetry, event and calibration sidecars per ride.
+- Open > Ride reference video provides original-pair registration and calibration.
+  Files are copied into versioned per-ride folders; source data is never moved.
+- Reuse unchanged B+C XYZ/orientation matching to map independent captures to the
+  video reference. Handle archived dynamic-study progress via its bound trajectory.
+- Apply mapped video timestamps/playback rates without changing the selected
+  recording clock, motion arrays, loop, Twin timing or physical constraints.
+- Show missing coverage, stationary-time uncertainty, incompatible identities and
+  calibration state. Retain original capture-linked video as an optional fallback.
+- Perform copying/matching outside the UI playback tick; support cancellation,
+  stale-worker rejection, same-source A/B cache reuse and portable relative paths.
+- Add coloured plot-legend swatches using exactly the trace palette/line styles;
+  preserve a single axis's colour and wrap long legend labels.
+- Retain v0.2.3 red extrema bars, graticule, tabbed Help/F1, menu arrangement and
+  Review/Tune/Validate inspector. No split view or unrelated panel rewrite.
+- No POC/matcher/kinematics/filter/variant/capture changes. No new dependencies.
+- Verification and limitations: WORKSPACE_VERIFICATION.md. Setup instructions:
+  CANONICAL_VIDEO_GUIDE.md. Actual Windows/Qt/video presentation not tested here.
+
+Sim Player Task Workspace v0.2.3 - 12 November 2026
+
+- Replace Inspector's simplified progress bars with the unchanged pre-refactor
+  ResponsiveBars renderer: red requested extrema, blue/gold peaks, warning
+  gutters, exact-value tooltips, valid limits and 50 mm graticule restored.
+- Use one controller-owned peak history and one presentation snapshot for both
+  Inspector and Advanced; retain all existing reset/seek/loop semantics.
+- Restore signed transform bars and correct source/processed stage labels.
+- Restore stable A/B column identity, dynamic comparison curves and graph units.
+- Restore full event details/Examine loop, floor/short/long/baseline diagnostics,
+  live dynamic sync/lag/fallback fields and applied-versus-curve multipliers.
+- Restore baseline/experiment actions, neutral summary/reset and keyboard gain
+  commits; block edits during reanalysis and revert failed edits to accepted data.
+- Restore baseline includes its archived global washout snapshot.
+- No motion equations, physical limits, output protocol or media sync changes.
+- Test suite and detailed before/after audit: WORKSPACE_VERIFICATION.md and
+  WORKSPACE_PANEL_AUDIT.md. Native Qt rendering remains untested here.
+
+Sim Player Task Workspace v0.2.2 - 12 November 2026
+
+- Restore the prototype's six help-topic areas in a reusable, modeless dialog.
+- One shared Workspace help action: Help menu, information icon and F1.
+- Describe working-player behaviour; label shared reference-video mapping and
+  other unimplemented prototype ideas explicitly instead of implying support.
+- Match preferred menu order: File, Open, View, Advanced, Twin, Help.
+- Move Open/Advanced/Twin out of the selector toolbar; retain all opening and
+  saving routes, advanced panels and actual Twin status/destination/settings.
+- Compact full-width selectors with Review/Tune/Validate and Help on the right.
+- Keep playback, A/B, loops, view modes, processing and output implementations.
+- Add focused help/menu tests, optional real-Qt dialog tests and preservation audit.
+- 107 selected regression tests passed, 2 skipped. Windows/Qt rendering not run.
+
+This starts the consolidated player workspace changelog. Earlier release notes
+remain in the existing functional documentation and are not deleted by this ZIP.

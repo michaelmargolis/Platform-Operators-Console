@@ -1,4 +1,4 @@
-# video_sync.py ver 1
+# video_sync.py ver 2
 """Qt-independent helpers for robust video/timeline synchronization.
 
 Avoid repeated H.264 decoder seeks during normal play and after pause/resume.
@@ -11,7 +11,8 @@ from __future__ import annotations
 def is_ride_telemetry_csv(filename: str) -> bool:
     """True for candidate high-rate capture CSVs, never state-event sidecars."""
     name = str(filename).casefold()
-    return name.endswith(".csv") and not name.endswith("_state_events.csv")
+    return name.endswith(".csv") and not name.endswith(("_state_events.csv", "_dynamic_diagnostics.csv",
+        "_timing.csv", "_protocol.csv", "_polls.csv")) and name not in ("index.csv", "gain_curve.csv")
 
 
 class VideoSeekGuard:

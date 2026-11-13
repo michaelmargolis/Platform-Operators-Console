@@ -1,4 +1,4 @@
-# tuning.py ver 2
+# tuning.py ver 3
 """Headless sim_player motion-tuning helpers (research only).
 
 Multipliers are relative to POC's current saved per-axis gains, and applied
@@ -63,14 +63,16 @@ def muscle_flags(frame, lo, hi):
     A final permitted length is normally inside the legal range even if the
     *request* was impossible. Both conditions must remain visible in the UI.
     """
+    if frame.analysis.get("valid", True) is False:
+        return (False,) * 6, (False,) * 6
     requested = frame.analysis.get("requested", ())
     workspace = frame.analysis.get("workspace_lengths", ())
     permitted = frame.muscle_lengths_mm
     if len(requested) != 6 or len(workspace) != 6 or len(permitted) != 6:
         return (False,) * 6, (False,) * 6
     out = tuple(float(v) < lo - 1.e-7 or float(v) > hi + 1.e-7 for v in requested)
-    clipped = tuple(abs(float(v) - float(p)) > 1.e-7
-                    for v, p in zip(workspace, permitted))
+    clipped = tuple(frame.analysis["final_clip_mask"]) if "final_clip_mask" in frame.analysis else tuple(
+        abs(float(v) - float(p)) > 1.e-7 for v, p in zip(workspace, permitted))
     return out, clipped
 
 
@@ -97,6 +99,8 @@ def tuning_metrics(recording):
     max_excess = max_short = max_long = 0.0
     lo, hi = recording.min_length_mm, recording.max_length_mm
     for frame in recording.frames:
+        if frame.analysis.get("valid", True) is False:
+            continue
         req = tuple(frame.analysis.get("requested", ()))
         workspace = tuple(frame.analysis.get("workspace_lengths", ()))
         if len(req) == 6:
@@ -104,8 +108,9 @@ def tuning_metrics(recording):
             oob_frames += extra > 1.e-7
             max_excess = max(max_excess, extra)
         if len(workspace) == 6:
-            clamp_frames += any(abs(float(w) - float(f)) > 1.e-7
-                                for w, f in zip(workspace, frame.muscle_lengths_mm))
+            clamp_frames += (any(frame.analysis["final_clip_mask"]) if "final_clip_mask" in frame.analysis
+                             else any(abs(float(w) - float(f)) > 1.e-7
+                                      for w, f in zip(workspace, frame.muscle_lengths_mm)))
             short = max(lo - float(v) for v in workspace)
             long = max(float(v) - hi for v in workspace)
             short_frames += short > 1.e-7

@@ -1,4 +1,4 @@
-# recording.py ver 3
+# recording.py ver 4
 """Recording and analysis adapter for sim_player.
 
 No Qt, network, SHS or Festo dependencies. Reuses the existing POC offline
@@ -86,6 +86,8 @@ class RideRecording:
     platform_config_sha256: str = ""
     platform_neutral_height_mm: float | None = None
     global_settings_snapshot: dict[str, Any] | None = None
+
+    dynamic_profile: dict[str, Any] | None = None
 
     @property
     def duration(self) -> float:

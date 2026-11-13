@@ -11,7 +11,9 @@ def test_sync_controls_are_only_in_dock():
     assert 'self._add_dock("video_sync", "Video synchronisation"' in ui
     assert 'video_sync.hide()' in ui
     assert 'control_layout.addLayout(video_row)' not in ui
-    assert 'self.panels["video_sync"].hide()' in ui
+    # Task workspace hides every advanced dock, including video sync.
+    assert "if key != 'inspector':" in ui and 'dock.hide()' in ui
+    assert 'def _activate_task_layout(self):' in ui
 
 
 def test_common_scale_grid_and_bounds():

@@ -1,4 +1,4 @@
-# app.py ver 6
+# app.py ver 8
 """MDX sim_player: offline replay controller (PyQt6 only).
 
 UI layout is in player_ui.py; presentation panels in panels.py. This module
@@ -13,6 +13,7 @@ import sys
 import time
 from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal, QTimer
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox, QMainWindow, QDialog, QDockWidget, QWidget, QInputDialog
+from . import WORKSPACE_VERSION
 from .panels import RideCsvDialogFilter, clock_label
 from .player_ui import PlayerUiMixin, apply_style
 from .recording import RideRecording, load_recording, write_saved_calibration
@@ -31,6 +32,8 @@ from .variant_presets import (
 )
 from .platform_selection import initial_platform_key, platform_metadata
 from sims.nolimits2.variant_store import VariantStore
+from .task_workspace_models import with_washout
+from .panel_state import muscle_bar_state, transform_readout
 from .tuning import (
     DEFAULT_GAINS, ExperimentSettings, load_experiment, save_experiment,
     muscle_flags, tuning_metrics, validate_gain_percent, current_poc_global_settings,
@@ -108,10 +111,14 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.worker = None
         self.loading = False
         self._init_review_state()
+        self._init_dynamic_state()
         self.has_video = False
         self.video_offset_s = 0.0
         self.settings = QSettings("MDXSAT", "sim_player")
+        self._init_canonical_media()
         self.visualizer_settings = load_visualizer_settings(self.settings)
+        self.task_mode = "review"
+        self.current_workflow = "inspect_motion"
         self.twin_output = ReplayTwinOutput(self.visualizer_settings)
         self.setWindowTitle("MDX sim_player — No recording loaded")
         # Compact default; the video grows/shrinks with the outer window.
@@ -121,6 +128,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self._create_central()
         self._create_docks()
         self._create_menus()
+        self._task_mode_selected('review')
         self._update_candidate_ui()
         self._update_twin_indicator()
         self.statusBar().showMessage("Offline replay • no NoLimits2, SHS or Festo connections")
@@ -160,12 +168,292 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.twin_timer.timeout.connect(self._twin_tick)
         self.twin_timer.start()
         if initial_path:
-            QTimer.singleShot(1, lambda: self.open_capture(Path(initial_path)))
+            QTimer.singleShot(1, lambda: self._open_initial_path(Path(initial_path)))
 
     def _initialize_layout_v17(self):
         """Apply fixed playback-strip height and compact startup dock rows."""
         self._fix_playback_controls_height()
-        self._compact_right_docks()
+        self._activate_task_layout()
+
+    def _task_mode_selected(self, mode):
+        """Select a task without resetting current capture, loop, or playhead."""
+        if mode not in ('review', 'tune', 'validate'):
+            return
+        self.task_mode = mode
+        for name, button in self.mode_buttons.items():
+            button.blockSignals(True)
+            button.setChecked(name == mode)
+            button.blockSignals(False)
+        tasks = {
+            'review': [('Inspect motion', 'inspect_motion'),
+                       ('Events and limits', 'inspect_events'),
+                       ('Candidate A/B', 'compare')],
+            'tune': [('Gains', 'gains'), ('Neutral / cue', 'neutral'),
+                     ('Washout', 'washout')],
+            'validate': [('Kinematic feasibility', 'limits'),
+                         ('Synchronisation', 'sync')],
+        }
+        self.workflow_box.blockSignals(True)
+        self.workflow_box.clear()
+        for label, key in tasks[mode]:
+            self.workflow_box.addItem(label, key)
+        self.workflow_box.blockSignals(False)
+        self.current_workflow = self.workflow_box.currentData()
+        self.workspace_inspector.set_workspace(mode)
+        self._apply_workflow_presentation()
+
+    def _workspace_platform_changed(self, *_args):
+        key = self.workspace_platform_box.currentData()
+        if key is None or key == self.platform_key:
+            return
+        self.platform_box.setCurrentIndex(self.platform_box.findData(key))
+        self._sync_platform_selector()
+
+    def _workspace_ride_changed(self, *_args):
+        value = self.workspace_ride_box.currentData()
+        if value not in ('open_capture', 'open_dynamic', 'open_candidates'):
+            return
+        self._refresh_workspace_selectors()
+        if value == 'open_capture':
+            self.pick_capture()
+        elif value == 'open_dynamic':
+            self.pick_dynamic_profiles()
+        else:
+            self.pick_review_candidates()
+
+    def _workspace_candidate_changed(self, *_args):
+        value = self.workspace_candidate_box.currentData()
+        if not isinstance(value, tuple) or len(value) != 2:
+            return
+        kind, key = value
+        if kind == 'dynamic' and self._dynamic_session is not None:
+            index = self.profile_slot.findData(key)
+            if index >= 0:
+                self.profile_slot.setCurrentIndex(index)
+        elif kind == 'ab' and self._candidate_session is not None:
+            index = self.candidate_box.findData(key)
+            if index >= 0:
+                self.candidate_box.setCurrentIndex(index)
+        elif kind == 'variant' and self._candidate_session is None and self._dynamic_session is None:
+            index = self.variant_box.findData(key)
+            if index >= 0:
+                self.variant_box.setCurrentIndex(index)
+
+    def _workflow_changed(self, *_args):
+        self.current_workflow = self.workflow_box.currentData() or 'inspect_motion'
+        self._apply_workflow_presentation()
+
+    def _apply_workflow_presentation(self):
+        inspector = self.workspace_inspector
+        inspector.set_workspace(self.task_mode)
+        label = {'review': 'Review', 'tune': 'Tune', 'validate': 'Validate'}.get(self.task_mode, 'Review')
+        inspector_dock = self.panels.get('inspector')
+        if inspector_dock is not None:
+            inspector_dock.setWindowTitle(f'Inspector : {label}')
+        task = self.current_workflow
+        options = {
+            'inspect_motion': ('motion_section', 'all_axes'),
+            'inspect_events': ('event_section', 'all_axes'),
+            'compare': ('compare_section', 'all_axes'),
+            'gains': ('gains_section', 'all_axes'),
+            'neutral': ('neutral_section', 'heave'),
+            'washout': ('washout_section', 'source_vs_processed_surge'),
+            'limits': ('validation_section', 'all_muscles'),
+            'sync': ('sync_section', 'all_axes'),
+        }
+        section_name, key = options.get(task, ('motion_section', 'all_axes'))
+        section = getattr(inspector, section_name, None)
+        if section is not None:
+            section.toggle.setChecked(True)
+        if self.plot_choice_box.findData(key) >= 0:
+            self.plot_choice_box.setCurrentIndex(self.plot_choice_box.findData(key))
+        # Do not override an explicitly selected Video/Plot/Overlay mode.
+        self._update_view_stack()
+
+    def _view_mode_selected(self, mode):
+        if mode not in ('video', 'plot', 'overlay'):
+            return
+        self.view_mode = mode
+        buttons = {
+            'video': self.video_mode_button,
+            'plot': self.plot_mode_button,
+            'overlay': self.overlay_mode_button,
+        }
+        for key, button in buttons.items():
+            button.blockSignals(True)
+            button.setChecked(key == mode)
+            button.blockSignals(False)
+        self._update_view_stack()
+
+    def _update_view_stack(self):
+        if not hasattr(self, 'video_stack'):
+            return
+        if (getattr(self, '_canonical_waiting', False) or
+                (getattr(self, '_canonical_binding', None) is not None and
+                 not getattr(self, '_canonical_available', True))):
+            if self.view_mode != 'plot':
+                self.video_message.setText(
+                    getattr(self, '_canonical_unavailable_message', None) or
+                    'Reference video alignment pending or unavailable here.\n'
+                    'Telemetry and motion plots remain available.')
+                self.video_stack.setCurrentWidget(self.video_message)
+                return
+        if self.recording is None:
+            self.video_stack.setCurrentWidget(self.video_message)
+            return
+        self.plot_canvas.set_recording(self.recording)
+        self.overlay_plot.set_recording(self.recording)
+        if self.view_mode == 'plot':
+            self.video_stack.setCurrentWidget(self.plot_canvas)
+        elif self.has_video:
+            if self.view_mode == 'overlay':
+                self.overlay_plot.setVisible(True)
+                self.video_stack.setCurrentWidget(self.video_overlay_widget)
+                self.overlay_plot.raise_()
+            else:
+                self.overlay_plot.setVisible(False)
+                self.video_stack.setCurrentWidget(self.video_screen)
+        elif getattr(self, '_dynamic_session', None) is not None:
+            self.video_stack.setCurrentWidget(self.profile_plot)
+        else:
+            # No video; show the actual calculated trace, never a blank area.
+            self.video_stack.setCurrentWidget(self.plot_canvas)
+
+    def _plot_choice_changed(self, *_args):
+        key = self.plot_choice_box.currentData()
+        self.plot_canvas.set_plot_key(key)
+        self.overlay_plot.set_plot_key(key)
+
+    def _refresh_workspace_selectors(self):
+        if hasattr(self, 'workspace_ride_box'):
+            box = self.workspace_ride_box
+            box.blockSignals(True)
+            box.clear()
+            if self.recording is not None:
+                box.addItem(self.recording.ride, 'current')
+            else:
+                box.addItem('Choose a ride…', 'current')
+            box.addItem('Open capture…', 'open_capture')
+            box.addItem('Review candidates…', 'open_candidates')
+            box.addItem('Review dynamic profiles…', 'open_dynamic')
+            box.setCurrentIndex(0)
+            box.blockSignals(False)
+        if hasattr(self, 'workspace_candidate_box'):
+            box = self.workspace_candidate_box
+            box.blockSignals(True)
+            box.clear()
+            dynamic = getattr(self, '_dynamic_session', None)
+            static = getattr(self, '_candidate_session', None)
+            if dynamic is not None:
+                for i, rec in enumerate(dynamic.recordings):
+                    label = rec.dynamic_profile.get('label', f'Profile {i+1}')
+                    box.addItem(f'{"AB"[i]} — {label}', ('dynamic', i))
+                box.setCurrentIndex(dynamic.active)
+            elif static is not None:
+                for key, slot in static.slots.items():
+                    box.addItem(f'{key} — {slot.choice.name}', ('ab', key))
+                box.setCurrentIndex(max(0, box.findData(('ab',static.active))))
+            elif self.recording is not None:
+                for i in range(self.variant_box.count()):
+                    box.addItem(self.variant_box.itemText(i), ('variant', self.variant_box.itemData(i)))
+                idx = box.findData(('variant', self.recording.variant_label))
+                if idx < 0:
+                    box.addItem(self.recording.variant_label or 'Current analysis', ('none',None))
+                    idx = box.count()-1
+                box.setCurrentIndex(idx)
+            else:
+                box.addItem('Current analysis', ('none',None))
+            box.setEnabled(not self.loading and self.recording is not None and box.count()>1)
+            box.blockSignals(False)
+
+    def _workspace_gain_commit(self, values):
+        if self.recording is None or self.loading or self._dynamic_session is not None:
+            return
+        gains = validate_gain_percent(values)
+        self.tuning_panel.set_gains(gains)
+        self._request_reanalysis(self.recording.cue_mode, gains)
+
+    def _workspace_neutral_commit(self, value):
+        if self.recording is None or self.loading or self._dynamic_session is not None:
+            return
+        self.tuning_panel.set_neutral_offset(value)
+        self._neutral_offset_changed(value)
+
+    def _workspace_cue_commit(self, cue):
+        if self.recording is None or self.loading or self._dynamic_session is not None:
+            return
+        self._request_reanalysis(cue, self.tuning_panel.gain_percent())
+
+    def _workspace_washout_commit(self, values):
+        if self.recording is None or self.loading or self._dynamic_session is not None:
+            return
+        from .study_bundle import checked_global_settings
+        try:
+            snapshot = with_washout(self.recording.global_settings_snapshot, **values)
+            checked_global_settings(snapshot)
+        except (KeyError, TypeError, ValueError) as exc:
+            QMessageBox.warning(self, 'Invalid offline washout settings', str(exc))
+            return
+        self._request_reanalysis(self.recording.cue_mode,
+                                 self.tuning_panel.gain_percent(), global_settings=snapshot)
+        self.statusBar().showMessage('Experimental washout reanalysis requested; POC configuration unchanged', 6000)
+
+    def _open_advanced_dock(self, key):
+        dock = self.panels.get(key)
+        if dock is not None:
+            dock.show()
+            dock.raise_()
+
+    def _save_workspace_notes(self):
+        if self.recording is None:
+            return
+        notes = self.workspace_inspector.notes()
+        if not notes:
+            QMessageBox.information(self, 'No notes', 'Add a trial note before saving.')
+            return
+        suggested = str(self.recording.csv_path.with_name(self.recording.csv_path.stem + '_trial_notes.json'))
+        path, _ = QFileDialog.getSaveFileName(self, 'Save offline trial notes', suggested, 'JSON (*.json)')
+        if not path:
+            return
+        if not path.lower().endswith('.json'):
+            path += '.json'
+        from json import dumps
+        payload = {'schema':'sim_player_trial_notes_v1',
+                   'recording': str(self.recording.csv_path),
+                   'ride':self.recording.ride,
+                   'platform':self.recording.platform_key,
+                   'notes':list(notes)}
+        try:
+            Path(path).write_text(dumps(payload, indent=2), encoding='utf-8')
+        except OSError as exc:
+            QMessageBox.warning(self, 'Notes not saved', str(exc))
+        else:
+            self.statusBar().showMessage('Offline trial notes saved: ' + path, 6000)
+
+    def _refresh_workspace_inspector(self):
+        if self.recording is None:
+            self.workspace_inspector.set_recording(None)
+            return
+        alternate = None
+        active_slot = 'A'
+        dynamic = getattr(self, '_dynamic_session', None)
+        if dynamic is not None and len(dynamic.recordings)==2:
+            alternate = dynamic.recordings[1-dynamic.active]
+            active_slot = 'AB'[dynamic.active]
+        elif self._candidate_session is not None:
+            active_slot = self._candidate_session.active
+            slots=self._candidate_session.slots
+            for key, slot in slots.items():
+                if key != self._candidate_session.active and slot.recording is not None:
+                    alternate = slot.recording
+                    break
+        self.workspace_inspector.set_recording(self.recording, self.anomalies,
+                                              comparison=alternate, active_slot=active_slot)
+        self.workspace_inspector.set_feedback(self.tuning_panel.feedback.text())
+        self.workspace_inspector.set_baseline_text(self.tuning_panel.baseline_label.text())
+        for canvas in (self.plot_canvas, self.overlay_plot):
+            canvas.set_recording(self.recording)
+            canvas.set_comparison(alternate)
 
     def _reset_muscle_extrema(self):
         """Start a new per-muscle extrema history for this replay/experiment."""
@@ -173,10 +461,11 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         if self.recording is not None:
             self.muscle_plot_bounds = plot_bounds(self.recording)
         self.muscle_bars.clear_extrema()
+        self.workspace_inspector.muscle_readout.clear_extrema()
 
     def about(self):
         QMessageBox.information(self, "About sim_player",
-            "sim_player — POC v193 — Qt6/FFmpeg video + telemetry replay.\n\n"
+            f"sim_player - Task Workspace v{WORKSPACE_VERSION} - Qt6/FFmpeg replay.\n\n"
             "A/B playback markers, Full/Range/Loop modes and adjustable loop hold.\n"
             "One selectable ride/kinematic marker lane and grouped anomaly replay.\n"
             "Manual 6DOF gains and ride-neutral height, baseline and experiment JSON.\n"
@@ -184,7 +473,9 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             "Muscle minimum/maximum requested markers persist until replay restart.\n"
             "Playback controls stay fixed-height; resize the window to resize video.\n"
             "Angular cues: current Euler, sine Roll and quaternion gravity vector.\n"
-            "Review any two optimiser candidates as independent A/B working copies.\n"
+            "Review dynamic profiles against static baseline, fallback or another profile.\n"
+            "Dynamic gain curves and synchronisation diagnostics; research-only review.\n"
+            "Review any two static optimiser candidates as independent A/B working copies.\n"
             "Save new named variant(s) without replacing original optimiser outputs.\n"
             "Per-platform JSON candidates can be saved explicitly for live POC review.\n"
             "All candidate cues are offline research only, not validated for rides.\n"
@@ -207,6 +498,8 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         return json.dumps(identity, sort_keys=True, default=str)
 
     def _cache_recording(self, recording):
+        if getattr(recording, "dynamic_profile", None) is not None:
+            return
         key = (recording.cue_mode, recording.gain_percent,
                self._variant_cache_token(recording))
         self._mode_cache[key] = recording
@@ -278,8 +571,11 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             if current.min_clearance_mm is not None and reference.min_clearance_mm is not None:
                 text += f"; floor {current.min_clearance_mm-reference.min_clearance_mm:+.1f} mm"
         self.tuning_panel.set_feedback(text)
+        self.workspace_inspector.set_feedback(text)
 
     def _set_baseline(self):
+        if getattr(self, "_dynamic_session", None) is not None and self._dynamic_readonly():
+            return
         if self.recording is None or self.loading:
             return
         self._baseline_recording = self.recording
@@ -297,26 +593,37 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
                 f"neutral {float((baseline.variant_snapshot or {}).get('neutral_height_delta_mm',0.0)):+g} mm"
             )
 
+        self.workspace_inspector.set_baseline_text(self.tuning_panel.baseline_label.text())
+
     def _restore_baseline(self):
+        if getattr(self, "_dynamic_session", None) is not None and self._dynamic_readonly():
+            return
         if self._baseline_recording is None or self.loading:
             return
         baseline = self._baseline_recording
         self._apply_experiment_values(baseline.cue_mode, baseline.gain_percent,
                                       variant_label=baseline.variant_label,
                                       variant_snapshot=baseline.variant_snapshot,
-                                      platform_key=baseline.platform_key)
+                                      platform_key=baseline.platform_key,
+                                      global_settings=baseline.global_settings_snapshot)
 
     def _reset_gains(self):
+        if getattr(self, "_dynamic_session", None) is not None and self._dynamic_readonly():
+            return
         if self.recording is None or self.loading:
             return
         self._apply_experiment_values(self.recording.cue_mode, DEFAULT_GAINS)
 
     def _gain_changed(self, gains):
+        if getattr(self, "_dynamic_session", None) is not None and self._dynamic_readonly():
+            return
         if self.recording is None or self.loading:
             return
         self._request_reanalysis(self.recording.cue_mode, gains)
 
     def _neutral_offset_changed(self, offset_mm):
+        if getattr(self, "_dynamic_session", None) is not None and self._dynamic_readonly():
+            return
         """Research-only ride height, never persisted until Save as candidate."""
         if self.recording is None or self.loading or self.recording.variant_snapshot is None:
             return
@@ -351,6 +658,8 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
                                  variant_snapshot=variant_snapshot, **settings)
 
     def _save_experiment(self):
+        if getattr(self, "_dynamic_session", None) is not None and self._dynamic_readonly():
+            return
         if self.recording is None or self.loading:
             return
         suggested = str(self.recording.csv_path.parent /
@@ -381,6 +690,8 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             self.statusBar().showMessage(f"Research experiment saved: {saved}", 6000)
 
     def _load_experiment(self):
+        if getattr(self, "_dynamic_session", None) is not None and self._dynamic_readonly():
+            return
         if self.recording is None or self.loading:
             return
         path, _ = QFileDialog.getOpenFileName(
@@ -466,7 +777,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
     def _update_twin_indicator(self):
         if not self.twin_output.enabled:
             label = "TWIN OFF"
-            tooltip = "Visualizer UDP output is off. Open File → Settings to enable it."
+            tooltip = "Visualizer UDP output is off. Open Twin > Visualizer settings to enable it."
         elif self.twin_output.last_error:
             label = "TWIN ERROR"
             tooltip = self.twin_output.last_error
@@ -482,9 +793,13 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         else:
             label = "TWIN HOLD"
             tooltip = "Visualizer UDP is enabled; the selected frame is held while paused."
+        destination = f"{self.visualizer_settings.ip_address}:{self.visualizer_settings.port}"
         self.twin_status.setText(label)
-        self.twin_status.setToolTip(tooltip +
-            f"\nDestination: {self.visualizer_settings.ip_address}:{self.visualizer_settings.port}")
+        self.twin_status.setToolTip(tooltip + f"\nDestination: {destination}")
+        if hasattr(self, 'twin_state_action'):
+            self.twin_state_action.setText("Status: " + label)
+            self.twin_state_action.setToolTip(tooltip)
+            self.twin_destination_action.setText("Destination: " + destination)
 
     def _send_twin(self, *, force=False):
         if self.recording is None or not self.twin_output.enabled:
@@ -534,6 +849,10 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.platform_box.setToolTip(
             f"{self.platform_key}: {metadata['platform_config_module']}\nVariants: {self.variant_store.path}")
         self.platform_box.blockSignals(False)
+        if hasattr(self, 'workspace_platform_box'):
+            self.workspace_platform_box.blockSignals(True)
+            self.workspace_platform_box.setCurrentIndex(self.workspace_platform_box.findData(self.platform_key))
+            self.workspace_platform_box.blockSignals(False)
 
     def _platform_changed(self, *_args):
         key = self.platform_box.currentData()
@@ -563,6 +882,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self._sync_platform_selector()
 
     def _set_analysis_busy(self):
+        self.workspace_inspector.set_busy(True)
         self.platform_box.setEnabled(False)
         self.variant_box.setEnabled(False)
         self.save_variant_action.setEnabled(False)
@@ -611,6 +931,8 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
                                       variant_label=label, variant_snapshot=snapshot)
 
     def save_variant_entry(self):
+        if getattr(self, "_dynamic_session", None) is not None and self._dynamic_readonly():
+            return
         """Append a new candidate, never overwrite another variant or accept it."""
         if self._candidate_session is not None:
             return self.save_review_variants()
@@ -670,15 +992,22 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         except (OSError, ValueError, KeyError) as exc:
             QMessageBox.warning(self, "Invalid optimiser study", str(exc))
             return
+        self._clear_dynamic_review()
         self._candidate_session = review_session
         self._candidate_switch_previous = None
         self._update_candidate_ui()
         self._set_playing(False)
         self.scrub_seek_timer.stop()
         self.video_seek_guard.reset()
+        self._canonical_clear()
         self.video_backend.unload()
         self.has_video = False
         self.recording = None  # never send the previous ride during loading
+        self.plot_canvas.set_recording(None)
+        self.overlay_plot.set_recording(None)
+        self._refresh_workspace_selectors()
+        self._refresh_workspace_inspector()
+        self._update_view_stack()
         self.muscle_extrema.clear()
         self.muscle_bars.clear_extrema()
         self.loop_range.reset(0.0)
@@ -758,20 +1087,16 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.video_offset_s = recording.video_offset_s
         self.sync_label.setText(recording.sync_source)
         self.sync_label.setToolTip(recording.sync_source + ("\n" + recording.diagnostics if recording.diagnostics else ""))
-        if recording.video_path is not None:
-            self.has_video = True
-            self.video_stack.setCurrentWidget(self.video_screen)
-            # A single initial decoder warm-up freezes after the first valid
-            # frame; Qt6 FFmpeg then updates paused seeks without play pulses.
-            self.video_backend.load(recording.video_path, initial_ms=self._video_target_ms())
-        else:
-            self.has_video = False
-            self.video_backend.unload()
-            self.video_stack.setCurrentWidget(self.video_message)
-            self.video_message.setText("No matching video recording\nTelemetry, muscle lengths and markers are available")
+        self.plot_canvas.set_recording(recording)
+        self.overlay_plot.set_recording(recording)
+        self._refresh_workspace_selectors()
+        self._refresh_workspace_inspector()
+        self._activate_media_for(recording, force=True)
         self.axis_bars.update_values((0,) * 6)
         self.muscle_bars.update_values((0,) * 6, recording.min_length_mm, recording.max_length_mm)
         self.seek_seconds(0, force_video=True)
+        self._update_view_stack()
+        self._apply_workflow_presentation()
         notes = "; ".join(filter(None, (recording.diagnostics,)))
         self.statusBar().showMessage(
             f"{recording.analysis_settings} | {len(recording.events)} ride events | "
@@ -785,6 +1110,9 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.cue_box.setEnabled(True)
         self.tuning_panel.set_analysis_enabled(False)
         self.info_badge.setText("LOAD FAILED")
+        self._refresh_workspace_selectors()
+        self._refresh_workspace_inspector()
+        self._update_view_stack()
         self.statusBar().showMessage("Could not load capture: " + message)
         QMessageBox.warning(self, "Cannot open capture", message)
 
@@ -803,6 +1131,8 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         if worker is not None:
             worker.deleteLater()
         self._after_review_worker_finished()
+        self._update_dynamic_ui()
+        self.workspace_inspector.set_busy(self.loading)
 
     def _cue_changed(self, *_args):
         if self.recording is None or self.loading:
@@ -815,6 +1145,8 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self._request_reanalysis(self.cue_box.currentData(), self.tuning_panel.gain_percent())
 
     def _request_reanalysis(self, mode, gains, *, variant_label="keep", variant_snapshot=None, global_settings=None):
+        if getattr(self, "_dynamic_session", None) is not None and self._dynamic_readonly():
+            return
         """Re-run entire capture through unchanged POC washout and kinematics.
 
         No video load or decoder seek; the current playback position is retained.
@@ -906,6 +1238,12 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self._update_tuning_feedback()
         if getattr(self, "_candidate_session", None) is not None:
             self._review_recording_applied(calculated)
+        self.plot_canvas.set_recording(calculated)
+        self.overlay_plot.set_recording(calculated)
+        self._refresh_workspace_selectors()
+        self._refresh_workspace_inspector()
+        if hasattr(self, '_activate_media_for'):
+            self._activate_media_for(calculated)
         self._display_current()
         self._send_twin(force=True)
         self.statusBar().showMessage(
@@ -928,6 +1266,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self._sync_neutral_panel(self.recording)
         self._fill_variant_choices(self.recording)
         self._refresh_cue_comparison()
+        self.workspace_inspector._refresh_tuning()
         self.statusBar().showMessage("Experimental analysis failed: " + error)
         QMessageBox.warning(self, "Research analysis failed", error)
 
@@ -944,19 +1283,16 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             return
         frame = recording.at(self.current_s)
         show_raw = self.raw_axes_action.isChecked()
-        self.axis_bars.axis_context = "RAW CSV" if show_raw else "PROCESSED"
-        self.panels["axes"].setWindowTitle("Transform · 6DOF (original NL2 CSV)" if show_raw else
-                                            "Transform · 6DOF (processed)")
-        self.axis_bars.update_values(frame.source_axes if show_raw else frame.processed_axes)
-        requested = frame.analysis.get("requested", ())
-        request_oob, final_clipped = muscle_flags(
-            frame, recording.min_length_mm, recording.max_length_mm)
+        context, values = transform_readout(recording, frame, show_raw)
+        self.axis_bars.axis_context = context
+        self.panels["axes"].setWindowTitle("Transform - " + context.lower())
+        self.axis_bars.update_values(values)
+        self.workspace_inspector.set_transform_state(context, values)
         self.muscle_extrema.advance(recording.frames, recording.nearest_index(self.current_s))
-        self.muscle_bars.update_values(
-            frame.muscle_lengths_mm, recording.min_length_mm, recording.max_length_mm,
-            requested=requested if len(requested) == 6 else None,
-            request_oob=request_oob, final_clipped=final_clipped,
-            extrema=self.muscle_extrema.extrema(), plot_bounds=self.muscle_plot_bounds)
+        bar_state = muscle_bar_state(recording, frame,
+            extrema=self.muscle_extrema.extrema(), bounds=self.muscle_plot_bounds)
+        bar_state.apply(self.muscle_bars)
+        self.workspace_inspector.set_muscle_state(bar_state)
         self.markers.set_current(self.current_s)
         self.position_label.setText(clock_label(self.current_s) + " / " + clock_label(recording.duration))
         self.slider.blockSignals(True)
@@ -964,6 +1300,10 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.slider.blockSignals(False)
         self.info_badge.setText("WORKSPACE LIMITED" if frame.workspace_limited else
                                 f"{len(recording.frames):,} SAMPLES")
+        self.plot_canvas.set_current_time(self.current_s)
+        self.overlay_plot.set_current_time(self.current_s)
+        self.workspace_inspector.set_current_time(self.current_s)
+        self._display_dynamic_frame(frame)
 
     def _refresh_anomalies(self):
         """Reanalyse cached POC results, never recompute kinematics here."""
@@ -976,6 +1316,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             )
             self.anomalies = detect_anomalies(self.recording, thresholds)
         self.anomaly_panel.set_events(self.anomalies)
+        self._refresh_workspace_inspector()
         self._refresh_marker_lane()
 
     def _anomaly_thresholds_changed(self, _step, _floor):
@@ -1102,7 +1443,10 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.loop_feedback_label.setVisible(False)
         self._update_twin_indicator()
         if resume_video and self.has_video:
-            self.video_backend.play()  # Resume without another decoder seek.
+            if getattr(self, '_canonical_binding', None) is not None:
+                self._drive_canonical_video()
+            else:
+                self.video_backend.play()  # Resume without another decoder seek.
         self.anchor_ride_s = self.current_s
         self.anchor_time = time.monotonic()
 
@@ -1133,14 +1477,24 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             return
         self.seek_seconds(self.loop_range.start, force_video=True)
         if self.has_video:
-            self.video_backend.set_speed(self.speed_ratio)
-            self.video_backend.play()
+            if getattr(self, '_canonical_binding', None) is not None:
+                self._drive_canonical_video()
+            else:
+                self.video_backend.set_speed(self.speed_ratio)
+                self.video_backend.play()
         self.statusBar().showMessage("LOOP RESTART — returned to A", 1000)
 
     def _video_target_ms(self):
+        if getattr(self, '_canonical_binding', None) is not None:
+            return self._canonical_clock_ms()
         return max(0, round((self.current_s + self.video_offset_s) * 1000))
 
     def _sync_video(self, force=False):
+        if getattr(self, '_canonical_binding', None) is not None:
+            self._drive_canonical_video(force)
+            return
+        if getattr(self, '_canonical_waiting', False):
+            return
         if not self.has_video:
             return
         target_ms = self._video_target_ms()
@@ -1227,7 +1581,11 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         # Tell the Twin immediately when replay is paused/resumed. Pausing
         # holds the current pose rather than lowering it unexpectedly.
         self._send_twin(force=True)
-        if self.has_video:
+        if getattr(self, '_canonical_binding', None) is not None:
+            self._drive_canonical_video()
+        elif getattr(self, '_canonical_waiting', False):
+            self.video_backend.pause()
+        elif self.has_video:
             if active:
                 # No unconditional seek on Play: simply resume the decoder.
                 drift = self.video_backend.position() - self._video_target_ms()
@@ -1247,13 +1605,22 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.speed_ratio = float(self.speed_box.currentData())
         self.anchor_time = time.monotonic()
         self.anchor_ride_s = self.current_s
-        self.video_backend.set_speed(self.speed_ratio)
+        if getattr(self, '_canonical_binding', None) is not None:
+            self._canonical_rate = None
+            self._drive_canonical_video()
+        else:
+            self.video_backend.set_speed(self.speed_ratio)
 
     def _offset_changed(self, seconds):
+        if getattr(self, '_canonical_binding', None) is not None:
+            return
         self.video_offset_s = float(seconds)
         self._sync_video(force=True)
 
     def save_sync_offset(self):
+        if getattr(self, '_canonical_binding', None) is not None:
+            self.manage_canonical_video()
+            return
         if self.recording is None or not self.has_video:
             return
         try:
@@ -1293,6 +1660,13 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self._sync_video()
 
     def closeEvent(self, event):
+        media_workers = getattr(self, '_canonical_workers', ())
+        if any(w.isRunning() for w in media_workers):
+            for worker in list(media_workers):
+                worker.requestInterruption()
+            event.ignore()
+            self.statusBar().showMessage('Cancelling reference-video alignment; close again after it stops.')
+            return
         if self.worker is not None and self.worker.isRunning():
             QMessageBox.information(self, "Loading", "A capture is still loading. Close after it finishes.")
             event.ignore()
@@ -1307,7 +1681,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Offline NoLimits2 video + telemetry replay")
-    parser.add_argument("csv", nargs="?", help="Ride telemetry CSV to open")
+    parser.add_argument("csv", nargs="?", help="Ride CSV, dynamic profile.json, saved dynamic review, or profile-results folder")
     args = parser.parse_args(argv)
     app = QApplication(sys.argv[:1])
     apply_style(app)

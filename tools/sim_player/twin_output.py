@@ -1,4 +1,4 @@
-# twin_output.py ver 1
+# twin_output.py ver 2
 """Optional headless replay -> MDX Platform Twin output.
 
 Uses POC's existing DigitalTwinSender and its versioned JSON/UDP protocol,
@@ -87,8 +87,8 @@ class ReplayTwinOutput:
             platform_state="ACTIVE",
             parking_state="UNPARKED",
             simulator_state=str(state),
-            telemetry_valid=True,
-            transform_applied=True,
+            telemetry_valid=bool(frame.analysis.get("valid", True)),
+            transform_applied=bool(frame.analysis.get("valid", True)),
             dtop_load_kg_per_muscle=0.0,  # not measured in offline capture
             transform=frame.processed_axes,
             muscle_length_mm=frame.muscle_lengths_mm,

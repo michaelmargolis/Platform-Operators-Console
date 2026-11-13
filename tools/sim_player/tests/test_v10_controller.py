@@ -50,12 +50,14 @@ class FakeWindow:
     def __init__(self):
         self.recording=SimpleNamespace(duration=10,events=(SimpleNamespace(seconds=1,name='Departed'),))
         self.anomalies=()
+        self.inspector_refreshes=0
         self.anomaly_panel=FakePanel()
         self.markers=SimpleNamespace(set_recording=lambda events,duration: setattr(self,'displayed',(events,duration)))
         self.marker_mode_box=FakeCombo(); self.marker_title=FakeLabel()
         self.loop_range=PlaybackRange(duration=10)
         self.seeks=[]; self.play_states=[]; self.refreshes=0; self.status=[]
         for name,func in extract().items(): setattr(self,name,func.__get__(self))
+    def _refresh_workspace_inspector(self): self.inspector_refreshes+=1
     def _update_tuning_feedback(self): pass  # v11 adds feedback when thresholds change
     def _set_playing(self,active): self.play_states.append(active)
     def _refresh_range_controls(self): self.refreshes+=1
@@ -101,6 +103,7 @@ def test_threshold_update_handles_empty_recording():
     app._anomaly_thresholds_changed(50,30)
     assert app.anomaly_panel.events == ()
     assert app.displayed == ((),1.0)
+    assert app.inspector_refreshes == 1
 
 
 def test_threshold_rebuilds_event_list_from_precomputed_data():
@@ -121,3 +124,4 @@ def test_threshold_rebuilds_event_list_from_precomputed_data():
     app._anomaly_thresholds_changed(100,30)
     assert app.anomalies == ()
     assert app.displayed[0] == ()
+    assert app.inspector_refreshes == 2

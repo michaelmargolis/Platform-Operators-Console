@@ -58,6 +58,12 @@ class FakeUI:
         self._refresh_anomalies=lambda: None
         self._reset_muscle_extrema=lambda: None
         self._update_tuning_feedback=lambda: None
+        self.plot_updates=[]
+        self.plot_canvas=SimpleNamespace(set_recording=lambda rec: self.plot_updates.append(('plot',rec)))
+        self.overlay_plot=SimpleNamespace(set_recording=lambda rec: self.plot_updates.append(('overlay',rec)))
+        self.workspace_updates=[]
+        self._refresh_workspace_selectors=lambda: self.workspace_updates.append('selectors')
+        self._refresh_workspace_inspector=lambda: self.workspace_updates.append('inspector')
         self._display_current=lambda: None
         self._send_twin=lambda force: self.sent.append(force)
 
@@ -74,6 +80,8 @@ def test_cached_reanalysis_uses_both_mode_and_six_gains_without_video_seek():
     assert ui.stopped==[False]
     assert ui.sent==[True]
     assert not ui.video_calls
+    assert ui.plot_updates == [('plot', alt), ('overlay', alt)]
+    assert ui.workspace_updates == ['selectors', 'inspector']
 
 
 def test_cached_reanalysis_is_bounded_to_five_variants():

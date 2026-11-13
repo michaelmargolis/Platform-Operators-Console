@@ -1,4 +1,4 @@
-# anomaly_detection.py ver 1
+# anomaly_detection.py ver 2
 """Headless kinematic anomaly detection for precomputed sim_player frames.
 
 Reads the *existing POC analyser results*. Never solves kinematics, applies
@@ -53,6 +53,10 @@ CATEGORIES = {
     "muscle_step": ("Large muscle step", "#f36b6b", "alert", "mm"),
     "low_clearance": ("Low applied clearance", "#f0b058", "warning", "mm"),
     "requested_floor": ("Requested floor violation", "#e77c9b", "warning", "mm"),
+    "sync_lost": ("Profile sync uncertain", "#ec819e", "warning", "s"),
+    "profile_lag": ("Profile lookup lag", "#dca364", "warning", "ms"),
+    "profile_fallback": ("Profile fallback/blend", "#b9a3e3", "warning", "%"),
+    "output_range": ("Output outside working range", "#ff6868", "alert", "mm"),
 }
 
 
@@ -128,6 +132,24 @@ def detect_anomalies(recording, thresholds=AnomalyThresholds()):
     for frame in frames:
         info = frame.analysis
         t = float(frame.seconds)
+        if info.get("valid", True) is False:
+            for values in rows.values(): values.append(None)
+            prior = None
+            continue
+        dynamic = info.get("dynamic", {})
+        active = dynamic.get("ride_time_s", -1.) >= 0
+        status = dynamic.get("status", "")
+        lost = active and (status.startswith("lost") or status in ("reacquiring", "no_fresh_telemetry"))
+        rows["sync_lost"].append((t, 0.05, (), f"B+C status: {status}; profile may use fallback") if lost else None)
+        lag = _number(dynamic.get("profile_lag_s"))
+        rows["profile_lag"].append((t, abs(lag)*1000, (), f"Matched versus lookup phase differs by {lag:+.3f} s")
+                                   if active and lag is not None and abs(lag) > .25 else None)
+        blending = active and dynamic.get("fallback_active", False)
+        rows["profile_fallback"].append((t, 1., (), "Applied multipliers differ from the curve during fallback/blend")
+                                        if blending else None)
+        output_excess = max((max(lo-v, v-hi, 0.) for v in frame.muscle_lengths_mm), default=0.)
+        rows["output_range"].append((t, output_excess, (), f"Calculated production output is {output_excess:.2f} mm beyond working range")
+                                   if dynamic and output_excess > 1e-7 else None)
         requested = tuple(info.get("requested", ()))
         out = [(f"M{i+1}", max(lo-float(v), float(v)-hi, 0.0))
                for i, v in enumerate(requested)]
@@ -152,7 +174,8 @@ def detect_anomalies(recording, thresholds=AnomalyThresholds()):
 
         unclamped = info.get("workspace_lengths", ())
         permitted = frame.muscle_lengths_mm
-        excesses = [(f"M{i+1}", abs(float(v)-float(p)))
+        excesses = [(f"M{i+1}", (max(lo-float(v),float(v)-hi,0.0)
+                     if "final_clip_mask" in info else abs(float(v)-float(p))))
                     for i, (v, p) in enumerate(zip(unclamped, permitted))]
         clipped = [(name, excess) for name, excess in excesses if excess > 1e-7]
         if clipped:
