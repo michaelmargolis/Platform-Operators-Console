@@ -1,4 +1,4 @@
-# recording.py ver 4
+# recording.py ver 5
 """Recording and analysis adapter for sim_player.
 
 No Qt, network, SHS or Festo dependencies. Reuses the existing POC offline
@@ -252,7 +252,7 @@ def write_saved_calibration(csv_path, offset_s):
     path = _calibration_path(csv_path)
     contents = {"schema": 1, "capture_csv": csv_path.name,
                 "video_offset_s": round(float(offset_s), 4),
-                "comment": "Video PTS at telemetry elapsed_s=0; calibrated in sim_player"}
+                "comment": "Video PTS at telemetry elapsed_s=0; calibrated in MDX Ride Analyzer"}
     path.write_text(json.dumps(contents, indent=2) + "\n", encoding="utf-8")
     return path
 

@@ -1,3 +1,4 @@
+# dynamic_browser.py ver 1
 """Select any dynamic profiles for a common park/platform/capture."""
 from __future__ import annotations
 from pathlib import Path
@@ -5,6 +6,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QFormLayout,QLabel,QLineEdit,
     QPushButton,QComboBox,QTableWidget,QTableWidgetItem,QHeaderView,QDialogButtonBox,
     QFileDialog,QMessageBox,QCheckBox,QAbstractItemView)
+from sims.nolimits2 import ride_config
 from .dynamic_review import ROOT, ReviewSpec, discover_profiles, DynamicProfile
 
 
@@ -76,7 +78,9 @@ class DynamicProfileBrowserDialog(QDialog):
 
     def fill_parks(self,*args):
         self.park.blockSignals(True);self.park.clear()
-        for park in sorted({c.park for c in self.choices if c.platform==self.platform.currentData()}):
+        for park in sorted({c.park for c in self.choices
+                            if c.platform==self.platform.currentData()
+                            and c.park not in ride_config.ANALYZER_HIDDEN_PARKS}):
             self.park.addItem(park,park)
         self.park.blockSignals(False);self.fill_choices()
 

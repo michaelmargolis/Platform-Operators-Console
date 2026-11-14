@@ -1,4 +1,4 @@
-# ride_config.py ver 6 -- shared parks/calibration and variant schema helpers.
+# ride_config.py ver 7 -- shared parks/calibration and variant schema helpers.
 """NL2 park/calibration data and common variant schema validation.
 
 Variant labels are unique IDs within one platform JSON file. No variants live here.
@@ -57,6 +57,14 @@ SHOW_VARIANT_MODIFIERS = True
 # Operator menu only: keep configuration, capture and research access intact.
 # Grand National block-occupancy investigation is deferred (5 Nov 2026).
 OPERATOR_HIDDEN_PARKS = frozenset(("grandnational",))
+
+# Ride Analyzer keeps Grand National available for explicit engineering/research
+# review, but Scenic Run is retired from normal Analyzer ride-selection surfaces.
+ANALYZER_HIDDEN_PARKS = frozenset(("scenicrun",))
+
+# Normal POC operation hides both classes. Low-level timing/research tooling may
+# still make its own explicit choices from the configured PARKS catalogue.
+POC_HIDDEN_PARKS = OPERATOR_HIDDEN_PARKS | ANALYZER_HIDDEN_PARKS
 
 DEFAULT_VARIANT_LABEL = "Mdx Logo Coaster"
 

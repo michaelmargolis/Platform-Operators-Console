@@ -1,4 +1,4 @@
-# tuning.py ver 3
+# tuning.py ver 4
 """Headless sim_player motion-tuning helpers (research only).
 
 Multipliers are relative to POC's current saved per-axis gains, and applied
@@ -194,7 +194,7 @@ def load_experiment(path):
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(data, dict) or data.get("schema") not in (
             "sim_player_experiment_v1", "sim_player_experiment_v2", "sim_player_experiment_v3"):
-        raise ValueError("Not a sim_player experiment file")
+        raise ValueError("Not a Ride Analyzer experiment file")
     return ExperimentSettings(
         cue_mode=data["angular_cue"],
         gain_percent=tuple(data["relative_gains_percent"]),

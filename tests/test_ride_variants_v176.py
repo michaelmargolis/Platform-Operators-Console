@@ -1,4 +1,4 @@
-# test_ride_variants_v176.py ver 2
+# test_ride_variants_v176.py ver 3
 """v176 regression: labels are IDs; park reloads only for different park keys.
 
 Tests are offline. They send no SHS/Festo output or physical platform commands.
@@ -41,7 +41,7 @@ def test_no_duplicated_park_calibration_and_recorder_indices():
     assert tuple(name for name, _ in config.RIDES) == tuple(p['name'] for p in ride_config.PARKS.values())
     for i, (name, _) in enumerate(config.RIDES):
         park_key = tuple(ride_config.PARKS)[i]
-        if park_key in ride_config.OPERATOR_HIDDEN_PARKS:
+        if park_key in ride_config.POC_HIDDEN_PARKS:
             with pytest.raises(ValueError, match='No available variant'):
                 ride_config.variant_index_for_park_index(i)
         else:

@@ -1,3 +1,4 @@
+# dynamic_review.py ver 1
 """Profile-aware, offline review of Phase 1 output. No Qt or hardware I/O.
 
 Saved-study mode consumes *post-washout* diagnostics, not telemetry. It never
@@ -87,7 +88,7 @@ def profile_choice(path):
     if context['platform'] != profile.identity['platform'] or base['park'] != profile.identity['park']:
         raise ValueError('Profile processing identity disagrees with its park/platform')
     if context.get('tick_s') != .05 or context.get('intensity_percent') != 100.:
-        raise ValueError('This player supports the Phase 1 20 Hz / 100% frozen processing format')
+        raise ValueError('This Ride Analyzer supports the Phase 1 20 Hz / 100% frozen processing format')
     captures = []
     for row in metadata.get('source_captures', []):
         name = row.get('trial')
@@ -385,7 +386,7 @@ def build_recording(spec, *, root=ROOT, cancel=None, progress=None):
     csv_path = Path(spec.profile_path).parent/(spec.capture+'_dynamic_diagnostics.csv')
     event_list = list(data.events)
     event_list.append(RideEvent(-zero,'First sustained movement','#84cbb5',
-                     'Ride elapsed zero; pre-roll remains on the player timeline'))
+                     'Ride elapsed zero; pre-roll remains on the Ride Analyzer timeline'))
     note = ('Saved study: recorded post-washout values and B+C phase; local kinematics checked. '
             'No second washout or matching pass. Match residual/lookup lag unavailable in Phase 1 diagnostics.'
             if data.source=='saved study' else

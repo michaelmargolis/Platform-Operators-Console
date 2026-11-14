@@ -1,4 +1,65 @@
-# changelog.txt ver 37
+# changelog.txt ver 43
+
+POC v200 / MDX Ride Analyzer v0.2.16 - 2026-11-14
+- Ride Analyzer: Open > Open dynamic source now shows a hover suitability hint for each primary recording.
+- Ratings are Suggested / Good / Caution / Avoid / Unrated. Suggested identifies a clean representative selected by Timing Study from at least two comparable completed runs.
+- Caution and Avoid are driven by explicit capture/timing evidence; the tooltip explains the reason and states that the hint is not physical qualification.
+- No live POC behaviour, capture timing, matcher or motion processing changed.
+
+
+POC v199 / MDX Ride Analyzer v0.2.15 - 2026-11-14
+- Ride Analyzer: added Open > Open dynamic source... for direct navigation to completed dynamic-source studies.
+- Dedicated picker defaults to captures/dynamic_source and hides timing/protocol/poll/event companion CSVs by accepting only primary recording filenames.
+- No live POC behaviour or motion processing changed.
+
+v198 | Ride Analyzer dynamic-study hardware provenance and scope metadata
+--------------------------------------------------------------------------
+- Prefill Study > Capture dynamic source Test conditions with Normal deployed configuration plus detected CPU and physical GPU names where available. The Analyzer reuses the existing timing/benchmark display-controller probe and performs a best-effort friendly Windows CPU model lookup.
+- Standard/Extended child capture commands now carry the matching low-level preset while still passing the Analyzer's explicit operator-visible ride list. This prevents Extended studies being mislabeled as quick in session metadata.
+- Add Ride Analyzer study_scope provenance to completed/partial session.json files, including Current and Custom scopes that are not low-level timing-study presets.
+- VR state remains measured automatically from NL2; no capture timing, matcher, simulator control, POC motion, Festo, SHS, geometry or dynamic-runtime behaviour changes.
+
+v197 | Ride Analyzer Scenic Run retirement and dynamic-study time estimate
+--------------------------------------------------------------------------
+- Hide Scenic Run from normal POC ride selection and Ride Analyzer ride-selection/study surfaces while retaining its configuration and historical files.
+- Standard/Extended dynamic-source studies no longer attempt Scenic Run.
+- Add a capture-duration estimate to Study > Capture dynamic source, based on selected ride durations and recording counts. Canonical ride trajectories are preferred; existing timing-study duration hints are used only when canonical duration data is unavailable.
+- Refresh the estimated remaining time at the start of each measured/warm-up recording. The estimate intentionally excludes load/reset/retry overhead and optional uncertainty-extension recordings.
+- No live dynamic-profile runtime, motion, Festo, SHS, geometry or kinematic behaviour changes.
+
+v196 | Ride Analyzer dynamic-source study UI and scope refinement
+--------------------------------------------------------------------
+- Fix keyboard ride selection in Study > Capture dynamic source: the focused ride
+  can be toggled with Return, Enter or Space. Rename scope/button wording to
+  Custom rides / Choose rides... to remove duplicated Select rides... controls.
+- Remove monitor-count metadata from the Ride Analyzer dialog and rename Conditions
+  to Test conditions (optional). The low-level timing-study CLI remains unchanged.
+- Treat deployment-PC + VR-active capture as the current dynamic-source qualification
+  condition; non-VR equivalence testing is deferred.
+- Make Standard and Extended Ride Analyzer studies explicitly select every current
+  operator-available, non-hidden NoLimits ride. Standard defaults to 3 measured
+  recordings per ride and Extended to 5. Quick remains Blackbird/Fenrir/Tilt.
+- No live POC motion, Festo, SHS, geometry, variant-catalogue or dynamic-profile
+  runtime changes.
+
+v195 | MDX Ride Analyzer rename and dynamic-source study capture
+-----------------------------------------------------------------
+- Rename the user-facing offline application from Sim Player to MDX Ride Analyzer;
+  retain `tools/sim_player`, existing settings keys and saved-data schema names for
+  compatibility.
+- Add a Study menu and a modal Capture dynamic source workflow. Source capture
+  launches the established `tools.nl2_timing_study` implementation in a child
+  process rather than duplicating NoLimits load/dispatch/recording logic.
+- Introduce user-facing dynamic source recording / dynamic study terminology and
+  default new Ride Analyzer studies to `captures/dynamic_source/`.
+- Support current ride, explicit ride selection and quick/standard/extended scopes,
+  measured repeats, warm-ups, conditions, monitor metadata and optional uncertainty
+  extension. The currently selected motion candidate is deliberately not applied.
+- After capture, allow the generated study report or a completed normal telemetry
+  recording to be opened from the same dialog. Capture does not record video.
+- Update current Ride Analyzer help/About/reference-media wording. No live POC
+  motion, Festo, SHS, geometry, ride-variant or dynamic-profile runtime changes.
+
 v194 | Rename human-facing platform to Ground-Loading Platform
 ----------------------------------------------------------------
 - Rename the user-facing `platform_v2` physical-platform name from MDX Suspended

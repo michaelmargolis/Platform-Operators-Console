@@ -1,4 +1,4 @@
-# variant_store.py ver 3
+# variant_store.py ver 4
 """Shared, Qt-independent per-platform NL2 variant catalog and durable reviews.
 
 Working files: ride_variants/<platform_key>.json (or POC_RIDE_VARIANTS_DIR).
@@ -202,7 +202,7 @@ class VariantStore:
                      if v.get('status', 'candidate') == 'preferred'}
         return tuple(v['label'] for v in self._data['variants']
                      if (park_key is None or v['park'] == park_key)
-                     and (not self._operator_filter or v['park'] not in ride_config.OPERATOR_HIDDEN_PARKS)
+                     and (not self._operator_filter or v['park'] not in ride_config.POC_HIDDEN_PARKS)
                      and (v.get('status', 'candidate') == 'preferred'
                           or (v.get('status', 'candidate') == 'candidate' and v['park'] not in preferred)))
 
@@ -210,6 +210,7 @@ class VariantStore:
         """Research UI may inspect new candidates even while POC has a preferred ride."""
         return tuple(v["label"] for v in self._data["variants"]
                      if (park_key is None or v["park"] == park_key)
+                     and v["park"] not in ride_config.ANALYZER_HIDDEN_PARKS
                      and v.get("status", "candidate") != "rejected")
 
     def validate_display(self, show_modifiers=None):

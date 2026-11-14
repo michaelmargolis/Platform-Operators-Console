@@ -1,10 +1,10 @@
-# optimizer.py ver 2
+# optimizer.py ver 3
 """Batch offline NL2 ride optimisation; no Qt, simulator or hardware output.
 
 From the POC root:
     py -m tools.sim_player.optimizer captures/nl2_ride_study --output studies
 
-Open exported candidate CSVs normally in Sim Player. Keep each *_optimizer.json
+Open exported candidate CSVs normally in MDX Ride Analyzer. Keep each *_optimizer.json
 beside its CSV. Normalised source telemetry is NEVER replaced by processed data.
 """
 from __future__ import annotations
@@ -363,12 +363,12 @@ def optimise_group(captures: list[Capture], platform: str, output: Path,
         for index, trial in enumerate(results[target], 1):
             note = (" " + captures[0].sha256[:8]) if independent else ""
             new_label = f"{ride_config.PARKS[park]['name']} [Opt {short_platform} {target} {index}{note}]"
-            progress(f"independent player replay: {target} candidate {index}")
+            progress(f"independent Ride Analyzer replay: {target} candidate {index}")
             recordings, metrics = analyse_candidate(captures, platform, snapshot, trial.parameters,
                         new_label, globals_snapshot, catalog, allowance, evaluator.active_primary)
             if not metrics["qualified"]:
                 report["failures"].append({"target": target, "parameters": asdict(trial.parameters),
-                                          "reason": "Independent full player replay rejected finalist", "metrics": metrics})
+                                          "reason": "Independent full Ride Analyzer replay rejected finalist", "metrics": metrics})
                 continue
             if model_fingerprint(platform) != provenance:
                 raise ValueError("POC geometry/processing source changed during search; no new candidates exported")
@@ -488,9 +488,9 @@ def main(argv=None) -> int:
     now = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
     root = args.output.resolve() / ("run_" + now)
     root.mkdir(parents=True, exist_ok=False)
-    (root / "OPEN_IN_SIM_PLAYER.txt").write_text(
-        "Open a candidate CSV listed in index.csv using File > Open in Sim Player.\n"
-        "Keep the CSV and all its companion files together. The player automatically\n"
+    (root / "OPEN_IN_RIDE_ANALYZER.txt").write_text(
+        "Open a candidate CSV listed in index.csv using Open > Open capture in MDX Ride Analyzer.\n"
+        "Keep the CSV and all its companion files together. Ride Analyzer automatically\n"
         "selects the candidate platform/cue/gains/neutral and frozen global settings.\n"
         "Its anomaly display is recalculated from ORIGINAL telemetry. Use the usual\n"
         "gain/neutral controls for manual tuning; save a candidate to POC only explicitly.\n"
@@ -534,7 +534,7 @@ def main(argv=None) -> int:
               or any(i["status"] == "error" for i in issues))
     run["status"] = "partial" if failed else "complete"
     write_json(root / "run.json", run)
-    print(f"Results: {root}\nOpen candidate CSVs from index.csv in Sim Player.", flush=True)
+    print(f"Results: {root}\nOpen candidate CSVs from index.csv in MDX Ride Analyzer.", flush=True)
     return 1 if failed else 0
 
 

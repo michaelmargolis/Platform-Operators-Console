@@ -1,5 +1,5 @@
-# player_ui.py ver 6
-"""Construction of sim_player's dockable Qt6 main window.
+# player_ui.py ver 8
+"""Construction of MDX Ride Analyzer's dockable Qt6 main window.
 
 Only widgets, menus, layouts and signal wiring live here.  ReplayWindow in
 app.py remains responsible for loading recordings, playback and UDP output.
@@ -48,7 +48,7 @@ class PlayerUiMixin(CanonicalVideoMixin, DynamicProfileWorkflowMixin, CandidateR
         # Retain controller-updated metadata widgets without a duplicate heading
         # row. The active ride/candidate is shown by the workspace selectors;
         # Twin status belongs in its menu, not in a permanent toolbar button.
-        self.ride_label = QLabel("SIM PLAYER / OPEN A RIDE CAPTURE", self)
+        self.ride_label = QLabel("RIDE ANALYZER / OPEN A RIDE CAPTURE", self)
         self.ride_label.setObjectName("rideTitle")
         self.ride_label.hide()
         self.twin_status = QLabel("TWIN OFF", self)
@@ -581,6 +581,7 @@ class PlayerUiMixin(CanonicalVideoMixin, DynamicProfileWorkflowMixin, CandidateR
         # diverge into different loaders/help windows or lose their enabled state.
         file_menu = self.menuBar().addMenu("File")
         self.open_menu = self.menuBar().addMenu("Open")
+        self.study_menu = self.menuBar().addMenu("Study")
         view = self.menuBar().addMenu("View")
         self.advanced_menu = self.menuBar().addMenu("Advanced")
         self.twin_menu = self.menuBar().addMenu("Twin")
@@ -590,6 +591,12 @@ class PlayerUiMixin(CanonicalVideoMixin, DynamicProfileWorkflowMixin, CandidateR
         open_action.setShortcut(QKeySequence(QKeySequence.StandardKey.Open))
         open_action.triggered.connect(self.pick_capture)
         self.open_menu.addAction(open_action)
+        dynamic_source_open = QAction("Open dynamic source...", self)
+        dynamic_source_open.setToolTip(
+            "Open a primary telemetry recording from captures/dynamic_source"
+        )
+        dynamic_source_open.triggered.connect(self.pick_dynamic_source)
+        self.open_menu.addAction(dynamic_source_open)
         review_action = QAction("Review optimiser candidates...", self)
         review_action.triggered.connect(self.pick_review_candidates)
         self.open_menu.addAction(review_action)
@@ -601,6 +608,13 @@ class PlayerUiMixin(CanonicalVideoMixin, DynamicProfileWorkflowMixin, CandidateR
         self.open_menu.addAction("Open saved dynamic review...", self.open_dynamic_review)
         self.open_menu.addSeparator()
         self.open_menu.addAction("Ride reference video...", self.manage_canonical_video)
+
+        self.capture_dynamic_source_action = QAction("Capture dynamic source...", self)
+        self.capture_dynamic_source_action.setToolTip(
+            "Create a dynamic study using the existing NoLimits capture workflow"
+        )
+        self.capture_dynamic_source_action.triggered.connect(self.capture_dynamic_source)
+        self.study_menu.addAction(self.capture_dynamic_source_action)
 
         self.save_review_session_action = QAction("Save candidate review...", self)
         self.save_review_session_action.triggered.connect(self.save_review_session)
@@ -674,7 +688,7 @@ class PlayerUiMixin(CanonicalVideoMixin, DynamicProfileWorkflowMixin, CandidateR
         help_menu.addAction(self.workspace_help_action)
         self.workspace_help_button.setDefaultAction(self.workspace_help_action)
         help_menu.addSeparator()
-        help_menu.addAction("About sim_player", self.about)
+        help_menu.addAction("About MDX Ride Analyzer", self.about)
 
     def _show_workflow_context_menu(self, mode, source, pos):
         title = {'review': 'Review', 'tune': 'Tune', 'validate': 'Validate'}.get(mode, 'Workflow')

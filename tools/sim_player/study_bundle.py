@@ -1,5 +1,5 @@
-# study_bundle.py ver 1
-"""Read-only, self-describing optimiser studies for normal Sim Player opening.
+# study_bundle.py ver 2
+"""Read-only, self-describing optimiser studies for normal Ride Analyzer opening.
 
 The CSV keeps ORIGINAL telemetry columns. The sidecar specifies the processing
 experiment; derived opt_* columns are audit data, not another motion input.
@@ -78,7 +78,7 @@ def checked_global_settings(value: dict) -> dict:
 def read_candidate_bundle(csv_path: Path) -> dict | None:
     """Return validated defaults, or None for an ordinary raw recording.
 
-    Model changes are reported, not hidden: the player recalculates with the
+    Model changes are reported, not hidden: Ride Analyzer recalculates with the
     installed geometry and must not imply old optimisation metrics still hold.
     Missing/modified CSV companions are errors, never silently a raw replay.
     """

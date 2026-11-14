@@ -1,4 +1,5 @@
-"""Profile-aware workflow mixed into the existing player; no live promotion."""
+# dynamic_workflow.py ver 1
+"""Profile-aware workflow mixed into Ride Analyzer; no live promotion."""
 from __future__ import annotations
 from dataclasses import asdict
 from datetime import datetime
@@ -204,7 +205,7 @@ class DynamicProfileWorkflowMixin:
         if not hasattr(self, 'workspace_inspector'):
             self.panels['dynamic_profile'].show();self.panels['dynamic_profile'].raise_()
         self.ride_label.setText(rec.ride.upper()+' / DYNAMIC PROFILE REVIEW')
-        self.setWindowTitle('MDX sim_player - '+rec.dynamic_profile['label'])
+        self.setWindowTitle('MDX Ride Analyzer - '+rec.dynamic_profile['label'])
         if hasattr(self, '_refresh_workspace_selectors'):
             self._refresh_workspace_selectors()
             self._refresh_workspace_inspector()

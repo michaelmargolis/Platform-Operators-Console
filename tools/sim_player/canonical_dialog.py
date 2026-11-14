@@ -1,3 +1,4 @@
+# canonical_dialog.py ver 2
 """One-time canonical ride-video import and calibration, kept out of the toolbar."""
 from __future__ import annotations
 from pathlib import Path
@@ -55,6 +56,8 @@ class CanonicalVideoDialog(QDialog):
         self.ride = QComboBox()
         from sims.nolimits2 import ride_config
         for key, info in ride_config.PARKS.items():
+            if key in ride_config.ANALYZER_HIDDEN_PARKS:
+                continue
             self.ride.addItem(info["name"], key)
         if recording:
             try:
@@ -79,7 +82,7 @@ class CanonicalVideoDialog(QDialog):
         setup = QWidget()
         form = QFormLayout(setup)
         intro = QLabel(
-            "Choose the reference video. Sim Player automatically uses a telemetry CSV "
+            "Choose the reference video. Ride Analyzer automatically uses a telemetry CSV "
             "with the same base filename in the same folder (for example ride.mp4 + "
             "ride.csv). Existing videos can be reused; no new capture is needed when "
             "only motion candidates change. Files are copied, not moved."
@@ -118,7 +121,7 @@ class CanonicalVideoDialog(QDialog):
         form.addRow("Initial video offset", self.offset)
 
         self.calibration_hint = QLabel(
-            "After a matching CSV is found, Sim Player reads any saved calibration; "
+            "After a matching CSV is found, Ride Analyzer reads any saved calibration; "
             "otherwise the offset remains an estimate."
         )
         self.calibration_hint.setWordWrap(True)

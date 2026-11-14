@@ -1,3 +1,4 @@
+# workspace_help.py ver 1
 """Tabbed, modeless player help; no capture, settings or output side effects."""
 from __future__ import annotations
 
@@ -7,7 +8,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from . import WORKSPACE_VERSION
+from . import PRODUCT_NAME, WORKSPACE_VERSION
 from .workspace_help_content import help_topics, workflow_quick_help
 
 
@@ -21,7 +22,7 @@ class WorkspaceHelpDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName('workspaceHelpDialog')
-        self.setWindowTitle('Sim Player - Task workspace help')
+        self.setWindowTitle(PRODUCT_NAME + ' - Task workspace help')
         self.setWindowModality(Qt.WindowModality.NonModal)
         self.setModal(False)
         self.setSizeGripEnabled(True)
@@ -29,7 +30,7 @@ class WorkspaceHelpDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(10)
-        title = QLabel('Sim Player - Task Workspace ' + WORKSPACE_VERSION)
+        title = QLabel(PRODUCT_NAME + ' - Task Workspace ' + WORKSPACE_VERSION)
         title.setStyleSheet('font-weight: bold; font-size: 13pt;')
         layout.addWidget(title)
         hint = QLabel('Help / information icon / F1 open this same window. Playback is unchanged.')
@@ -95,7 +96,7 @@ class WorkflowHelpDialog(QDialog):
             raise ValueError(f'Unknown workflow: {workflow}')
         self.workflow = str(workflow).lower()
         self.setObjectName('workflowHelpDialog_' + self.workflow)
-        self.setWindowTitle('Sim Player - ' + guide['title'])
+        self.setWindowTitle(PRODUCT_NAME + ' - ' + guide['title'])
         self.setWindowModality(Qt.WindowModality.NonModal)
         self.setModal(False)
         self.setMinimumWidth(500)

@@ -1,5 +1,5 @@
-#file_versions.txt  ver 191
-# Application baseline: v194 + Sim Player Task Workspace v0.2.10
+#file_versions.txt  ver 197
+# Application baseline: v200 + MDX Ride Analyzer Task Workspace v0.2.16
 # Relative path | expected version
 config/platforms.py|7
 controls/__init__.py|1
@@ -108,9 +108,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|37
+changelog.txt|43
 README.md|17
-file_versions.txt|191
+file_versions.txt|197
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -140,13 +140,13 @@ tests/test_nl2_ride_completion_v169.py|2
 tests/test_nl2_multitrain_v170.py|2
 tests/test_nl2_multistation_v171.py|2
 tests/test_nl2_angular_washout_v172.py|2
-sims/nolimits2/ride_config.py|6
+sims/nolimits2/ride_config.py|7
 sims/nolimits2/angular_cues.py|1
-tests/test_ride_variants_v176.py|2
+tests/test_ride_variants_v176.py|3
 tests/test_ride_labels_v177.py|1
 core/platform_geometry.py|2
 sims/nolimits2/ride_variants/.gitignore|1
-sims/nolimits2/variant_store.py|3
+sims/nolimits2/variant_store.py|4
 tests/conftest.py|1
 tests/test_floor_policy_v178.py|1
 tests/test_review_dialog_gui_v178.py|2
@@ -155,25 +155,27 @@ tests/test_variant_migration_v178.py|1
 tests/test_variant_selection_v178.py|3
 tests/test_variant_store_v178.py|2
 tools/migrate_nl2_variants.py|1
-tools/sim_player/__init__.py|2
+tools/sim_player/__init__.py|8
 tools/sim_player/__main__.py|1
 tools/sim_player/angular_cues.py|1
 tools/sim_player/anomaly_detection.py|2
 tools/sim_player/anomaly_panel.py|1
-tools/sim_player/app.py|9
-tools/sim_player/candidate_browser.py|1
-tools/sim_player/candidate_review.py|1
-tools/sim_player/candidate_workflow.py|2
+tools/sim_player/app.py|11
+tools/sim_player/candidate_browser.py|3
+tools/sim_player/candidate_review.py|2
+tools/sim_player/candidate_workflow.py|3
 tools/sim_player/review_save_dialog.py|1
 tools/sim_player/tests/test_candidate_review_v193.py|1
+tools/sim_player/tests/test_dynamic_source_rating_v200.py|1
+tools/sim_player/dynamic_source_rating.py|1
 tools/sim_player/loop_range.py|1
 tools/sim_player/metrics.py|1
 tools/sim_player/muscle_extrema.py|2
-tools/sim_player/options_dialog.py|1
-tools/sim_player/panels.py|3
+tools/sim_player/options_dialog.py|2
+tools/sim_player/panels.py|5
 tools/sim_player/platform_selection.py|2
-tools/sim_player/player_ui.py|6
-tools/sim_player/recording.py|4
+tools/sim_player/player_ui.py|8
+tools/sim_player/recording.py|5
 tools/sim_player/settings.py|1
 tools/sim_player/tests/conftest.py|1
 tools/sim_player/tests/test_angular_cues_v7.py|1
@@ -208,14 +210,14 @@ tools/sim_player/tests/test_v7_gui.py|1
 tools/sim_player/tests/test_v8_range_slider.py|1
 tools/sim_player/tests/test_v9_gui.py|1
 tools/sim_player/tests/test_v9_playback_modes.py|1
-tools/sim_player/tests/test_video_sync.py|1
+tools/sim_player/tests/test_video_sync.py|2
 tools/sim_player/theme.py|1
-tools/sim_player/tuning.py|3
+tools/sim_player/tuning.py|4
 tools/sim_player/tuning_panel.py|2
 tools/sim_player/twin_output.py|2
 tools/sim_player/variant_presets.py|3
 tools/sim_player/video_backend.py|1
-tools/sim_player/video_sync.py|2
+tools/sim_player/video_sync.py|3
 ui/variant_review.py|2
 tools/sim_player/tests/test_muscle_scale_v179.py|1
 tools/sim_player/marker_intervals.py|1
@@ -245,6 +247,22 @@ sims/nolimits2/station_modes.py|3
 tests/test_nl2_station_modes_v189.py|3
 # v192 offline ride optimiser additions
 tools/sim_player/optimization_search.py|1
-tools/sim_player/optimizer.py|2
-tools/sim_player/study_bundle.py|1
+tools/sim_player/optimizer.py|3
+tools/sim_player/study_bundle.py|2
 tools/sim_player/tests/test_optimizer_v192.py|1
+
+# MDX Ride Analyzer v0.2.11 additions / newly version-tracked current files
+tools/sim_player/README.md|6
+tools/sim_player/canonical_dialog.py|2
+tools/sim_player/canonical_media.py|1
+tools/sim_player/canonical_rides/README.md|1
+tools/sim_player/changelog.txt|6
+tools/sim_player/dynamic_review.py|1
+tools/sim_player/dynamic_source.py|4
+tools/sim_player/dynamic_source_dialog.py|4
+tools/sim_player/dynamic_browser.py|1
+tools/sim_player/dynamic_workflow.py|1
+tools/sim_player/tests/test_dynamic_source_capture_v0211.py|4
+tools/sim_player/tests/test_workspace_menu_contract_v022.py|3
+tools/sim_player/workspace_help.py|1
+tools/sim_player/workspace_help_content.py|6

@@ -1,3 +1,4 @@
+# test_workspace_menu_contract_v022.py ver 3
 """Execute the actual menu-builder with minimal non-Qt doubles.
 
 These test action wiring and state, NOT Qt painting, sizing or event dispatch.
@@ -97,11 +98,12 @@ def menu_host():
     host.workspace_help_button = Mock()
     host.panel_button = Mock()
     host.advanced_widget = Mock()
-    names = ('pick_capture', 'pick_review_candidates', 'pick_dynamic_profiles',
+    names = ('pick_capture', 'pick_dynamic_source', 'pick_review_candidates', 'pick_dynamic_profiles',
              'open_review_session', 'open_dynamic_review', 'save_review_session',
              'save_dynamic_review', 'save_variant_entry', 'show_settings', 'close',
              '_display_current', 'restore_default_layout', 'show_all_panels',
-             'show_workspace_help', 'about', 'manage_canonical_video', '_canonical_toggled')
+             'show_workspace_help', 'about', 'manage_canonical_video', '_canonical_toggled',
+             'capture_dynamic_source')
     for name in names:
         setattr(host, name, Mock())
     host._canonical_enabled = True
@@ -118,7 +120,7 @@ def actions(menu):
 
 def test_top_menu_order_matches_requested_layout():
     host = menu_host()
-    assert [m.title for m in host.menubar.items] == ['File', 'Open', 'View', 'Advanced', 'Twin', 'Help']
+    assert [m.title for m in host.menubar.items] == ['File', 'Open', 'Study', 'View', 'Advanced', 'Twin', 'Help']
 
 
 def test_menu_icon_and_f1_share_one_help_action():
@@ -133,6 +135,7 @@ def test_menu_icon_and_f1_share_one_help_action():
 
 @pytest.mark.parametrize('title,handler', [
     ('Open capture...', 'pick_capture'),
+    ('Open dynamic source...', 'pick_dynamic_source'),
     ('Review optimiser candidates...', 'pick_review_candidates'),
     ('Review dynamic motion profiles...', 'pick_dynamic_profiles'),
     ('Open saved candidate review...', 'open_review_session'),
@@ -143,6 +146,13 @@ def test_all_open_workflows_remain_available(title, handler):
     host = menu_host()
     actions(host.open_menu)[title].triggered.emit()
     getattr(host, handler).assert_called_once_with()
+
+
+def test_study_menu_exposes_dynamic_source_capture_without_toolbar_button():
+    host = menu_host()
+    actions(host.study_menu)['Capture dynamic source...'].triggered.emit()
+    host.capture_dynamic_source.assert_called_once_with()
+    assert not hasattr(host, 'dynamic_source_button')
 
 
 def test_advanced_controls_toggle_has_no_duplicate_toolbar_button():

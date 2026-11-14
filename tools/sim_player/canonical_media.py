@@ -1,3 +1,4 @@
+# canonical_media.py ver 1
 """Player-owned, portable ride reference video library.
 
 Each import is immutable; only the per-ride reference.json pointer/calibration
@@ -139,7 +140,7 @@ def initial_calibration(csv_path):
     path=Path(csv_path)
     calibrated=read_saved_calibration(path)
     if calibrated is not None:
-        return [[0., calibrated]], True, 'Existing saved player calibration'
+        return [[0., calibrated]], True, 'Existing saved Ride Analyzer calibration'
     manifest,_=_read_sync(path.with_name(path.stem+'_video_sync.json'))
     offset, reason = _video_offset(manifest)
     return [[0.,offset]], False, reason

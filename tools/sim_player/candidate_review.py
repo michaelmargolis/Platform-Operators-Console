@@ -1,4 +1,4 @@
-# candidate_review.py ver 1
+# candidate_review.py ver 2
 """Qt-free optimiser-result discovery and A/B working-copy state.
 
 The optimiser's index.csv is the authoritative inventory.  Candidates are
@@ -285,7 +285,7 @@ def reopen_session(path: Path) -> ReviewSession:
     """Resume an A/B study, rechecking original CSV/sidecars before trusting edits."""
     raw = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     if not isinstance(raw, dict) or raw.get("schema") != REVIEW_SCHEMA:
-        raise ValueError("Not a Sim Player candidate-review session")
+        raise ValueError("Not a Ride Analyzer candidate-review session")
     run = load_run_index(raw["run_root"])
     selections = []
     for key in ("A", "B"):

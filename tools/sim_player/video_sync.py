@@ -1,4 +1,4 @@
-# video_sync.py ver 2
+# video_sync.py ver 3
 """Qt-independent helpers for robust video/timeline synchronization.
 
 Avoid repeated H.264 decoder seeks during normal play and after pause/resume.
@@ -6,6 +6,7 @@ Even with Qt6 / FFmpeg, unnecessary seek requests cost decoder work; normal
 playback should run continuously, while explicit paused user seeks are allowed.
 """
 from __future__ import annotations
+import re
 
 
 def is_ride_telemetry_csv(filename: str) -> bool:
@@ -13,6 +14,21 @@ def is_ride_telemetry_csv(filename: str) -> bool:
     name = str(filename).casefold()
     return name.endswith(".csv") and not name.endswith(("_state_events.csv", "_dynamic_diagnostics.csv",
         "_timing.csv", "_protocol.csv", "_polls.csv")) and name not in ("index.csv", "gain_curve.csv")
+
+
+_DYNAMIC_SOURCE_RECORDING_RE = re.compile(
+    r"^.+_timing_\d{8}T\d{6}_[0-9a-f]{8}\.csv$", re.IGNORECASE
+)
+
+def is_dynamic_source_recording_csv(filename: str) -> bool:
+    """True only for the primary telemetry CSV from a dynamic-source capture.
+
+    Timing-study companion CSVs append a suffix such as ``_polls`` or
+    ``_state_events`` after the capture id, so an anchored full-name match
+    keeps them out of the dedicated open dialog without depending on a
+    blacklist of every companion type.
+    """
+    return bool(_DYNAMIC_SOURCE_RECORDING_RE.fullmatch(str(filename)))
 
 
 class VideoSeekGuard:

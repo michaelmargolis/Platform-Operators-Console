@@ -1,7 +1,8 @@
+# workspace_help_content.py ver 6
 """Built-in help for the task workspace; no Qt or processing dependencies.
 
 Topics follow the recovered Qt prototype's six-tab help. Descriptions refer
-only to the implemented player; reference-video uncertainty is explicitly labelled.
+only to implemented Ride Analyzer behaviour; reference-video uncertainty is explicitly labelled.
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -58,7 +59,7 @@ def workflow_quick_help(key):
 
 HELP_TOPICS = (
     HelpTopic('workflows', 'Workflows', '''
-<h2>One player, three tasks</h2>
+<h2>One analyzer, three workflows</h2>
 <p><b>Review</b> inspects motion, muscle lengths, events, candidate A/B differences
 and trial notes. <b>Tune</b> exposes base gains, neutral height, angular cue and
 experimental translational washout. <b>Validate</b> shows calculated kinematic
@@ -67,15 +68,48 @@ limits, synchronisation information and provenance.</p>
 related plot. Changing tasks preserves the loaded recording, active candidate,
 playhead, loop range and Video / Plot / Overlay choice. The inspector scrolls
 independently; expand only the sections you need.</p>
-<h3>Menus, not extra toolbars</h3>
-<p><b>Open</b>: a capture, static optimiser candidates, dynamic profiles, or a
-saved review. <b>File</b>: save reviews/variants and player settings.
-<b>View</b>: inspector and layout controls. <b>Advanced</b>: detailed source
+<h3>Menus</h3>
+<p><b>Open</b>: a capture, a recording from a completed dynamic-source study, static optimiser candidates, dynamic profiles, or a
+saved review. <b>Study</b>: capture dynamic source recordings for a dynamic study.
+<b>File</b>: save reviews/variants and Ride Analyzer settings. <b>View</b>: inspector and layout controls. <b>Advanced</b>: detailed source
 controls and the original diagnostic docks. <b>Twin</b>: Visualizer status,
 destination and settings.</p>
 <p>Use the Platform, Ride and Candidate selectors for the current review.
 An A/B review stays within its selected platform. Open another review to change
 that pairing; an archived candidate is not silently reinterpreted for another platform.</p>
+<h3>Dynamic studies</h3>
+<p><b>Study &gt; Capture dynamic source...</b> launches the existing local NoLimits
+capture workflow in a modal dialog. A dynamic study contains repeated
+<b>dynamic source recordings</b> plus timing and provenance companions used later
+for dynamic-profile generation and validation. The selected Ride Analyzer
+candidate is deliberately not applied to capture; the simulator trajectory is
+recorded so the same source study can support different later motion settings.</p>
+<p>For qualification, create dynamic source recordings on a <b>deployment PC with VR active</b>.
+<b>Quick study</b> captures Blackbird, Fenrir and Tilt Coaster. <b>Standard study</b>
+uses all current operator-available, non-hidden NoLimits rides with three measured
+recordings each; <b>Extended study</b> uses the same ride set with five each.
+Scenic Run is retired from normal POC and Ride Analyzer selection and is not included.
+<b>Custom rides</b> allows an explicit subset. <b>Test conditions (optional)</b> is
+descriptive provenance. It is prefilled with Normal deployed configuration plus
+detected CPU/GPU names where available; edit it when the test setup is unusual.
+VR state is measured automatically. The completed session records the selected
+Ride Analyzer study scope.</p>
+<p><b>Estimated capture time</b> sums the typical ride duration across the requested
+recordings. Installed canonical ride trajectories are preferred; the existing timing-study
+duration hints are used when a canonical reference is unavailable. The estimate is refreshed
+when each recording starts and deliberately excludes load/reset/retry delays and optional
+uncertainty-extension recordings.</p>
+<p>The capture workflow connects to NoLimits on localhost only while the study is
+running. It does not record video. Retain the complete study folder; the ordinary
+telemetry CSV is convenient for replay, but the companion files are required for
+dynamic-profile generation.</p>
+<p>To replay a completed dynamic-source recording later, use <b>Open &gt; Open dynamic source...</b>.
+The picker starts in <code>captures/dynamic_source</code> and shows only primary recording CSVs,
+hiding timing/protocol/poll/event companion CSVs that are not Ride Analyzer playback inputs. Hover a recording
+for a source-suitability hint: <b>Suggested</b>, <b>Good</b>, <b>Caution</b>, <b>Avoid</b> or <b>Unrated</b>.
+<b>Suggested</b> means the completed Timing Study selected a clean recording as the representative source for a
+comparable group. The tooltip shows the reason and available timing evidence. Ratings are engineering hints only;
+they are not physical validation or deployment approval.</p>
 <p>Hover <b>Review</b>, <b>Tune</b> or <b>Validate</b> for a task-specific hint.
 Right-click any of those workflow buttons for a short purpose-and-process guide.
 <b>Help &gt; Workspace help</b>, the information icon and <b>F1</b> open this
@@ -86,7 +120,7 @@ full tabbed window. Help does not reset, pause, seek or reanalyse the ride.</p>
 <p><b>Video</b> shows the associated recording. <b>Plot</b> uses the main area for
 the selected trace. <b>Overlay</b> places the selected plot in a translucent grey
 band over the lower video area. There is no split Video + Plot layout. The Plot
-selector applies to both Plot and Overlay. Coloured line swatches identify each trace; dashed lines identify the comparison or source stage as labelled. Without video the player shows plot
+selector applies to both Plot and Overlay. Coloured line swatches identify each trace; dashed lines identify the comparison or source stage as labelled. Without video the Ride Analyzer shows plot
 information instead.</p>
 <h3>Inspect events and loop a section</h3>
 <p>Orange kinematic bars show <b>duration</b>. Hover for details and click to seek
@@ -140,7 +174,7 @@ Confirm the pair and import it. Existing files are copied, never moved or delete
 They are kept under <code>tools/sim_player/canonical_rides/&lt;park_key&gt;/</code>.
 No extra copy is needed per platform, candidate or new telemetry repetition.</p>
 <h3>Calibrate the original pair once</h3>
-<p>The existing saved player offset is imported automatically. Otherwise the
+<p>The existing saved Ride Analyzer offset is imported automatically. Otherwise the
 initial offset may only be an OBS estimate. It is the video timestamp at the
 original CSV's elapsed zero: positive means video started earlier. Check a
 recognisable event before relying on the alignment. The <b>Calibration</b> tab
@@ -176,10 +210,10 @@ a second time. Existing candidate A/B and motion computations are unchanged.</p>
 <p><b>Tune &gt; Washout</b> shows the effective Surge and Sway enable flags and
 classical washout time constants. Adjust the numeric values, then choose
 <b>Reanalyse with these settings</b>. There are no washout percentage sliders.
-The current player edits the two axes independently; linked editing was a
+The Ride Analyzer edits the two axes independently; linked editing was a
 prototype idea and is not present in this build.</p>
 <p>Editing requires a non-dynamic capture that can be reprocessed and a classical
-washout settings snapshot. The player replays the whole capture through the
+washout settings snapshot. The Ride Analyzer replays the whole capture through the
 existing POC processing so filter history is consistent. It does not write to
 <code>telemetry_config.ini</code> or change deployed platform settings.</p>
 <p>A saved dynamic study contains already-filtered data. Its washout controls
@@ -189,7 +223,7 @@ carry over to altered filters.</p>
 <p>The NL2-versus-processed plots contain cue/gain/filter effects together;
 they are <b>not a filter-only response measurement</b>. Dynamic gain multipliers
 are a separate signal. Compare with a static baseline to help distinguish them.</p>
-<p>The player helps inspect timing and kinematic consequences. Useful washout
+<p>The Ride Analyzer helps inspect timing and kinematic consequences. Useful washout
 settings ultimately need <b>feedback on the physical platform</b>; numerical
 feasibility does not establish the subjective experience.</p>
 '''),
@@ -214,7 +248,9 @@ force/tension feasibility. Strict/relaxed optimisation targets do not enlarge
 physical actuator limits. Dynamic profiles remain research review items, not
 live POC exports in this build.</p>
 <h3>Output and saved data</h3>
-<p>The player does not connect to live NL2, SHS or Festo. Optional <b>Twin</b>
+<p>Normal analysis/replay does not connect to live NL2, SHS or Festo. The deliberate
+exception is <b>Study &gt; Capture dynamic source...</b>, which launches the existing
+local NoLimits capture tool for the duration of a dynamic study. Optional <b>Twin</b>
 output sends replay poses to the Visualizer over UDP with zero command pressures.
 The Twin menu shows whether it is enabled, holding, sending or reporting an error;
 its settings use the existing output configuration.</p>

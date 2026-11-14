@@ -1,5 +1,5 @@
-# options_dialog.py ver 1
-"""Qt6 preferences dialog for the offline sim_player.
+# options_dialog.py ver 2
+"""Qt6 preferences dialog for MDX Ride Analyzer.
 
 Video keeps its source aspect ratio automatically; there is deliberately no
 aspect ratio control. The v7 Settings dialog contains the optional Digital Twin UDP destination.
@@ -16,7 +16,7 @@ from .settings import VisualizerSettings
 class PlayerOptionsDialog(QDialog):
     def __init__(self, preferences: VisualizerSettings, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("sim_player — Settings")
+        self.setWindowTitle("MDX Ride Analyzer — Settings")
         self.setMinimumWidth(390)
         self._result: VisualizerSettings | None = None
         layout = QVBoxLayout(self)

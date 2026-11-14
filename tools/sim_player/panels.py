@@ -1,4 +1,4 @@
-# panels.py ver 3
+# panels.py ver 5
 """Native Qt6 panels and timeline widgets for sim_player.
 
 Presentation only.  Future strip chart and tension panels should be separate
@@ -17,6 +17,8 @@ from .theme import PANEL, RAIL, TEXT, MUTED, ACCENT, GREEN, ORANGE
 from .tuning import muscle_flags
 from .muscle_extrema import RelativeMuscleRuler
 from .marker_intervals import event_at_x, event_span
+from .video_sync import is_dynamic_source_recording_csv
+from .dynamic_source_rating import suitability_tooltip
 
 
 def clock_label(seconds):
@@ -442,6 +444,37 @@ class RideCsvDialogFilter(QSortFilterProxyModel):
         # The file dialog already filters for .csv; we only hide event sidecars.
         name = str(source.data(item, Qt.ItemDataRole.DisplayRole) or "")
         return not name.casefold().endswith("_state_events.csv")
+
+
+class DynamicSourceCsvDialogFilter(QSortFilterProxyModel):
+    """Show primary captures and provide non-blocking suitability tooltips."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._tooltip_cache = {}
+
+    def filterAcceptsRow(self, source_row, source_parent):
+        source = self.sourceModel()
+        item = source.index(source_row, 0, source_parent)
+        # Preserve navigation through session/ride folders. QFileSystemModel
+        # provides isDir(); the fallback keeps non-filesystem test doubles safe.
+        if hasattr(source, "isDir") and source.isDir(item):
+            return True
+        name = str(source.data(item, Qt.ItemDataRole.DisplayRole) or "")
+        return is_dynamic_source_recording_csv(name)
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if role == Qt.ItemDataRole.ToolTipRole:
+            source = self.sourceModel()
+            item = self.mapToSource(index)
+            if source is not None and not (hasattr(source, "isDir") and source.isDir(item)):
+                name = str(source.data(item, Qt.ItemDataRole.DisplayRole) or "")
+                if is_dynamic_source_recording_csv(name) and hasattr(source, "filePath"):
+                    path = str(source.filePath(item))
+                    if path not in self._tooltip_cache:
+                        self._tooltip_cache[path] = suitability_tooltip(path)
+                    return self._tooltip_cache[path]
+        return super().data(index, role)
 
 
 

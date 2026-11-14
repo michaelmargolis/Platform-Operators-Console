@@ -1,4 +1,4 @@
-# candidate_workflow.py ver 2
+# candidate_workflow.py ver 3
 """UI controller for candidate discovery, independent A/B tuning, explicit save.
 
 ReplayWindow owns the normal reanalysis, video and timeline. This mixin only
@@ -253,7 +253,7 @@ class CandidateReviewMixin:
                           for name in slot.source_bundle.get("_model_changed", [])})
         if changed:
             if QMessageBox.question(self, "Optimiser model changed",
-                "The player processing code differs from this archived optimiser run. "
+                "The Ride Analyzer processing code differs from this archived optimiser run. "
                 "Old strict/relaxed qualifications are no longer valid. Continue?\n\n" +
                 "\n".join(changed[:12])) != QMessageBox.StandardButton.Yes:
                 return

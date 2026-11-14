@@ -1,4 +1,4 @@
-# candidate_browser.py ver 1
+# candidate_browser.py ver 3
 """Qt6 candidate browser: select any two optimizer outputs for A/B tuning."""
 from __future__ import annotations
 from pathlib import Path
@@ -117,7 +117,8 @@ class CandidateBrowserDialog(QDialog):
         self.park_box.clear()
         if self.run_data:
             platform = self.platform_box.currentData()
-            parks = sorted({c.park for c in self.run_data.candidates if c.platform == platform})
+            parks = sorted({c.park for c in self.run_data.candidates
+                            if c.platform == platform and c.park not in ride_config.ANALYZER_HIDDEN_PARKS})
             for park in parks:
                 self.park_box.addItem(ride_config.PARKS[park]["name"], park)
             idx = self.park_box.findData(current)
@@ -206,7 +207,7 @@ class CandidateBrowserDialog(QDialog):
                           for module in slot.source_bundle.get("_model_changed", [])})
         if changed:
             question = ("The optimisation used different POC model files. Prior strict/5% qualification "
-                        "no longer applies; Sim Player will recalculate using the installed code.\n\n"
+                        "no longer applies; Ride Analyzer will recalculate using the installed code.\n\n"
                         + "\n".join(changed[:10]) + ("\n…" if len(changed) > 10 else "") +
                         "\n\nContinue to review?")
             if QMessageBox.question(self, "Model differs from optimiser run", question) != QMessageBox.StandardButton.Yes:

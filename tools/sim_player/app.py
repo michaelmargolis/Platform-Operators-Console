@@ -1,5 +1,5 @@
-# app.py ver 9
-"""MDX sim_player: offline replay controller (PyQt6 only).
+# app.py ver 11
+"""MDX Ride Analyzer: offline ride-analysis controller (PyQt6 only).
 
 UI layout is in player_ui.py; presentation panels in panels.py. This module
 owns playback, capture loading, video synchronisation and optional Twin output.
@@ -13,11 +13,11 @@ import sys
 import time
 from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal, QTimer
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox, QMainWindow, QDialog, QDockWidget, QWidget, QInputDialog
-from . import WORKSPACE_VERSION
-from .panels import RideCsvDialogFilter, clock_label
+from . import PRODUCT_NAME, PRODUCT_SHORT_NAME, WORKSPACE_VERSION
+from .panels import RideCsvDialogFilter, DynamicSourceCsvDialogFilter, clock_label
 from .player_ui import PlayerUiMixin, apply_style
 from .recording import RideRecording, load_recording, write_saved_calibration
-from .video_sync import VideoSeekGuard, is_ride_telemetry_csv
+from .video_sync import VideoSeekGuard, is_ride_telemetry_csv, is_dynamic_source_recording_csv
 from .settings import load_visualizer_settings, save_visualizer_settings
 from .options_dialog import PlayerOptionsDialog
 from .twin_output import ReplayTwinOutput
@@ -120,7 +120,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.task_mode = "review"
         self.current_workflow = "inspect_motion"
         self.twin_output = ReplayTwinOutput(self.visualizer_settings)
-        self.setWindowTitle("MDX sim_player — No recording loaded")
+        self.setWindowTitle(f"{PRODUCT_NAME} — No recording loaded")
         # Compact default; the video grows/shrinks with the outer window.
         self.resize(1320, 720)
         self.setDockOptions(QMainWindow.DockOption.AllowNestedDocks | QMainWindow.DockOption.AllowTabbedDocks |
@@ -464,8 +464,9 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.workspace_inspector.muscle_readout.clear_extrema()
 
     def about(self):
-        QMessageBox.information(self, "About sim_player",
-            f"sim_player - Task Workspace v{WORKSPACE_VERSION} - Qt6/FFmpeg replay.\n\n"
+        QMessageBox.information(self, f"About {PRODUCT_NAME}",
+            f"{PRODUCT_NAME} - Task Workspace v{WORKSPACE_VERSION} - Qt6/FFmpeg ride analysis.\n\n"
+            "Review, tune and validate recorded NoLimits ride motion.\n"
             "A/B playback markers, Full/Range/Loop modes and adjustable loop hold.\n"
             "One selectable ride/kinematic marker lane and grouped anomaly replay.\n"
             "Manual 6DOF gains and ride-neutral height, baseline and experiment JSON.\n"
@@ -478,12 +479,10 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             "Review any two static optimiser candidates as independent A/B working copies.\n"
             "Save new named variant(s) without replacing original optimiser outputs.\n"
             "Per-platform JSON candidates can be saved explicitly for live POC review.\n"
-            "All candidate cues are offline research only, not validated for rides.\n"
-            "Motion lengths use existing POC offline analysis; no new kinematics.\n"
-            "Video timing requires empirical calibration.\n"
-            "No SHS, NoLimits2 live connection or Festo communication.\n"
+            "Study > Capture dynamic source launches the existing local NoLimits capture tool.\n"
+            "Normal analysis does not connect to SHS or Festo; dynamic-source capture connects only to local NoLimits.\n"
             "Optional POC_TWIN UDP replay uses zero pressures.\n\n"
-            "Later docks can show strip charts, clearance and tension feasibility.")
+            "Internal package paths and saved-data schemas retain the sim_player name for compatibility.")
 
     @staticmethod
     def _variant_cache_token(recording):
@@ -818,6 +817,38 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         if self.playing and not self._loop_holding and self.recording is not None and not self.slider.isSliderDown():
             self._send_twin()
 
+    def capture_dynamic_source(self):
+        """Launch the modal dynamic-study capture workflow.
+
+        The Ride Analyzer only orchestrates the existing capture tool; it does
+        not duplicate or bypass its NL2 loading, dispatch or recording logic.
+        """
+        from .dynamic_source import park_key_for_recording
+        from .dynamic_source_dialog import DynamicSourceCaptureDialog
+
+        dialog = DynamicSourceCaptureDialog(park_key_for_recording(self.recording), self)
+        dialog.capture_started.connect(lambda: self._set_playing(False))
+        result = dialog.exec()
+        if result == QDialog.DialogCode.Accepted and dialog.open_recording_path is not None:
+            self.open_capture(dialog.open_recording_path)
+
+    def pick_dynamic_source(self):
+        """Open a primary recording from a completed dynamic-source study."""
+        root = Path.cwd() / "captures" / "dynamic_source"
+        directory = str(root if root.exists() else root.parent)
+        dialog = QFileDialog(self)
+        dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        dialog.setWindowTitle("Open dynamic source recording")
+        dialog.setDirectory(directory)
+        dialog.setNameFilter("Dynamic source recording (*.csv)")
+        dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
+        dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptOpen)
+        dialog.setProxyModel(DynamicSourceCsvDialogFilter(dialog))
+        if dialog.exec():
+            selected = dialog.selectedFiles()
+            if selected and is_dynamic_source_recording_csv(Path(selected[0]).name):
+                self.open_capture(Path(selected[0]))
+
     def pick_capture(self):
         directory = str(self.settings.value("last_directory", str(Path.cwd() / "captures")))
         # Set DontUseNativeDialog *before* setting other properties, as Qt
@@ -1072,7 +1103,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self._sync_platform_selector()
         self.settings.setValue("last_directory", str(recording.csv_path.parent))
         self.ride_label.setText(recording.ride.upper() + "  /  REPLAY")
-        self.setWindowTitle(f"MDX sim_player — {recording.ride} — {recording.csv_path.name}")
+        self.setWindowTitle(f"{PRODUCT_NAME} — {recording.ride} — {recording.csv_path.name}")
         self.info_badge.setText(f"{len(recording.frames):,} SAMPLES")
         self._refresh_anomalies()
         self.loop_range.reset(recording.duration)
@@ -1680,7 +1711,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Offline NoLimits2 video + telemetry replay")
+    parser = argparse.ArgumentParser(description="MDX Ride Analyzer - offline NoLimits2 ride analysis")
     parser.add_argument("csv", nargs="?", help="Ride CSV, dynamic profile.json, saved dynamic review, or profile-results folder")
     args = parser.parse_args(argv)
     app = QApplication(sys.argv[:1])
@@ -1688,7 +1719,7 @@ def main(argv=None):
     try:
         window = ReplayWindow(args.csv)
     except (OSError, ValueError, ImportError) as exc:
-        QMessageBox.critical(None, "sim_player configuration error", str(exc))
+        QMessageBox.critical(None, f"{PRODUCT_SHORT_NAME} configuration error", str(exc))
         return 1
     window.show()
     return app.exec()
