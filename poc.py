@@ -1,5 +1,5 @@
-#poc.py  ver 4
 #!/usr/bin/env python3
+#poc.py ver 5
 from __future__ import annotations
 
 import argparse
@@ -23,6 +23,10 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "--fullscreen",
         action="store_true",
         help="start full screen; Escape closes the application",
+    )
+    parser.add_argument(
+        "--max-intensity", type=int, choices=(100, 150), default=100,
+        help="commissioning only: allow 0..150%% intensity; default is 0..100%%",
     )
     return parser.parse_args(argv)
 
@@ -56,7 +60,7 @@ def main() -> int:
     try:
         # Catalog validation happens in PocCore before constructing its physical
         # backend. Invalid JSON must produce a visible error, not a Qt traceback.
-        core = PocCore(config)
+        core = PocCore(config, max_intensity_percent=args.max_intensity)
     except (OSError, ValueError, RuntimeError, KeyError) as exc:
         logging.getLogger(__name__).error("POC startup configuration error: %s", exc)
         QtWidgets.QMessageBox.critical(None, "POC Configuration Error", str(exc))
@@ -72,6 +76,14 @@ def main() -> int:
         window.showFullScreen()
     else:
         window.show()
+    if core.dynamic_error_log.count:
+        QtWidgets.QMessageBox.information(
+            window, "Dynamic profile errors recorded",
+            "The persistent dynamic profile log currently contains "
+            f"{core.dynamic_error_log.count} error entries.\n\n"
+            "Review logs/dynamic_errors.log as required. Closing this message "
+            "allows POC to continue and does not clear the log."
+        )
     try:
         core.start()
     except (OSError, ValueError, RuntimeError, KeyError) as exc:

@@ -1,4 +1,4 @@
-<!-- README.md ver 17 -->
+<!-- README.md ver 18 -->
 # Platform Operators Console
 
 The Platform Operators Console (POC) is the Raspberry Pi operator console for
@@ -8,6 +8,18 @@ telemetry processing, platform kinematics, Festo pressure output and
 
 The live Raspberry Pi installation is `/home/poc/Runtime` and starts as a
 desktop-autostart application. It is not installed as a system service.
+
+## v201 - Experimental dynamic ride runtime (engineering integration only)
+
+Optional dynamic candidates for **both Chair V3 and Ground-Loading Platform**
+now use a verified, immutable per-platform profile bundle and the existing B+C
+matcher. Blackbird was tested first, followed by Mdx Logo Coaster. All existing
+static motion processing remains unchanged. The code adds a read-only Profile
+tab, persistent dynamic error logging, and explicit commissioning-only
+`--max-intensity 150` support. No dynamic profiles or candidates are installed
+automatically. **Do not deploy dynamic rides into passenger service before
+physical commissioning and remote park-identity verification.** See
+[the v201 dynamic runtime guide](docs/POC_DYNAMIC_RUNTIME_V201.md).
 
 ## v194 - Ground-Loading Platform display name
 

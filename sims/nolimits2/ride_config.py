@@ -1,4 +1,4 @@
-# ride_config.py ver 7 -- shared parks/calibration and variant schema helpers.
+# ride_config.py ver 8 -- shared parks/calibration and variant schema helpers.
 """NL2 park/calibration data and common variant schema validation.
 
 Variant labels are unique IDs within one platform JSON file. No variants live here.
@@ -76,7 +76,8 @@ HEAVE_MODES = frozenset(("legacy_height", "vertical_g", "normalized_height"))
 _BRACKET_MODIFIER = re.compile(r"(?: \[[^\[\]\s][^\[\]]*\])+")
 VARIANT_FIELDS = frozenset(("label", "park", "angular_cue", "gain_scale_pct",
                              "roll_washout", "pitch_washout", "heave_mode",
-                             "normalized_height_amplitude", "neutral_height_delta_mm", "status"))
+                             "normalized_height_amplitude", "neutral_height_delta_mm", "status",
+                             "dynamic_profile"))
 
 
 def validate_variant_label_format(label, park_key, parks=PARKS):
@@ -193,6 +194,13 @@ def validate(parks=PARKS, variants=None, default=None,
                 validated_ride_neutral_delta(item["neutral_height_delta_mm"])
             except ValueError as exc:
                 raise ValueError(f"Invalid ride neutral offset in {label!r}: {exc}") from exc
+        if "dynamic_profile" in item:
+            # Structural validation only. An unsafe/missing/corrupt deployment
+            # path is classified by the startup audit: log it and hide that
+            # candidate, rather than taking the entire POC offline.
+            rel = item["dynamic_profile"]
+            if not isinstance(rel, str) or not rel.strip():
+                raise ValueError(f"Invalid dynamic profile path in {label!r}")
         if item.get("status", "candidate") not in ("candidate", "preferred", "rejected"):
             raise ValueError(f"Invalid review status in {label!r}")
         by_label[label] = item

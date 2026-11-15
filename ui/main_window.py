@@ -1,4 +1,4 @@
-#main_window.py  ver 75
+#main_window.py  ver 76
 from __future__ import annotations
 
 import csv
@@ -88,6 +88,8 @@ class MainWindow(QtWidgets.QMainWindow):
         uic.loadUi(str(ui_path), self)
         self.core = core
         self.config_store = config_store
+        self._last_profile_update_at = 0.0
+        self._setup_profile_tab()
         self.sim_tabs = SimTabManager(self.tabWidget, self.tab_debug)
         self._updating_sim_combo = False
         self._updating_experience_combo = False
@@ -147,6 +149,77 @@ class MainWindow(QtWidgets.QMainWindow):
         size = screen.geometry().size()
         return size.width() <= 800 and size.height() <= 480
 
+    def _setup_profile_tab(self):
+        """The same read-only Profile tab is available for static/dynamic rides.
+
+        Widget construction is startup-only; values are copied at max 4 Hz
+        only while visible, so the Pi's 20 Hz processing is not burdened.
+        """
+        tab = QtWidgets.QWidget(self.tabWidget)
+        tab.setObjectName("tab_profile")
+        self.tab_profile = tab
+        layout = QtWidgets.QVBoxLayout(tab)
+        label = QtWidgets.QLabel("Current ride configuration and dynamic synchronisation")
+        label.setWordWrap(True)
+        layout.addWidget(label)
+        self.txt_profile_state = QtWidgets.QPlainTextEdit(tab)
+        self.txt_profile_state.setReadOnly(True)
+        self.txt_profile_state.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
+        font = self.txt_profile_state.font()
+        font.setFamily("Courier New")
+        font.setPointSize(10 if self._compact_ui else 11)
+        self.txt_profile_state.setFont(font)
+        layout.addWidget(self.txt_profile_state)
+        debug_index = self.tabWidget.indexOf(self.tab_debug)
+        if debug_index >= 0:
+            self.tabWidget.insertTab(debug_index, tab, "Profile")
+        else:
+            self.tabWidget.addTab(tab, "Profile")
+
+    def _update_profile(self, force=False):
+        if not force and self.tabWidget.currentWidget() is not self.tab_profile:
+            return
+        now = time.monotonic()
+        if not force and now-self._last_profile_update_at < .25:
+            return
+        p = self.core.get_profile_snapshot()
+        base = p.get("base_gains", ())
+        pct = " / ".join(f"{float(g):g}" for g in base) + " %"
+        lines = [
+            f"Platform       : {p.get('platform', '--')}",
+            f"NL2 variant    : {p.get('label', '--')}",
+            f"Motion profile : {p.get('motion_profile', 'Static')}",
+            f"NL2 motion     : cue={p.get('cue', '--')}  heave={p.get('heave', '--')}",
+            f"Variant gains  : {pct}",
+            f"Ride neutral   : {float(p.get('neutral_mm', 0)):+g} mm",
+            f"Intensity      : {p.get('intensity_percent')}%  max={p.get('max_intensity_percent')}%",
+        ]
+        if p.get('motion_profile') == 'Dynamic':
+            gains = p.get('gain_percent', ())
+            values = " / ".join(f"{float(g):g}" for g in gains) + " %" if gains else "--"
+            phase = p.get('profile_phase_s')
+            lag = p.get('profile_lag_s')
+            age = p.get('observation_age_s')
+            lines.extend((
+                "",
+                f"Profile        : {p.get('profile_name', '--')}",
+                f"Dynamic gains  : {values}",
+                f"Sync state     : {p.get('state', 'INVALID')}",
+                f"Match basis    : {p.get('match_basis', '--')}",
+                f"Profile phase  : {phase:.2f} s" if phase is not None else "Profile phase  : --",
+                f"Profile lag    : {lag:+.3f} s" if lag is not None else "Profile lag    : --",
+                f"Observation age: {age:.3f} s" if age is not None else "Observation age: --",
+                f"Fallback       : {p.get('fallback', '--')}",
+                f"Match losses   : {p.get('loss_count', 0)}",
+            ))
+            if p.get('fault'):
+                lines.append("PROFILE FAULT: " + str(p['fault']))
+        lines.extend(("", f"Dynamic errors : {p.get('dynamic_errors', 0)} (persistent log)"))
+        text = "\n".join(lines)
+        if self.txt_profile_state.toPlainText() != text:
+            self.txt_profile_state.setPlainText(text)
+        self._last_profile_update_at = now
+
     def _enforce_compact_tabs(self):
         """Show useful compact tabs while omitting the Transform Viewer."""
         visible_tabs = (
@@ -154,6 +227,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tab_input,
             self.tab_output,
             self.tab_platform_selection,
+            self.tab_profile,
             self.tab_debug,
         )
         for index in range(self.tabWidget.count() - 1, -1, -1):
@@ -382,6 +456,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.btn_run.clicked.connect(self.core.request_run)
         self.btn_pause.clicked.connect(self.core.request_pause)
         self.btn_reset.clicked.connect(self.core.request_reset_vr)
+        self.sld_intensity.setMaximum(self.core.max_intensity_percent)
         self.sld_intensity.valueChanged.connect(self.core.request_intensity_percent)
         self.btn_normal_load.clicked.connect(lambda: self.core.request_payload_level(1))
         self.btn_full_load.clicked.connect(lambda: self.core.request_payload_level(2))
@@ -748,12 +823,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         state = self.core.platform.state
         if state is PlatformState.ACTIVATED:
-            # Physical encoder intensity has exactly 11 discrete values:
-            # 0, 10, 20, ... 100 percent. If the slider currently contains an
-            # intermediate mouse-entered value, move to the next 10% boundary.
+            # Normal operation has 11 discrete levels (0..100 by 10%).
+            # --max-intensity 150 explicitly permits another five commissioning
+            # levels through the same hardware encoder and touch slider.
             current = int(self.core.intensity_percent)
             if step > 0:
-                target = min(100, ((current // 10) + 1) * 10)
+                target = min(self.core.max_intensity_percent, ((current // 10) + 1) * 10)
             else:
                 target = max(0, ((current - 1) // 10) * 10) if current > 0 else 0
             if target != current:
@@ -984,7 +1059,8 @@ class MainWindow(QtWidgets.QMainWindow):
         for label, slider in zip(self.gain_labels, self.gain_sliders):
             label.setText(str(slider.value()))
         self._sync_washout_controls()
-        self.core.apply_telemetry_config(self._telemetry_values_from_ui())
+        if not self.core.apply_telemetry_config(self._telemetry_values_from_ui()):
+            self._load_telemetry_controls(self.core.get_telemetry_config())
 
     def _washout_type_changed(self, *args):
         if self._updating_telemetry_controls:
@@ -1020,7 +1096,9 @@ class MainWindow(QtWidgets.QMainWindow):
             spin.setEnabled(enabled and checkbox.isChecked())
 
     def _save_telemetry_controls(self):
-        self.core.save_telemetry_config(self._telemetry_values_from_ui())
+        if not self.core.save_telemetry_config(self._telemetry_values_from_ui()):
+            self._load_telemetry_controls(self.core.get_telemetry_config())
+            return
         self._load_telemetry_controls()
 
     def _cancel_telemetry_controls(self):
@@ -1138,6 +1216,7 @@ class MainWindow(QtWidgets.QMainWindow):
         elif current_tab is self.tab_transform:
             self._update_transform_viewer(sample)
         self._capture_csv_sample(sample)
+        self._update_profile()
         self._update_debug()
 
     def _load_ride_image(self):
@@ -1654,6 +1733,7 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Station status : {station_text}",
             f"Activation     : mode={snapshot['activation_control_mode']}  interlock={snapshot['activation_interlock']}",
             f"Request result : {snapshot['activation_request_result']}",
+            f"Dynamic errors : {snapshot.get('dynamic_error_count', 0)}  profile={snapshot.get('dynamic_state', 'STATIC')}",
         ]
         if self.core.sim_key == "nolimits2":
             gains = snapshot.get("nl2_gain_scales_pct")
@@ -1723,6 +1803,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._update_sim_images(self.core.get_debug_snapshot()["transform"])
         elif current_tab is self.tab_debug:
             self._update_debug(force=True)
+        elif current_tab is self.tab_profile:
+            self._update_profile(force=True)
 
     def _load_status_pixmaps(self):
         image_dir = Path(__file__).resolve().parent.parent / "images"

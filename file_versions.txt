@@ -1,5 +1,5 @@
-#file_versions.txt  ver 197
-# Application baseline: v200 + MDX Ride Analyzer Task Workspace v0.2.16
+#file_versions.txt  ver 198
+# Application baseline: v201 dynamic ride runtime engineering + Ride Analyzer v0.2.16
 # Relative path | expected version
 config/platforms.py|7
 controls/__init__.py|1
@@ -9,7 +9,7 @@ controls/rotary_encoder.py|1
 controls/physical_controls.py|7
 core/config_store.py|8
 core/digital_twin.py|2
-core/poc_core.py|56
+core/poc_core.py|57
 core/platform_controller.py|19
 kinematics/cfg_SuspendedPlatformMdx.py|5
 kinematics/cfg_SuspendedChairFalcon.py|1
@@ -67,7 +67,7 @@ tests/smoke_sim_interface.py|1
 tests/test_nolimits2_adapter.py|32
 tests/test_platform_controller.py|12
 tests/test_d_to_p.py|1
-core/telemetry_config.py|6
+core/telemetry_config.py|7
 sims/nolimits2/telemetry_config.ini|2
 sims/spacecoaster/telemetry_config.ini|2
 sims/xplane/telemetry_config.ini|2
@@ -75,14 +75,14 @@ tests/test_telemetry_config.py|4
 tests/test_operator_status.py|4
 tests/test_ui_layout.py|11
 tests/test_sim_registry.py|1
-ui/main_window.py|75
+ui/main_window.py|76
 ui/poc_main.ui|15
 ui/poc_main_800x480.ui|18
 ui/ui_widgets.py|7
 ui/transform_viewer.py|1
 ui/sim_tabs.py|2
 requirements.txt|3
-poc.py|4
+poc.py|5
 poc_config.json|6
 version_check.py|5
 raspi/setup-console.sh|13
@@ -108,9 +108,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|43
-README.md|17
-file_versions.txt|197
+changelog.txt|44
+README.md|18
+file_versions.txt|198
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -140,13 +140,13 @@ tests/test_nl2_ride_completion_v169.py|2
 tests/test_nl2_multitrain_v170.py|2
 tests/test_nl2_multistation_v171.py|2
 tests/test_nl2_angular_washout_v172.py|2
-sims/nolimits2/ride_config.py|7
+sims/nolimits2/ride_config.py|8
 sims/nolimits2/angular_cues.py|1
 tests/test_ride_variants_v176.py|3
 tests/test_ride_labels_v177.py|1
 core/platform_geometry.py|2
 sims/nolimits2/ride_variants/.gitignore|1
-sims/nolimits2/variant_store.py|4
+sims/nolimits2/variant_store.py|5
 tests/conftest.py|1
 tests/test_floor_policy_v178.py|1
 tests/test_review_dialog_gui_v178.py|2
@@ -266,3 +266,8 @@ tools/sim_player/tests/test_dynamic_source_capture_v0211.py|4
 tools/sim_player/tests/test_workspace_menu_contract_v022.py|3
 tools/sim_player/workspace_help.py|1
 tools/sim_player/workspace_help_content.py|6
+core/dynamic_profiles.py|1
+tools/nl2_dynamic_profiles/promote.py|1
+tests/test_dynamic_runtime_v201.py|1
+tests/test_dynamic_core_equivalence_v201.py|1
+docs/POC_DYNAMIC_RUNTIME_V201.md|1

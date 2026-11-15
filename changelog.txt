@@ -1,4 +1,12 @@
-# changelog.txt ver 43
+# changelog.txt ver 44
+
+POC v201 - Dynamic ride runtime engineering integration - 2026-11-14
+- Both Chair V3 and Ground-Loading Platform: new immutable dynamic profile loader, checksum/source/processing compatibility validation and separate controlled promoter.
+- NL2 20 Hz path: B+C trajectory matching and six post-washout multipliers for an explicitly selected verified dynamic candidate only; unchanged static variant path.
+- Preflight NL2 version, viewed train/car/seat and departure station; fail closed on invalid dynamic candidates without silently substituting another ride.
+- Smooth temporary tracking-loss fallback, bounded sustained-loss latch, persistent error log/startup notice, Profile tab and commissioning-only 0..150 percent intensity override.
+- Blackbird then Mdx Logo Coaster: ten full no-network replays each across two platforms, no matcher loss/clips/workspace intervention. Large commanded muscle steps remain a physical commissioning concern.
+- RESEARCH/ENGINEERING ONLY: no runtime profile or candidate catalogue shipped. No physical pneumatic/force/comfort qualification or remote NL2 park-file SHA attestation. Do not commission on passengers.
 
 POC v200 / MDX Ride Analyzer v0.2.16 - 2026-11-14
 - Ride Analyzer: Open > Open dynamic source now shows a hover suitability hint for each primary recording.

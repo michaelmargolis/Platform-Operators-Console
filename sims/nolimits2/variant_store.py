@@ -1,4 +1,4 @@
-# variant_store.py ver 4
+# variant_store.py ver 5
 """Shared, Qt-independent per-platform NL2 variant catalog and durable reviews.
 
 Working files: ride_variants/<platform_key>.json (or POC_RIDE_VARIANTS_DIR).
@@ -126,6 +126,8 @@ class VariantStore:
         self._data = deepcopy(data)
         self._raw = raw
         self._operator_filter = bool(operator_filter)
+        # In-memory only: startup bundle verification never mutates a catalogue.
+        self._dynamic_invalid = {}
 
     @classmethod
     def load(cls, platform_key, *, directory=None):
@@ -197,11 +199,24 @@ class VariantStore:
         return tuple(v['label'] for v in self._data['variants']
                      if park_key is None or v['park'] == park_key)
 
+    def set_dynamic_invalid(self, invalid):
+        """Hide untrusted profiles without rewriting the persistent catalogue.
+
+        This does not affect research/Analyzer access or static variants. A
+        preferred invalid dynamic variant must not reveal other candidates.
+        """
+        self._dynamic_invalid = dict(invalid)
+
+    @property
+    def dynamic_invalid(self):
+        return dict(self._dynamic_invalid)
+
     def visible_labels(self, park_key=None):
         preferred = {v['park'] for v in self._data['variants']
                      if v.get('status', 'candidate') == 'preferred'}
         return tuple(v['label'] for v in self._data['variants']
                      if (park_key is None or v['park'] == park_key)
+                     and v['label'] not in self._dynamic_invalid
                      and (not self._operator_filter or v['park'] not in ride_config.POC_HIDDEN_PARKS)
                      and (v.get('status', 'candidate') == 'preferred'
                           or (v.get('status', 'candidate') == 'candidate' and v['park'] not in preferred)))
@@ -255,6 +270,7 @@ class VariantStore:
             elif decision == 'preferred' and v['park'] == original['park']:
                 v['status'] = 'rejected'
         candidate = VariantStore(self.platform_key, data)
+        candidate.set_dynamic_invalid(self._dynamic_invalid)
         return candidate
 
     def _commit(self, updated):
@@ -274,6 +290,8 @@ class VariantStore:
         self._raw = raw
 
     def review(self, label, decision):
+        if label in self._dynamic_invalid:
+            raise VariantStoreError('Invalid dynamic candidate cannot be preferred: ' + self._dynamic_invalid[label])
         updated = self.review_preview(label, decision)
         updated.validate_display()
         self._commit(updated._data)

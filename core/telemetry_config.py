@@ -1,4 +1,4 @@
-#telemetry_config.py  ver 6
+#telemetry_config.py  ver 7
 from __future__ import annotations
 
 import configparser
@@ -61,7 +61,12 @@ class TelemetryConfig:
         "legacy_duration": [12.0] * 6,
     }
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, max_intensity_percent: int = 100):
+        # The 0..150 commissioning override is explicit and transient; no
+        # simulator INI or existing global gain setting is changed.
+        if type(max_intensity_percent) is not int or max_intensity_percent not in (100, 150):
+            raise ValueError("max_intensity_percent must be 100 or 150")
+        self.max_intensity_percent = max_intensity_percent
         self.path = Path(path)
         self.values = {}
         self._filters = [None] * 6
@@ -162,7 +167,7 @@ class TelemetryConfig:
 
     def scale_without_washout(self, transform: Iterable[float], intensity_percent: float) -> tuple[float, ...]:
         master = self.values["master_gain"] / 100.0
-        intensity = max(0.0, min(100.0, float(intensity_percent))) / 100.0
+        intensity = max(0.0, min(float(self.max_intensity_percent), float(intensity_percent))) / 100.0
         return tuple(
             float(value) * (gain / 100.0) * (variant / 100.0) * master * intensity
             for value, gain, variant in zip(transform, self.values["gains"], self._variant_gain_percent)

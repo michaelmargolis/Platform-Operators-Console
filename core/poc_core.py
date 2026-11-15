@@ -1,4 +1,4 @@
-#poc_core.py  ver 56
+#poc_core.py  ver 57
 from __future__ import annotations
 
 import logging
@@ -57,9 +57,20 @@ class PocCore(QtCore.QObject):
     PERFORMANCE_WINDOW_FRAMES = 200  # 10 seconds at 20 Hz
     FAN_SEND_PERIOD_S = 0.1
 
-    def __init__(self, config_store, parent=None):
+    def __init__(self, config_store, parent=None, *, max_intensity_percent=100):
         super().__init__(parent)
         self.config_store = config_store
+        if type(max_intensity_percent) is not int or max_intensity_percent not in (100, 150):
+            raise ValueError("POC maximum intensity must be 100 or 150")
+        self.max_intensity_percent = max_intensity_percent
+        from core.dynamic_profiles import DynamicErrorLog
+        self.dynamic_error_log = DynamicErrorLog()
+        self._dynamic_deployments = {}
+        self._dynamic_runtime = None
+        self._dynamic_variant = None
+        self._dynamic_profile_required = False
+        self._dynamic_issue = ""
+        self._dynamic_preflight_reported = None
 
         # Always use the SOP kinematics/D->P/Festo output path. The Festo
         # transport is UDP and does not require a software output gate.
@@ -69,6 +80,12 @@ class PocCore(QtCore.QObject):
         if self.config_store.get("selected_sim", "nolimits2") == "nolimits2":
             from sims.nolimits2.variant_store import VariantStore
             self._startup_variant_store = VariantStore.load(self.platform_key)
+            from core.dynamic_profiles import audit_dynamic_store
+            self._dynamic_deployments = audit_dynamic_store(
+                self._startup_variant_store,
+                TelemetryConfig(Path(__file__).resolve().parent.parent /
+                                "sims/nolimits2/telemetry_config.ini").snapshot(),
+                error_log=self.dynamic_error_log)
             self._startup_variant_store.validate_display()
         platform_def = PLATFORMS[self.platform_key]
         self.platform_name = platform_def.get("platform_name", self.platform_key)
@@ -225,8 +242,18 @@ class PocCore(QtCore.QObject):
 
         # Validate the destination simulator catalog before disconnecting or
         # asking SHS to change anything. Physical platform is fixed this session.
+        variant_store = self._startup_variant_store if initial else None
+        if not initial and key == "nolimits2":
+            from sims.nolimits2.variant_store import VariantStore
+            from core.dynamic_profiles import audit_dynamic_store
+            variant_store = VariantStore.load(self.platform_key)
+            self._dynamic_deployments = audit_dynamic_store(
+                variant_store, TelemetryConfig(Path(__file__).resolve().parent.parent /
+                                               "sims/nolimits2/telemetry_config.ini").snapshot(),
+                error_log=self.dynamic_error_log)
+            variant_store.validate_display()
         candidate = create_sim(key, self.host_service.address, platform_key=self.platform_key,
-                               variant_store=self._startup_variant_store if initial else None)
+                               variant_store=variant_store)
         self._startup_variant_store = None
         if not initial and self.host_service_enabled:
             if not self.host_service.select_sim(key):
@@ -240,6 +267,13 @@ class PocCore(QtCore.QObject):
         # All simulators run on the PC hosting Sim Host Service, so SHS is the
         # single source of the simulator host address.
         self.sim = candidate
+        if self._dynamic_runtime is not None:
+            self._dynamic_runtime.stop_cycle()
+        self._dynamic_runtime = None
+        self._dynamic_variant = None
+        self._dynamic_profile_required = False
+        self._dynamic_issue = ""
+        self._dynamic_preflight_reported = None
         # Optional simulator capability: SpaceCoaster uses the shared SHS client
         # for Windows-side mouse workarounds. Other simulators need no hook.
         set_host_service = getattr(self.sim, "set_host_service", None)
@@ -247,7 +281,8 @@ class PocCore(QtCore.QObject):
             set_host_service(self.host_service)
         self.sim_key = key
         telemetry_path = Path(__file__).resolve().parent.parent / "sims" / key / "telemetry_config.ini"
-        self.telemetry_config = TelemetryConfig(telemetry_path)
+        self.telemetry_config = TelemetryConfig(
+            telemetry_path, max_intensity_percent=self.max_intensity_percent)
         self._angular_washout_ride = None
         # Switching away from NL2 must not leave a ride-only height bias on
         # the physical backend for other simulators.
@@ -509,6 +544,61 @@ class PocCore(QtCore.QObject):
             and status.ready_to_start
         ))
 
+    def _dynamic_preflight(self, *, report=False) -> bool:
+        """Block dispatch on profile/provenance mismatch, never silently run static.
+
+        The active NL2 variant is not trusted until loaded and confirmed.
+        Every check is in-memory (source SHA/NPZ validated at startup).
+        """
+        if self.sim_key != "nolimits2" or self.sim is None:
+            return True
+        if getattr(self.sim, "_ride_load_pending", False):
+            return False
+        variant = self.sim.loaded_variant_snapshot()
+        if variant is None:
+            return False
+        rel = variant.get("dynamic_profile")
+        if rel is None:
+            return True
+        bundle = self._dynamic_deployments.get(variant["label"])
+        try:
+            if bundle is None or self._dynamic_runtime is None:
+                raise ValueError("Dynamic bundle is not verified for this session")
+            telemetry = getattr(self.sim.client, "latest_telemetry", None)
+            if self.sim.heave_mode != variant["heave_mode"]:
+                raise ValueError("Effective NL2 heave mode differs from frozen variant")
+            if getattr(self.sim, "_angular_cue_mode", None) != variant["angular_cue"]:
+                raise ValueError("Effective NL2 angular cue differs from frozen variant")
+            # Initial READY can have neither _ready_station nor _ride_station:
+            # those are pinned later during dispatch/arrival. Prefer the
+            # current freshly identified occupied/view-train station, never an
+            # unverified nearest-station guess. Otherwise dynamic rides could
+            # be permanently blocked before their very first dispatch.
+            departure_station = None
+            station_observer = getattr(self.sim, "_station_observation", None)
+            if callable(station_observer):
+                station = station_observer()
+                if station.valid and station.view_train_here:
+                    departure_station = station.identity
+            if departure_station is None:
+                departure_station = (getattr(self.sim, "_ride_station", None)
+                                     or getattr(self.sim, "_ready_station", None))
+            bundle.preflight(variant=variant, telemetry_globals=self.get_telemetry_config(),
+                             nl2_version=getattr(self.sim.client, "version", None),
+                             telemetry=telemetry, departure_station=departure_station)
+            self._dynamic_issue = ""
+            self._dynamic_preflight_reported = None
+            return True
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            self._dynamic_issue = str(exc)
+            if report and self._dynamic_preflight_reported != self._dynamic_issue:
+                self._dynamic_preflight_reported = self._dynamic_issue
+                self.dynamic_error_log.append(
+                    "dynamic_preflight_failure", label=variant["label"],
+                    platform=self.platform_key, park=variant["park"],
+                    reason=self._dynamic_issue)
+            return False
+
     @property
     def ready_for_dispatch(self) -> bool:
         status = self.get_sim_status()
@@ -521,9 +611,13 @@ class PocCore(QtCore.QObject):
             and status.pc_connected and status.sim_connected
             and self._sim_data_ready_for_dispatch(self.sim, status)
             and status.ready_to_start
+            and self._dynamic_preflight(report=False)
         )
 
     def request_run(self) -> None:
+        if not self._dynamic_preflight(report=True):
+            self.message.emit("Dynamic ride cannot dispatch: " + (self._dynamic_issue or "profile not ready"))
+            return
         if not self.ready_for_dispatch:
             self.message.emit("Platform must be activated, parked, and simulator ready for dispatch")
             return
@@ -567,8 +661,14 @@ class PocCore(QtCore.QObject):
             self.message.emit("Simulator no longer ready; returning platform to park")
             self.platform.request_park()
             return
+        if not self._dynamic_preflight(report=True):
+            self.message.emit("Dynamic ride preflight failed before dispatch: " + self._dynamic_issue)
+            self.platform.request_park()
+            return
         try:
             self.sim.run()
+            if self._dynamic_runtime is not None:
+                self._dynamic_runtime.start_cycle()
             self._ride_dispatched = True
             self._set_experience_state(self.sim.state)
         except Exception as exc:
@@ -595,6 +695,8 @@ class PocCore(QtCore.QObject):
             return
         self._ride_dispatched = False
         self._ride_has_run = False
+        if self._dynamic_runtime is not None:
+            self._dynamic_runtime.stop_cycle()
         try:
             self.platform.request_park()  # Keep logical ACTIVATED.
         except Exception as exc:
@@ -636,8 +738,8 @@ class PocCore(QtCore.QObject):
         except (TypeError, ValueError):
             self.message.emit(f"Invalid intensity: {percent}")
             return
-        if not 0 <= percent <= 100:
-            self.message.emit(f"Intensity out of range: {percent}")
+        if not 0 <= percent <= self.max_intensity_percent:
+            self.message.emit(f"Intensity out of range (0..{self.max_intensity_percent}%): {percent}")
             return
         self.intensity_percent = percent
         self.intensity_level = percent // 10
@@ -703,6 +805,9 @@ class PocCore(QtCore.QObject):
         if (self.sim_key != "nolimits2" or self.telemetry_config is None
                 or self.platform.state is not PlatformState.DEACTIVATED):
             self.message.emit("Deactivate the platform before changing NL2 heave mode")
+            return False
+        if self._dynamic_profile_required:
+            self.message.emit("Dynamic ride heave mode is frozen; select a static ride to change it")
             return False
         setter = getattr(self.sim, "set_heave_mode", None)
         if not callable(setter):
@@ -827,6 +932,24 @@ class PocCore(QtCore.QObject):
         self.telemetry_config.set_angular_washout_overrides(roll, pitch, reset=True)
         self.telemetry_config.set_temporary_classical_z(
             bool(variant and self.sim.heave_mode == "vertical_g"))
+        # Variant identity change is the only way to create a dynamic runtime.
+        # A static variant takes no matcher/lookup/multiplier path whatsoever.
+        if getattr(self, "_dynamic_runtime", None) is not None:
+            self._dynamic_runtime.stop_cycle()
+        self._dynamic_runtime = None
+        self._dynamic_variant = None
+        self._dynamic_profile_required = False
+        self._dynamic_issue = ""
+        self._dynamic_preflight_reported = None
+        self._dynamic_profile_required = bool(variant and variant.get("dynamic_profile") is not None)
+        if self._dynamic_profile_required:
+            deployment = self._dynamic_deployments.get(variant["label"])
+            if deployment is None:
+                self._dynamic_issue = "Dynamic profile not verified at startup"
+                log.error("Confirmed dynamic variant not verified: %s", name)
+            else:
+                self._dynamic_runtime = deployment.new_runtime()
+                self._dynamic_variant = name
         self._angular_washout_ride = name
         self._motion_transform = (0.0,) * 6
         effective = self.telemetry_config.effective_washout()
@@ -841,21 +964,31 @@ class PocCore(QtCore.QObject):
             return {}
         return self.telemetry_config.snapshot()
 
-    def apply_telemetry_config(self, values: dict) -> None:
+    def apply_telemetry_config(self, values: dict) -> bool:
         if self.telemetry_config is None:
-            return
+            return False
+        if self._dynamic_profile_required:
+            self.message.emit("Global gains/washout are frozen for a dynamic ride; select a static ride before tuning")
+            return False
         self.telemetry_config.apply_values(values)
+        return True
 
-    def save_telemetry_config(self, values: dict) -> None:
+    def save_telemetry_config(self, values: dict) -> bool:
         if self.telemetry_config is None:
-            return
+            return False
+        if self._dynamic_profile_required:
+            self.message.emit("Dynamic ride processing is frozen; save prevented")
+            return False
         self.telemetry_config.apply_values(values)
         self.telemetry_config.save()
         self.message.emit(f"Telemetry settings saved for {self.sim.name}")
+        return True
 
     def cancel_telemetry_config(self) -> dict:
         if self.telemetry_config is None:
             return {}
+        if self._dynamic_profile_required:
+            return self.telemetry_config.snapshot()
         values = self.telemetry_config.load()
         self.message.emit(f"Telemetry settings restored for {self.sim.name}")
         return values
@@ -1025,7 +1158,34 @@ class PocCore(QtCore.QObject):
             and sample.telemetry_valid
         )
         if transform_applied:
-            self.platform.move(self._motion_transform)
+            if self.sim_key == "nolimits2" and self._dynamic_runtime is not None:
+                raw = getattr(getattr(self.sim, "client", None), "latest_telemetry", None)
+                self._dynamic_runtime.tick(raw)
+                from core.dynamic_profiles import DynamicProfileError
+                try:
+                    motion_request = self._dynamic_runtime.multiply(self._motion_transform)
+                except DynamicProfileError as exc:
+                    self._dynamic_issue = str(exc)
+                    self._motion_transform = (0.0,) * 6
+                    transform_applied = False
+                    # Hold the most recent safe command for this tick; do not
+                    # invent a potentially large neutral/zero-motion step.
+                else:
+                    self._motion_transform = motion_request
+                    self.platform.move(self._motion_transform)
+            elif self.sim_key == "nolimits2" and self._dynamic_profile_required:
+                # A selected dynamic variant can never silently run as static.
+                # Preserve normal UI/telemetry callbacks while withholding
+                # this unqualified motion command.
+                self._motion_transform = (0.0,) * 6
+                transform_applied = False
+            else:
+                self.platform.move(self._motion_transform)
+        elif self._dynamic_runtime is not None:
+            if self.experience_state is ExperienceState.PAUSED:
+                self._dynamic_runtime.suspend()
+            elif not self._ride_dispatched and self._dynamic_runtime.cycle_active:
+                self._dynamic_runtime.stop_cycle()
 
         self._update_fan(sample)
         self._send_digital_twin_snapshot(sample, transform_applied)
@@ -1117,6 +1277,32 @@ class PocCore(QtCore.QObject):
     def estop_latched(self) -> bool:
         return bool(self._estop_latched)
 
+    def get_profile_snapshot(self) -> dict:
+        """Pure diagnostic projection; does not drive any output hardware."""
+        selected = (self.sim.loaded_variant_snapshot() if self.sim_key == "nolimits2"
+                    and self.sim is not None and
+                    not getattr(self.sim, "_ride_load_pending", False) else None)
+        base = {
+            "platform": self.platform_name,
+            "label": selected.get("label", "--") if selected else "--",
+            "cue": selected.get("angular_cue", "--") if selected else "--",
+            "heave": selected.get("heave_mode", "--") if selected else "--",
+            "neutral_mm": selected.get("neutral_height_delta_mm", 0.0) if selected else 0.0,
+            "base_gains": (tuple(self.telemetry_config.variant_gain_scales)
+                           if self.telemetry_config is not None else (100,) * 6),
+            "intensity_percent": self.intensity_percent,
+            "max_intensity_percent": self.max_intensity_percent,
+            "dynamic_errors": self.dynamic_error_log.count,
+        }
+        if self._dynamic_runtime is not None:
+            base.update(self._dynamic_runtime.snapshot())
+        elif selected and selected.get("dynamic_profile") is not None:
+            base.update(motion_profile="Dynamic", state="INVALID",
+                        fault=self._dynamic_issue or "Profile not verified")
+        else:
+            base.update(motion_profile="Static", state="STATIC", fallback="--")
+        return base
+
     def get_debug_snapshot(self) -> dict:
         """Compact runtime diagnostics; omit values already visible in normal UI."""
         sample = self._last_sample
@@ -1126,6 +1312,9 @@ class PocCore(QtCore.QObject):
         if self.sim_key == "nolimits2" and not getattr(self.sim, "_ride_load_pending", False):
             loaded_variant = self.sim.loaded_variant_label
         return {
+            "dynamic_error_count": self.dynamic_error_log.count,
+            "dynamic_state": (self._dynamic_runtime.status if self._dynamic_runtime else "STATIC"),
+            "dynamic_issue": self._dynamic_issue,
             "processing_percent": self.processing_percent,
             "jitter_percent": self.jitter_percent,
             "processing_max_percent": self.processing_max_percent,
