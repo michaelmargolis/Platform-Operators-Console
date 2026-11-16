@@ -1,6 +1,18 @@
-# platform_geometry.py ver 2
+# platform_geometry.py ver 3
 """Shared floor applicability/geometry setup for live and offline backends."""
 import math
+
+# Conservative commissioning adjustment range; physical geometry itself is fixed.
+MIN_OPERATING_FLOOR_CLEARANCE_MM = 5.0
+MAX_OPERATING_FLOOR_CLEARANCE_MM = 75.0
+
+def validate_operating_floor_clearance(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("minimum operating floor clearance must be numeric")
+    value = float(value)
+    if not math.isfinite(value) or not MIN_OPERATING_FLOOR_CLEARANCE_MM <= value <= MAX_OPERATING_FLOOR_CLEARANCE_MM:
+        raise ValueError(f"floor clearance must be {MIN_OPERATING_FLOOR_CLEARANCE_MM:g}..{MAX_OPERATING_FLOOR_CLEARANCE_MM:g} mm")
+    return value
 
 
 def clearance_settings(cfg):

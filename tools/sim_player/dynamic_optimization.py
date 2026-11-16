@@ -1,3 +1,4 @@
+# dynamic_optimization.py ver 1
 """Bounded offline search for C1, post-washout gain curves.
 
 Uses production POC kinematics. Static midpoint/cue seeds reuse v192's search;

@@ -1,4 +1,4 @@
-#main_window.py  ver 76
+#main_window.py  ver 77
 from __future__ import annotations
 
 import csv
@@ -170,11 +170,82 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setPointSize(10 if self._compact_ui else 11)
         self.txt_profile_state.setFont(font)
         layout.addWidget(self.txt_profile_state)
+        controls = QtWidgets.QHBoxLayout()
+        self.btn_dynamic_import = QtWidgets.QPushButton('Import dynamic candidate ZIP...', tab)
+        self.btn_dynamic_import.setToolTip('Commissioning only. Import an Analyzer-qualified candidate while parked; restart POC to select it.')
+        self.btn_dynamic_import.clicked.connect(self._import_dynamic_candidate)
+        controls.addWidget(self.btn_dynamic_import)
+        self.btn_ground_clearance = QtWidgets.QPushButton('Adjust floor clearance...', tab)
+        self.btn_ground_clearance.setToolTip('Ground-Loading Platform only; change minimum operating clearance when fully deactivated and parked')
+        self.btn_ground_clearance.clicked.connect(self._adjust_ground_clearance)
+        self.btn_ground_clearance.setVisible(self.core.platform_key == 'platform_v2')
+        controls.addWidget(self.btn_ground_clearance)
+        layout.addLayout(controls)
         debug_index = self.tabWidget.indexOf(self.tab_debug)
         if debug_index >= 0:
             self.tabWidget.insertTab(debug_index, tab, "Profile")
         else:
             self.tabWidget.addTab(tab, "Profile")
+
+    def _adjust_ground_clearance(self):
+        if self.core.platform_key != 'platform_v2':
+            return
+        if not self._platform_safe_to_close():
+            QtWidgets.QMessageBox.warning(self, 'Platform active',
+                'Deactivate and fully park before adjusting operating floor clearance.')
+            return
+        old = float(self.config_store.get('ground_loading_min_clearance_mm', 15.0))
+        value, accepted = QtWidgets.QInputDialog.getDouble(
+            self, 'Ground-Loading Platform minimum clearance',
+            'Minimum underside-to-floor clearance while running (mm):',
+            old, 5.0, 75.0, 1)
+        if not accepted or abs(value-old) < 1e-9:
+            return
+        choice = QtWidgets.QMessageBox.question(
+            self, 'Confirm floor clearance change',
+            f'Change the minimum operating clearance from {old:g} to {value:g} mm?\n\n'
+            'This affects dynamic AND static ride workspace limiting. It does not adjust '
+            'CAD geometry or parking. Confirm the physical clearance on the platform '
+            'before running. The value persists across restarts.',
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No)
+        if choice != QtWidgets.QMessageBox.Yes:
+            return
+        try:
+            self.core.set_ground_loading_clearance_mm(value)
+        except (RuntimeError, ValueError, OSError) as exc:
+            QtWidgets.QMessageBox.warning(self, 'Clearance not changed', str(exc))
+        self._update_profile(force=True)
+
+    def _import_dynamic_candidate(self):
+        if not self._platform_safe_to_close():
+            QtWidgets.QMessageBox.warning(self, 'Platform active',
+                'Deactivate and fully park before importing a dynamic candidate.')
+            return
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, 'Import Analyzer-qualified dynamic candidate',
+            str(Path.home()), 'Dynamic candidate package (*.zip)')
+        if not path:
+            return
+        choice = QtWidgets.QMessageBox.question(
+            self, 'Import dynamic candidate',
+            'This adds a new candidate to this platform catalogue without replacing '
+            'existing variants. The qualified recording does NOT constitute physical commissioning. '
+            'Import and restart POC?', QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No)
+        if choice != QtWidgets.QMessageBox.Yes:
+            return
+        try:
+            from core.dynamic_import import import_candidate
+            label, manifest = import_candidate(path, platform_key=self.core.platform_key)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, 'Import rejected', str(exc))
+            return
+        QtWidgets.QMessageBox.information(self, 'Dynamic candidate imported',
+            f'Added candidate: {label}\n\nBundle: {manifest}\n\n'
+            'Restart POC to load the new candidate. If this ride already has a '
+            'preferred variant, the new candidate will be hidden until the review '
+            'status is changed during commissioning.')
 
     def _update_profile(self, force=False):
         if not force and self.tabWidget.currentWidget() is not self.tab_profile:
@@ -193,6 +264,8 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Variant gains  : {pct}",
             f"Ride neutral   : {float(p.get('neutral_mm', 0)):+g} mm",
             f"Intensity      : {p.get('intensity_percent')}%  max={p.get('max_intensity_percent')}%",
+            (f"Floor clearance: minimum {float(p['ground_clearance_mm']):g} mm (operating)"
+             if p.get('ground_clearance_mm') is not None else 'Floor clearance: N/A'),
         ]
         if p.get('motion_profile') == 'Dynamic':
             gains = p.get('gain_percent', ())

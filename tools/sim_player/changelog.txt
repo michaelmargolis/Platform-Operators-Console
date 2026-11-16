@@ -1,4 +1,53 @@
-# changelog.txt ver 6
+# changelog.txt ver 14
+
+MDX Ride Analyzer v0.2.24 - 2026-11-15
+- Keep a Review profile again secondary action available in Prepare/Export states, allowing a previously reviewed dynamic candidate to be reopened without changing its workflow state.
+- Replace the unhelpful post-generation log pane with a generation summary containing result/report paths and candidate qualification/review/preparation state. New generations retain optimiser stdout in analyzer_generation_output.txt; older studies still show the derived summary.
+- No dynamic optimisation, qualification, kinematic, POC runtime or physical-output behaviour changed.
+
+MDX Ride Analyzer v0.2.23 - 2026-11-15
+- Restyle the Dynamic rides - prepare for POC workspace so Source / Generate / Review / Prepare / Export appears as a segmented progress strip rather than five large button-like panels.
+- Add Current step / Next action guidance and constrain action buttons to normal widths so the workflow advances through one clear primary action at a time.
+- Keep source-recording playback, report viewing, dismissal and generation details available as secondary controls without stretching them across the full panel width.
+
+
+MDX Ride Analyzer v0.2.22 - 2026-11-15
+- Redesign Study > Dynamic rides - prepare for POC as a state-driven workflow with Source / Generate / Review / Prepare / Export progress and one prominent next action.
+- Collapse optional source recordings and generation logs by default; expose report/regeneration/dismissal as secondary engineering actions and clearly disable irrelevant controls while generation is active.
+- Recommend qualified Strict profiles per platform first, falling back to Relaxed 5% only when no qualifying Strict candidate is available; replace implementation-oriented candidate labels with human-readable qualification labels.
+- Persist candidate review/preparation state so Return to dynamic study advances naturally from Review to Prepare, and prepared packages expose Open folder / Copy folder path directly.
+- No optimiser, qualification, kinematic, POC runtime or physical-output behaviour changed.
+
+MDX Ride Analyzer v0.2.21 - 2026-11-15
+- Packaging correction: include tools.nl2_timing_study and the full nl2_sync runtime dependency closure used by dynamic profile generation.
+- Add manifest/dependency closure regression coverage so future release staging cannot pass merely because omitted packages happen to exist in the development checkout.
+- Verify the real Blackbird generation path from a stripped staging install through completed profile/report output. No optimisation or motion-processing behavior changed.
+
+
+MDX Ride Analyzer v0.2.20 - 2026-11-15
+- Packaging fix: include tools.nl2_sync_benchmark and tools.nl2_sync.host, which the Phase 1 dynamic replay imports after profile generation starts.
+- Added regression coverage for the complete dynamic-optimizer runtime dependency chain.
+- No optimiser mathematics, qualification thresholds, capture data, POC runtime or physical output behaviour changed.
+
+
+MDX Ride Analyzer v0.2.19 - 2026-11-15
+- Packaging fix: restore the complete Phase 1 dynamic-profile executable module set required by Study > Dynamic rides - prepare for POC.
+- Restored tools.nl2_dynamic_profiles.__main__, replay, evaluate, output and package initializer plus the dynamic_optimizer launcher.
+- Verified the launcher can discover the five Blackbird runs in session_20261114T123551_7fbbb6fe with --list.
+- No optimiser mathematics, qualification rules, motion processing, POC runtime or physical output behaviour changed.
+
+MDX Ride Analyzer v0.2.18 - 2026-11-15
+- Fix source-recording Plot/Overlay after returning from dynamic-profile work: if the selected plot family is unavailable for the newly loaded recording, automatically select 6-DOF motion.
+- Disable Dynamic gain multipliers while a raw/dynamic-source recording is loaded; it becomes available again when a dynamic profile is loaded.
+- Verified the Extended-study Suggested Blackbird recording contains normal six-axis motion and trajectory data; no capture-data repair is required.
+- No motion processing, optimiser, profile generation, POC runtime or physical output behaviour changed.
+
+MDX Ride Analyzer v0.2.17 - 2026-11-15
+- New Study > Dynamic rides - prepare for POC... workflow: rank/select complete study, optionally play a source run, generate profiles without command-line steps, open report, review profiles and return to study.
+- Candidate list supports non-destructive Dismiss/restore. Prepare for POC exports an SHA256-bound candidate ZIP with Analyzer qualification evidence and copies export folder path to clipboard.
+- POC Profile tab imports a qualified candidate while parked without catalogue replacement. The Ground-Loading Platform's operating clearance can be adjusted and persisted within 5..75 mm, independently of candidate selection.
+- Unrelated exact Python source fingerprints/NL2 patch version differences are advisory instead of automatically blocking a qualified profile. Existing integrity, geometry/output and fallback protections remain active.
+- No physical commissioning claim, no bundled dynamic candidate, no acceleration-based hard rejection.
 
 MDX Ride Analyzer v0.2.16 - 2026-11-14
 - Open > Open dynamic source now provides a hover tooltip suitability hint for each primary recording.

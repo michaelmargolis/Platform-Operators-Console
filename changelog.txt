@@ -1,4 +1,53 @@
-# changelog.txt ver 44
+# changelog.txt ver 52
+
+POC v209 / MDX Ride Analyzer v0.2.24 - 2026-11-15
+- Ride Analyzer: keep Review profile again available after a candidate has already been reviewed, so reopening a Prepare/Export-stage workspace never removes access to profile playback.
+- Persist optimiser stdout for new generated profile studies and make the collapsed generation control show a useful summary when reopened: result/report paths plus candidate qualification/review/preparation state; older studies without retained stdout still receive the derived summary.
+- No optimiser, qualification, kinematic, POC runtime or physical-output behaviour changed.
+
+POC v208 / MDX Ride Analyzer v0.2.23 - 2026-11-15
+- Ride Analyzer: restyle the Dynamic rides preparation workspace again so the five workflow stages render as a passive segmented progress strip instead of button-like tiles.
+- Add explicit Current step / Next action guidance, constrain action buttons to normal widths, and visually differentiate selectors from push-buttons so the main Prepare/Review/Generate action is clearer.
+- Optional source-recording and generation-detail sections remain available but no longer read as full-width primary actions. No optimiser, qualification, kinematic, POC runtime or physical-output behaviour changed.
+
+
+POC v207 / MDX Ride Analyzer v0.2.22 - 2026-11-15
+- Ride Analyzer: redesign the Dynamic rides preparation dialog around a visible Source / Generate / Review / Prepare / Export workflow and one context-sensitive primary action.
+- Automatically recommend qualified Strict candidates for each platform, falling back to Relaxed 5% only when needed; preserve alternatives, dismissed candidates, reports and source playback as secondary engineering controls.
+- Remember reviewed/prepared candidate state across Return to dynamic study and show the prepared package path with Open folder / Copy path actions.
+- Generation/source details are collapsed unless needed, and controls that are not meaningful during generation are disabled. No motion-processing or POC runtime behaviour changed.
+
+POC v206 / MDX Ride Analyzer v0.2.21 - 2026-11-15
+- Correct dynamic-profile generation packaging again: include and version-track the complete tools.nl2_timing_study runtime package plus the previously untracked nl2_sync matcher/profile/validation modules required transitively by the Analyzer-managed optimiser.
+- Add a dependency-closure regression test that requires every internal optimiser module to exist and be represented in file_versions.txt. This specifically prevents a development tree from hiding a missing release dependency.
+- Release verification is performed from a stripped v205-style staging tree, then runs the actual Blackbird generation command through completed candidate output. No optimiser mathematics, qualification rules, POC runtime motion or physical output behavior changed.
+
+
+POC v205 / MDX Ride Analyzer v0.2.20 - 2026-11-15
+- Fix remaining dynamic-optimizer packaging dependency: restore the no-network B+C replay package used by tools.nl2_dynamic_profiles.replay once generation begins.
+- Add tools.nl2_sync_benchmark pipeline/runner package and tools.nl2_sync.host as tracked runtime dependencies.
+- Verified the exact Analyzer generation path progresses through Blackbird production replay and into dynamic curve optimisation against session_20261114T123551_7fbbb6fe. No optimiser mathematics, qualification rules or POC motion behaviour changed.
+
+
+POC v204 / MDX Ride Analyzer v0.2.19 - 2026-11-15
+- Fix v202 packaging omission that left the integrated dynamic optimiser launcher without tools.nl2_dynamic_profiles.__main__ and its Phase 1 support modules.
+- Restore and version-track the complete runtime module set needed by the Analyzer-managed dynamic-profile generation workflow.
+- Verified Blackbird study discovery against session_20261114T123551_7fbbb6fe. No dynamic optimisation mathematics or POC motion behaviour changed.
+
+POC v203 / MDX Ride Analyzer v0.2.18 - 2026-11-15
+- Ride Analyzer: fix Plot/Overlay after opening a dynamic-source recording when an unavailable dynamic-profile-only plot was previously selected.
+- Automatically fall back to 6-DOF motion and disable Dynamic gain multipliers until a dynamic profile is loaded.
+- Capture data, optimiser/profile calculations, POC runtime motion and physical output are unchanged.
+
+POC v202 / MDX Ride Analyzer v0.2.17 - 2026-11-15
+- Add Study > Dynamic rides - prepare for POC... for study selection/ranking, optional source playback, managed profile generation, report/review/return, dismissal and one-step qualified ZIP export.
+- Add Study context banner in Analyzer, preserving selected study/ride/platform/profile during Review and return. Source-recording ratings guide playback, not manual reference selection.
+- Export immutable package with SHA256-bound Analyzer qualification evidence for all nominal captures, held-out and static fallback; accept strict and 5%-requested-range candidates, preserving final output and Ground-Loading Platform clearance checks.
+- Add POC Profile > Import dynamic candidate ZIP... to validate a package and atomically merge one candidate without overwriting an existing catalogue. Exact source-code hashes/NL2 minor versions are advisory, while bad/corrupt/missing package data remains a hard rejection.
+- Add Ground-Loading Platform persistent minimum operating floor-clearance adjustment (5..75 mm) while deactivated/parked; existing motion limiting still applies to all variants.
+- Large muscle length steps remain report-only motion realism/response concerns; do not add an acceleration hard-rejection gate.
+- No physical motion safety, force/comfort qualification or native Qt/connected hardware testing is claimed. No dynamic profiles or working catalogues included.
+
 
 POC v201 - Dynamic ride runtime engineering integration - 2026-11-14
 - Both Chair V3 and Ground-Loading Platform: new immutable dynamic profile loader, checksum/source/processing compatibility validation and separate controlled promoter.

@@ -1,4 +1,4 @@
-#config_store.py  ver 8
+#config_store.py  ver 9
 from __future__ import annotations
 
 import ipaddress
@@ -13,6 +13,7 @@ DEFAULTS = {
     "_file_version": CONFIG_FILE_VERSION,
     "selected_sim": "nolimits2",
     "selected_platform": "platform_v2",
+    "ground_loading_min_clearance_mm": 15.0,
     "sim_host_service": {
         "enabled": True,
         "address": "192.168.0.4",
@@ -99,6 +100,11 @@ class ConfigStore:
                 f"Invalid selected_sim {simulator!r} in {self.path}; "
                 f"expected one of: {', '.join(sorted(simulator_keys))}"
             )
+        from core.platform_geometry import validate_operating_floor_clearance
+        try:
+            validate_operating_floor_clearance(data.get('ground_loading_min_clearance_mm'))
+        except ValueError as exc:
+            raise RuntimeError(f'Invalid ground-loading clearance in {self.path}: {exc}') from exc
         self._validate_endpoint(
             data.get("sim_host_service"), "sim_host_service", allow_disabled=False
         )

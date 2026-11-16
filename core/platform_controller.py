@@ -1,4 +1,4 @@
-#platform_controller.py  ver 19
+#platform_controller.py  ver 20
 from __future__ import annotations
 
 import importlib
@@ -6,7 +6,7 @@ import logging
 import math
 from typing import Callable, Sequence
 
-from core.platform_geometry import clearance_settings, configure_workspace
+from core.platform_geometry import clearance_settings, configure_workspace, validate_operating_floor_clearance
 from core.ride_neutral import validated_ride_neutral_delta, real_heave_for_physical_height
 from core.types import PlatformState, PlatformMotionState
 
@@ -165,6 +165,24 @@ class SopPlatformBackend:
             for x, y in self._workspace_hull_xy
         )
         return float(lowest_z - self._workspace_floor_z)
+
+    def set_minimum_operating_floor_clearance_mm(self, value):
+        """Change only active-ride floor protection, not CAD/parking geometry.
+
+        The calling PocCore ensures parked/deactivated before adjustment.
+        Recheck the currently selected neutral offset before accepting it.
+        """
+        value = validate_operating_floor_clearance(value)
+        if not self._workspace_hull_xy or self.workspace_limit_mode != 'geometry':
+            raise ValueError('Adjustable floor clearance is only available for the Ground-Loading Platform')
+        old = self._workspace_min_floor_clearance
+        try:
+            self._workspace_min_floor_clearance = value
+            self.set_ride_neutral_height_delta_mm(self.ride_neutral_height_delta_mm)
+        except Exception:
+            self._workspace_min_floor_clearance = old
+            raise
+        return value
 
     def _apply_floor_limit(self, transform: Sequence[float]):
         candidate = [float(value) for value in transform]

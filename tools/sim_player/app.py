@@ -1,4 +1,4 @@
-# app.py ver 11
+# app.py ver 13
 """MDX Ride Analyzer: offline ride-analysis controller (PyQt6 only).
 
 UI layout is in player_ui.py; presentation panels in panels.py. This module
@@ -32,7 +32,7 @@ from .variant_presets import (
 )
 from .platform_selection import initial_platform_key, platform_metadata
 from sims.nolimits2.variant_store import VariantStore
-from .task_workspace_models import with_washout
+from .task_workspace_models import with_washout, plot_series, resolve_plot_key
 from .panel_state import muscle_bar_state, transform_readout
 from .tuning import (
     DEFAULT_GAINS, ExperimentSettings, load_experiment, save_experiment,
@@ -115,6 +115,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.has_video = False
         self.video_offset_s = 0.0
         self.settings = QSettings("MDXSAT", "sim_player")
+        self._dynamic_ride_context = {}
         self._init_canonical_media()
         self.visualizer_settings = load_visualizer_settings(self.settings)
         self.task_mode = "review"
@@ -323,6 +324,38 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         key = self.plot_choice_box.currentData()
         self.plot_canvas.set_plot_key(key)
         self.overlay_plot.set_plot_key(key)
+
+    def _refresh_plot_availability(self, recording=None):
+        """Keep the plot selector compatible with the loaded recording.
+
+        A raw/dynamic-source recording has no dynamic multiplier series. If the
+        previous review left that plot selected, fall back to 6-DOF motion and
+        disable unavailable plot families rather than showing an empty graph.
+        """
+        recording = recording if recording is not None else self.recording
+        available = set()
+        for index in range(self.plot_choice_box.count()):
+            key = self.plot_choice_box.itemData(index)
+            if plot_series(recording, key):
+                available.add(key)
+            model = self.plot_choice_box.model()
+            item = model.item(index) if hasattr(model, 'item') else None
+            if item is not None:
+                item.setEnabled(key in available)
+                if key == 'profile_gains' and key not in available:
+                    item.setToolTip('Available after a dynamic motion profile is loaded')
+                else:
+                    item.setToolTip('')
+        current = self.plot_choice_box.currentData()
+        if current not in available:
+            fallback = resolve_plot_key(recording, current, 'all_axes')
+            if fallback is None:
+                fallback = next(iter(available), None)
+            if fallback is not None:
+                index = self.plot_choice_box.findData(fallback)
+                if index >= 0:
+                    self.plot_choice_box.setCurrentIndex(index)
+        return available
 
     def _refresh_workspace_selectors(self):
         if hasattr(self, 'workspace_ride_box'):
@@ -830,7 +863,44 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         dialog.capture_started.connect(lambda: self._set_playing(False))
         result = dialog.exec()
         if result == QDialog.DialogCode.Accepted and dialog.open_recording_path is not None:
+            from .dynamic_source_rating import _find_session_dir
+            from .dynamic_ride_studies import recording_ride
+            session = _find_session_dir(dialog.open_recording_path)
+            if session:
+                self._dynamic_ride_context.update(session=str(session),
+                                                 ride=recording_ride(dialog.open_recording_path) or 'blackbird')
+                self._update_dynamic_study_banner()
             self.open_capture(dialog.open_recording_path)
+
+    def open_dynamic_ride_workspace(self):
+        """One entry point for source selection, optimisation, review and export."""
+        from .dynamic_ride_workspace import DynamicRideWorkspace
+        if self.loading or (self.worker is not None and self.worker.isRunning()):
+            self.statusBar().showMessage('Complete the current Analyzer load first', 3500)
+            return
+        dialog = DynamicRideWorkspace(self.settings, self, context=self._dynamic_ride_context)
+        outcome = dialog.exec()
+        self._dynamic_ride_context = dict(dialog.context)
+        self._update_dynamic_study_banner()
+        if outcome != QDialog.DialogCode.Accepted:
+            return
+        if dialog.action == 'recording' and dialog.selected_path:
+            self.open_capture(dialog.selected_path)
+        elif dialog.action == 'profile' and dialog.selected_path:
+            self._open_initial_path(dialog.selected_path)
+
+    def _update_dynamic_study_banner(self):
+        banner = getattr(self, 'dynamic_study_banner', None)
+        if banner is None:
+            return
+        session = self._dynamic_ride_context.get('session')
+        banner.setVisible(bool(session))
+        if session:
+            label = Path(str(session)).name
+            self.dynamic_study_context_label.setText(
+                f'Dynamic study: {label}  /  {self._dynamic_ride_context.get("ride", "")}' )
+        if hasattr(self, 'return_to_dynamic_study_action'):
+            self.return_to_dynamic_study_action.setEnabled(bool(session))
 
     def pick_dynamic_source(self):
         """Open a primary recording from a completed dynamic-source study."""
@@ -847,7 +917,15 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         if dialog.exec():
             selected = dialog.selectedFiles()
             if selected and is_dynamic_source_recording_csv(Path(selected[0]).name):
-                self.open_capture(Path(selected[0]))
+                from .dynamic_source_rating import _find_session_dir
+                from .dynamic_ride_studies import recording_ride
+                source = Path(selected[0])
+                session = _find_session_dir(source)
+                if session:
+                    self._dynamic_ride_context.update(session=str(session),
+                                                     ride=recording_ride(source) or 'blackbird')
+                    self._update_dynamic_study_banner()
+                self.open_capture(source)
 
     def pick_capture(self):
         directory = str(self.settings.value("last_directory", str(Path.cwd() / "captures")))
@@ -1118,6 +1196,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.video_offset_s = recording.video_offset_s
         self.sync_label.setText(recording.sync_source)
         self.sync_label.setToolTip(recording.sync_source + ("\n" + recording.diagnostics if recording.diagnostics else ""))
+        self._refresh_plot_availability(recording)
         self.plot_canvas.set_recording(recording)
         self.overlay_plot.set_recording(recording)
         self._refresh_workspace_selectors()

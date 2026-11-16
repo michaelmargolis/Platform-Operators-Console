@@ -1,4 +1,4 @@
-#poc_core.py  ver 57
+#poc_core.py ver 58
 from __future__ import annotations
 
 import logging
@@ -93,6 +93,9 @@ class PocCore(QtCore.QObject):
             platform_def["sop_config_module"],
             platform_def.get("festo_ip", "192.168.0.10"),
         )
+        if self.platform_key == 'platform_v2':
+            platform_backend.set_minimum_operating_floor_clearance_mm(
+                float(self.config_store.get('ground_loading_min_clearance_mm', 15.0)))
         # Check visible ride-only offsets against this platform before starting
         # the simulator or accepting any activation. Invalid candidates must
         # be corrected offline rather than failing during a 20 Hz motion tick.
@@ -1277,6 +1280,25 @@ class PocCore(QtCore.QObject):
     def estop_latched(self) -> bool:
         return bool(self._estop_latched)
 
+    def set_ground_loading_clearance_mm(self, clearance_mm):
+        """Persist operating clearance, but only while fully deactivated and parked."""
+        from core.platform_geometry import validate_operating_floor_clearance
+        value = validate_operating_floor_clearance(clearance_mm)
+        if self.platform_key != 'platform_v2':
+            raise ValueError('Operating floor clearance applies only to Ground-Loading Platform')
+        if self.platform.state is not PlatformState.DEACTIVATED or not self.platform.parked:
+            raise RuntimeError('Deactivate and fully park the platform before changing clearance')
+        backend = self.platform.backend
+        previous = backend._workspace_min_floor_clearance
+        backend.set_minimum_operating_floor_clearance_mm(value)
+        try:
+            self.config_store.set('ground_loading_min_clearance_mm', value)
+        except Exception:
+            backend.set_minimum_operating_floor_clearance_mm(previous)
+            raise
+        self.message.emit(f'Ground-loading minimum operating floor clearance: {value:g} mm (persistent)')
+        return value
+
     def get_profile_snapshot(self) -> dict:
         """Pure diagnostic projection; does not drive any output hardware."""
         selected = (self.sim.loaded_variant_snapshot() if self.sim_key == "nolimits2"
@@ -1284,6 +1306,8 @@ class PocCore(QtCore.QObject):
                     not getattr(self.sim, "_ride_load_pending", False) else None)
         base = {
             "platform": self.platform_name,
+            "ground_clearance_mm": (self.platform.backend._workspace_min_floor_clearance
+                                      if self.platform_key == 'platform_v2' else None),
             "label": selected.get("label", "--") if selected else "--",
             "cue": selected.get("angular_cue", "--") if selected else "--",
             "heave": selected.get("heave_mode", "--") if selected else "--",

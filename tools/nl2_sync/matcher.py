@@ -1,3 +1,4 @@
+# matcher.py ver 1
 """Causal B+C: local XYZ segment projection, quaternion fallback at low speed.
 
 Reference arrays may look ahead (they are a prerecorded ride). Live observations

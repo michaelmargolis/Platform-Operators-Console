@@ -1,5 +1,5 @@
-#file_versions.txt  ver 198
-# Application baseline: v201 dynamic ride runtime engineering + Ride Analyzer v0.2.16
+#file_versions.txt  ver 205
+# Application baseline: v209 dynamic workflow reopen/summary UX + Ride Analyzer v0.2.24
 # Relative path | expected version
 config/platforms.py|7
 controls/__init__.py|1
@@ -7,10 +7,10 @@ controls/serial_remote.py|1
 controls/buttons.py|1
 controls/rotary_encoder.py|1
 controls/physical_controls.py|7
-core/config_store.py|8
+core/config_store.py|9
 core/digital_twin.py|2
-core/poc_core.py|57
-core/platform_controller.py|19
+core/poc_core.py|58
+core/platform_controller.py|20
 kinematics/cfg_SuspendedPlatformMdx.py|5
 kinematics/cfg_SuspendedChairFalcon.py|1
 kinematics/cfg_SuspendedChair.py|6
@@ -75,7 +75,7 @@ tests/test_telemetry_config.py|4
 tests/test_operator_status.py|4
 tests/test_ui_layout.py|11
 tests/test_sim_registry.py|1
-ui/main_window.py|76
+ui/main_window.py|77
 ui/poc_main.ui|15
 ui/poc_main_800x480.ui|18
 ui/ui_widgets.py|7
@@ -108,9 +108,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|44
-README.md|18
-file_versions.txt|198
+changelog.txt|52
+README.md|19
+file_versions.txt|205
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -144,7 +144,7 @@ sims/nolimits2/ride_config.py|8
 sims/nolimits2/angular_cues.py|1
 tests/test_ride_variants_v176.py|3
 tests/test_ride_labels_v177.py|1
-core/platform_geometry.py|2
+core/platform_geometry.py|3
 sims/nolimits2/ride_variants/.gitignore|1
 sims/nolimits2/variant_store.py|5
 tests/conftest.py|1
@@ -155,12 +155,12 @@ tests/test_variant_migration_v178.py|1
 tests/test_variant_selection_v178.py|3
 tests/test_variant_store_v178.py|2
 tools/migrate_nl2_variants.py|1
-tools/sim_player/__init__.py|8
+tools/sim_player/__init__.py|15
 tools/sim_player/__main__.py|1
 tools/sim_player/angular_cues.py|1
 tools/sim_player/anomaly_detection.py|2
 tools/sim_player/anomaly_panel.py|1
-tools/sim_player/app.py|11
+tools/sim_player/app.py|13
 tools/sim_player/candidate_browser.py|3
 tools/sim_player/candidate_review.py|2
 tools/sim_player/candidate_workflow.py|3
@@ -174,7 +174,7 @@ tools/sim_player/muscle_extrema.py|2
 tools/sim_player/options_dialog.py|2
 tools/sim_player/panels.py|5
 tools/sim_player/platform_selection.py|2
-tools/sim_player/player_ui.py|8
+tools/sim_player/player_ui.py|9
 tools/sim_player/recording.py|5
 tools/sim_player/settings.py|1
 tools/sim_player/tests/conftest.py|1
@@ -252,22 +252,73 @@ tools/sim_player/study_bundle.py|2
 tools/sim_player/tests/test_optimizer_v192.py|1
 
 # MDX Ride Analyzer v0.2.11 additions / newly version-tracked current files
-tools/sim_player/README.md|6
+tools/sim_player/README.md|12
 tools/sim_player/canonical_dialog.py|2
 tools/sim_player/canonical_media.py|1
 tools/sim_player/canonical_rides/README.md|1
-tools/sim_player/changelog.txt|6
+tools/sim_player/changelog.txt|14
+tools/sim_player/dynamic_optimizer.py|1
+tools/sim_player/dynamic_optimization.py|1
+tools/sim_player/tests/test_dynamic_optimizer_packaging_v204.py|1
 tools/sim_player/dynamic_review.py|1
 tools/sim_player/dynamic_source.py|4
 tools/sim_player/dynamic_source_dialog.py|4
 tools/sim_player/dynamic_browser.py|1
 tools/sim_player/dynamic_workflow.py|1
 tools/sim_player/tests/test_dynamic_source_capture_v0211.py|4
-tools/sim_player/tests/test_workspace_menu_contract_v022.py|3
+tools/sim_player/tests/test_workspace_menu_contract_v022.py|4
 tools/sim_player/workspace_help.py|1
-tools/sim_player/workspace_help_content.py|6
-core/dynamic_profiles.py|1
-tools/nl2_dynamic_profiles/promote.py|1
-tests/test_dynamic_runtime_v201.py|1
+tools/sim_player/workspace_help_content.py|8
+core/dynamic_profiles.py|2
+tools/nl2_dynamic_profiles/__init__.py|1
+tools/nl2_dynamic_profiles/__main__.py|1
+tools/nl2_dynamic_profiles/replay.py|1
+tools/nl2_dynamic_profiles/evaluate.py|1
+tools/nl2_dynamic_profiles/output.py|1
+tools/nl2_dynamic_profiles/promote.py|2
+tests/test_dynamic_runtime_v201.py|2
 tests/test_dynamic_core_equivalence_v201.py|1
-docs/POC_DYNAMIC_RUNTIME_V201.md|1
+docs/POC_DYNAMIC_RUNTIME_V201.md|2
+
+# POC v202 / Analyzer v0.2.17 dynamic preparation and import
+core/dynamic_qualification.py|1
+core/dynamic_import.py|1
+tools/nl2_dynamic_profiles/package.py|1
+tools/sim_player/dynamic_ride_studies.py|1
+tools/sim_player/dynamic_ride_workspace.py|4
+tests/test_dynamic_candidate_import_v202.py|1
+tests/test_dynamic_clearance_v202.py|1
+tools/sim_player/tests/test_dynamic_study_workspace_v202.py|1
+docs/POC_DYNAMIC_PREPARATION_V202.md|1
+tools/sim_player/tests/test_plot_compatibility_v203.py|1
+tools/sim_player/task_workspace_models.py|1
+tools/nl2_sync_benchmark/__init__.py|1
+tools/nl2_sync_benchmark/pipeline.py|1
+tools/nl2_sync_benchmark/runner.py|1
+tools/nl2_sync/host.py|1
+tools/sim_player/tests/test_dynamic_optimizer_dependencies_v205.py|1
+
+# v206 dynamic-optimizer complete dependency closure
+tools/nl2_timing_study/__init__.py|1
+tools/nl2_timing_study/__main__.py|1
+tools/nl2_timing_study/analysis.py|1
+tools/nl2_timing_study/capture.py|1
+tools/nl2_timing_study/clock.py|1
+tools/nl2_timing_study/common.py|1
+tools/nl2_timing_study/presets.py|1
+tools/nl2_timing_study/protocol.py|1
+tools/nl2_timing_study/quality.py|1
+tools/nl2_timing_study/report_extra.py|1
+tools/nl2_timing_study/system_info.py|1
+tools/nl2_sync/__init__.py|1
+tools/nl2_sync/matcher.py|1
+tools/nl2_sync/profile.py|1
+tools/nl2_sync/validation.py|1
+tools/nl2_sync_benchmark/__main__.py|1
+sims/nolimits2/__init__.py|1
+tools/sim_player/tests/test_dynamic_optimizer_dependency_closure_v206.py|1
+# v207 dynamic preparation UX
+tools/sim_player/dynamic_workflow_state.py|1
+tools/sim_player/tests/test_dynamic_workflow_state_v207.py|2
+
+tools/sim_player/tests/test_dynamic_workflow_reopen_v209.py|1

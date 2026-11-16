@@ -1,3 +1,4 @@
+# host.py ver 1
 """Best-effort local host metadata, collected OUTSIDE timed processing."""
 from __future__ import annotations
 import json

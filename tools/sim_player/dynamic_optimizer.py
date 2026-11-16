@@ -1,3 +1,4 @@
+# dynamic_optimizer.py ver 1
 """Convenient CLI alongside the existing static optimiser; no player UI change."""
 from tools.nl2_dynamic_profiles.__main__ import main
 

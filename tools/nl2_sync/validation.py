@@ -1,3 +1,4 @@
+# validation.py ver 1
 """Offline causal replay and checkpoint consistency (not independent ground truth)."""
 from __future__ import annotations
 from collections import Counter

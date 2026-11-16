@@ -1,3 +1,4 @@
+# task_workspace_models.py ver 1
 """Small, GUI-free helpers for the task-oriented Sim Player inspector.
 
 Research washout overrides are ephemeral snapshots. No live configuration or
@@ -95,6 +96,19 @@ def plot_series(recording, key):
     if key == 'sync_offset':
         return (('Video offset', tuple(float(recording.video_offset_s) for _ in recording.frames)),)
     return ()
+
+
+def resolve_plot_key(recording, requested, fallback='all_axes'):
+    """Return a plot key that actually has data for *recording*.
+
+    This keeps UI state from a previous dynamic-profile review from selecting a
+    profile-only plot after a raw/dynamic-source recording is opened.
+    """
+    if requested is not None and plot_series(recording, requested):
+        return requested
+    if fallback is not None and plot_series(recording, fallback):
+        return fallback
+    return None
 
 
 def plot_unit(key):

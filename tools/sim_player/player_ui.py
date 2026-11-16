@@ -1,4 +1,4 @@
-# player_ui.py ver 8
+# player_ui.py ver 9
 """Construction of MDX Ride Analyzer's dockable Qt6 main window.
 
 Only widgets, menus, layouts and signal wiring live here.  ReplayWindow in
@@ -51,6 +51,19 @@ class PlayerUiMixin(CanonicalVideoMixin, DynamicProfileWorkflowMixin, CandidateR
         self.ride_label = QLabel("RIDE ANALYZER / OPEN A RIDE CAPTURE", self)
         self.ride_label.setObjectName("rideTitle")
         self.ride_label.hide()
+        # Contextual return path when replay/review originated in a dynamic study.
+        self.dynamic_study_banner = QWidget()
+        return_layout = QHBoxLayout(self.dynamic_study_banner)
+        return_layout.setContentsMargins(4, 1, 4, 1)
+        return_layout.addWidget(QLabel('DYNAMIC STUDY'))
+        self.dynamic_study_context_label = QLabel('')
+        return_layout.addWidget(self.dynamic_study_context_label, 1)
+        self.return_study_button = QPushButton('Return to dynamic study')
+        self.return_study_button.clicked.connect(self.open_dynamic_ride_workspace)
+        return_layout.addWidget(self.return_study_button)
+        layout.addWidget(self.dynamic_study_banner)
+        self.dynamic_study_banner.hide()
+
         self.twin_status = QLabel("TWIN OFF", self)
         self.twin_status.setObjectName("twinStatus")
         self.twin_status.hide()
@@ -615,6 +628,16 @@ class PlayerUiMixin(CanonicalVideoMixin, DynamicProfileWorkflowMixin, CandidateR
         )
         self.capture_dynamic_source_action.triggered.connect(self.capture_dynamic_source)
         self.study_menu.addAction(self.capture_dynamic_source_action)
+        self.study_menu.addSeparator()
+        self.dynamic_ride_workspace_action = QAction('Dynamic rides - prepare for POC...', self)
+        self.dynamic_ride_workspace_action.setToolTip('Select a study, generate profiles, review and prepare a qualified candidate package')
+        self.dynamic_ride_workspace_action.triggered.connect(self.open_dynamic_ride_workspace)
+        self.study_menu.addAction(self.dynamic_ride_workspace_action)
+        self.return_to_dynamic_study_action = QAction('Return to dynamic study...', self)
+        self.return_to_dynamic_study_action.setEnabled(False)
+        self.return_to_dynamic_study_action.triggered.connect(self.open_dynamic_ride_workspace)
+        self.study_menu.addAction(self.return_to_dynamic_study_action)
+
 
         self.save_review_session_action = QAction("Save candidate review...", self)
         self.save_review_session_action.triggered.connect(self.save_review_session)

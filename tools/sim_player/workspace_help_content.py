@@ -1,4 +1,4 @@
-# workspace_help_content.py ver 6
+# workspace_help_content.py ver 8
 """Built-in help for the task workspace; no Qt or processing dependencies.
 
 Topics follow the recovered Qt prototype's six-tab help. Descriptions refer
@@ -77,6 +77,29 @@ destination and settings.</p>
 <p>Use the Platform, Ride and Candidate selectors for the current review.
 An A/B review stays within its selected platform. Open another review to change
 that pairing; an archived candidate is not silently reinterpreted for another platform.</p>
+<h3>Dynamic ride preparation (v0.2.22)</h3>
+<p><b>Study &gt; Dynamic rides - prepare for POC...</b> is a guided workflow.
+A progress strip shows <b>Source / Generate / Review / Prepare / Export</b> for
+the selected candidate and the <b>Next step</b> panel presents one primary action.
+Choose a complete study (best-quality first), the ride and target platform(s).
+Individual source playback is optional and is collapsed by default because the
+optimiser automatically selects its reference, fit and independent held-out
+recordings from the complete study.</p>
+<p>After generation, Analyzer recommends a qualified <b>Strict</b> profile for
+each platform when available; <b>Relaxed 5%</b> is recommended only when no
+qualifying Strict candidate is available. The generation report, regeneration,
+dismiss/restore and source recordings remain available as secondary engineering
+actions. Open <b>Review selected profile</b> in normal Analyzer playback, then use
+<b>Return to dynamic study</b>; the workflow advances to <b>Prepare for POC</b>.
+Generation details collapse after success and reopen automatically while running
+or after a failure.</p>
+<p>Preparation checks complete nominal/fallback/independent validation and the
+platform-specific fixed 5% muscle-request allowance. It writes a qualified
+candidate ZIP, copies the export folder path to the clipboard and changes the
+primary action to <b>Open package folder</b>. Copy that ZIP to POC; in the POC
+<b>Profile</b> tab, use <b>Import dynamic candidate ZIP...</b> while fully
+parked/deactivated. No terminal commands or catalogue-file overwrite are needed.
+Engineering qualification is not physical commissioning.</p>
 <h3>Dynamic studies</h3>
 <p><b>Study &gt; Capture dynamic source...</b> launches the existing local NoLimits
 capture workflow in a modal dialog. A dynamic study contains repeated

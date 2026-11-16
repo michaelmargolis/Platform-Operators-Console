@@ -1,4 +1,4 @@
-# test_workspace_menu_contract_v022.py ver 3
+# test_workspace_menu_contract_v022.py ver 4
 """Execute the actual menu-builder with minimal non-Qt doubles.
 
 These test action wiring and state, NOT Qt painting, sizing or event dispatch.
@@ -103,7 +103,7 @@ def menu_host():
              'save_dynamic_review', 'save_variant_entry', 'show_settings', 'close',
              '_display_current', 'restore_default_layout', 'show_all_panels',
              'show_workspace_help', 'about', 'manage_canonical_video', '_canonical_toggled',
-             'capture_dynamic_source')
+             'capture_dynamic_source', 'open_dynamic_ride_workspace')
     for name in names:
         setattr(host, name, Mock())
     host._canonical_enabled = True
@@ -152,6 +152,8 @@ def test_study_menu_exposes_dynamic_source_capture_without_toolbar_button():
     host = menu_host()
     actions(host.study_menu)['Capture dynamic source...'].triggered.emit()
     host.capture_dynamic_source.assert_called_once_with()
+    actions(host.study_menu)['Dynamic rides - prepare for POC...'].triggered.emit()
+    host.open_dynamic_ride_workspace.assert_called_once_with()
     assert not hasattr(host, 'dynamic_source_button')
 
 

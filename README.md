@@ -1,4 +1,4 @@
-<!-- README.md ver 18 -->
+<!-- README.md ver 19 -->
 # Platform Operators Console
 
 The Platform Operators Console (POC) is the Raspberry Pi operator console for
@@ -8,6 +8,20 @@ telemetry processing, platform kinematics, Festo pressure output and
 
 The live Raspberry Pi installation is `/home/poc/Runtime` and starts as a
 desktop-autostart application. It is not installed as a system service.
+
+## POC v202 / MDX Ride Analyzer v0.2.17 dynamic workflow (engineering)
+
+Ride Analyzer now has a complete **Study > Dynamic rides - prepare for POC...**
+workflow: select/rank a study, generate a profile, inspect the report, replay,
+prepare/export a qualified ZIP, then import in POC's Profile tab without
+command-line promotion or overwriting a working ride catalogue. V202 requires
+an Analyzer qualification report; strict SHA256 integrity still applies to
+bundle files, but unrelated Python source byte and NL2 version differences
+are advisory. A Ground-Loading Platform-only Profile control adjusts the
+persistent minimum operating underside-to-floor clearance while fully parked
+and deactivated. See `docs/POC_DYNAMIC_PREPARATION_V202.md`.
+
+This is an **engineering release, not physical commissioning approval**.
 
 ## v201 - Experimental dynamic ride runtime (engineering integration only)
 

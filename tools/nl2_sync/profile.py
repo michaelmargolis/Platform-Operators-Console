@@ -1,3 +1,4 @@
+# profile.py ver 1
 """Validated, offline research motion profiles. No hardware or file I/O per tick.
 
 Six non-negative multipliers are applied AFTER TelemetryConfig.process and
