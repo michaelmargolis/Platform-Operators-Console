@@ -60,8 +60,13 @@ def test_workflow_stage_advances_in_one_direction_for_selected_candidate():
 def test_workspace_source_contract_is_guided_not_flat_button_grid():
     source = (Path(__file__).parents[1] / 'dynamic_ride_workspace.py').read_text(encoding='utf-8')
     assert "('1 Source', '2 Generate', '3 Review', '4 Prepare', '5 Export')" in source
+    assert 'class WorkflowProgressStrip(QWidget):' in source
+    assert 'self.progress_strip = WorkflowProgressStrip(self)' in source
+    assert 'Current step:' in source
+    assert 'Next action:' in source
     assert 'self.primary_btn = QPushButton()' in source
-    assert 'Source recordings (optional)' in source
+    assert 'self.primary_btn.setMaximumWidth(280)' in source
+    assert 'self.source_toggle.setMaximumWidth(320)' in source
     assert 'Show generation details' in source
     assert 'Prepared package: none' not in source
     assert 'Recommended for this platform' in source
