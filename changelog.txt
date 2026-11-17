@@ -1,4 +1,10 @@
-# changelog.txt ver 52
+# changelog.txt ver 53
+
+
+POC v210 - Raspberry Pi shell line-ending protection - 2026-11-17
+- Re-issue all Pi-facing shell scripts with Unix LF line endings and preserved executable permissions. No shell-script runtime logic changed.
+- Add repository-root .gitattributes with *.sh text eol=lf so Git checkouts on Windows retain executable shell scripts in Linux-compatible form.
+- Track .gitattributes in file_versions.txt. This prevents CRLF shebang corruption that can produce /bin/bash^M / "cannot execute: required file not found" on the Raspberry Pi.
 
 POC v209 / MDX Ride Analyzer v0.2.24 - 2026-11-15
 - Ride Analyzer: keep Review profile again available after a candidate has already been reviewed, so reopening a Prepare/Export-stage workspace never removes access to profile playback.

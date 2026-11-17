@@ -1,6 +1,7 @@
-#file_versions.txt  ver 205
-# Application baseline: v209 dynamic workflow reopen/summary UX + Ride Analyzer v0.2.24
+#file_versions.txt  ver 206
+# Application baseline: v210 Raspberry Pi shell line-ending protection + Ride Analyzer v0.2.24
 # Relative path | expected version
+.gitattributes|1
 config/platforms.py|7
 controls/__init__.py|1
 controls/serial_remote.py|1
@@ -108,9 +109,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|52
+changelog.txt|53
 README.md|19
-file_versions.txt|205
+file_versions.txt|206
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
