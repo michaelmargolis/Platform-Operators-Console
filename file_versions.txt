@@ -1,5 +1,5 @@
-#file_versions.txt  ver 213
-# Application baseline: v216 dynamic existing-profile visibility + Ride Analyzer v0.2.28
+#file_versions.txt  ver 214
+# Application baseline: v217 SHS startup installer path confirmation + Ride Analyzer v0.2.28
 # Relative path | expected version
 .gitattributes|1
 config/platforms.py|7
@@ -38,7 +38,7 @@ sim_host_service/sims/nolimits2.bat|1
 sim_host_service/sims/spacecoaster.bat|1
 sim_host_service/windows/README.md|6
 sim_host_service/windows/configure_shs_firewall.ps1|1
-sim_host_service/windows/install_shs_startup.ps1|3
+sim_host_service/windows/install_shs_startup.ps1|4
 sim_host_service/windows/start_shs.cmd|3
 sims/nolimits2/config.py|18
 sims/nolimits2/nl2_protocol.py|23

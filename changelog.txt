@@ -1,4 +1,10 @@
-# changelog.txt ver 59
+# changelog.txt ver 60
+
+POC v217 - SHS startup installer path confirmation - 2026-11-19
+- SHS startup installer now displays the resolved repository DRIVE and ROOT on separate prominent lines, plus the full checkout path, start_shs.cmd target and Startup shortcut destination before making any change.
+- Require explicit Y/YES confirmation before creating or updating the Startup shortcut. Any other response cancels cleanly without changing the shortcut.
+- Existing shortcut creation remains idempotent: rerunning the installer updates the same POC Sim Host Service.lnk rather than creating duplicates.
+
 
 POC v216 / MDX Ride Analyzer v0.2.28 - Existing dynamic-profile visibility and explicit reuse - 2026-11-17
 - Make previous dynamic generation visible on the Source page instead of silently changing the primary action. Ride rows now summarize retained Chair/Ground state, and each platform checkbox shows Partial/Generated/Reviewed/Exported plus the profile-set timestamp/name with the full path in its tooltip.

@@ -1,4 +1,4 @@
-# install_shs_startup.ps1 ver 3
+# install_shs_startup.ps1 ver 4
 [CmdletBinding()]
 param()
 
@@ -9,9 +9,40 @@ $startScript = Join-Path $windowsDir 'start_shs.cmd'
 $iconPath = Join-Path $windowsDir 'poc_shs.ico'
 $startupDir = [Environment]::GetFolderPath('Startup')
 $shortcutPath = Join-Path $startupDir 'POC Sim Host Service.lnk'
-
 if (-not (Test-Path $startScript -PathType Leaf)) {
     throw "SHS start script not found: $startScript"
+}
+
+$drive = Split-Path -Qualifier $shsRoot
+if ([string]::IsNullOrWhiteSpace($drive)) {
+    $driveDisplay = '(no drive letter - network/UNC path)'
+    $rootDisplay = $shsRoot
+}
+else {
+    $driveDisplay = $drive
+    $rootDisplay = $shsRoot.Substring($drive.Length)
+    if ([string]::IsNullOrWhiteSpace($rootDisplay)) {
+        $rootDisplay = '\'
+    }
+}
+
+Write-Host ''
+Write-Host '============================================================'
+Write-Host ' SHS STARTUP INSTALL LOCATION'
+Write-Host '============================================================'
+Write-Host (" DRIVE : {0}" -f $driveDisplay) -ForegroundColor Yellow
+Write-Host (" ROOT  : {0}" -f $rootDisplay) -ForegroundColor Yellow
+Write-Host '------------------------------------------------------------'
+Write-Host (" FULL  : {0}" -f $shsRoot) -ForegroundColor Cyan
+Write-Host (" TARGET: {0}" -f $startScript)
+Write-Host (" STARTUP SHORTCUT: {0}" -f $shortcutPath)
+Write-Host '============================================================'
+Write-Host ''
+
+$confirmation = Read-Host 'Install/update the SHS startup shortcut using this location? [y/N]'
+if ($confirmation -notmatch '^(?i:y|yes)$') {
+    Write-Host 'Installation cancelled. No startup shortcut was changed.'
+    exit 0
 }
 
 try {
@@ -23,7 +54,6 @@ try {
 catch {
     throw 'Python 3.10 or later and the Python Launcher are required. Install a supported 64-bit Python 3 release, including the launcher, then rerun this script.'
 }
-
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = $startScript
@@ -32,7 +62,6 @@ $shortcut.Description = 'Start the Platform Operators Console Simulator Host Ser
 $shortcut.IconLocation = "$iconPath,0"
 $shortcut.WindowStyle = 7
 $shortcut.Save()
-
 Write-Host "Python $pythonVersion found."
 Write-Host "Created startup shortcut: $shortcutPath"
 Write-Host ''
