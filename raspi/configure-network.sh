@@ -1,5 +1,5 @@
 #!/bin/bash
-# configure-network.sh  ver 5
+# configure-network.sh  ver 6
 set -euo pipefail
 
 PLATFORM_PROFILE="POC Platform Static"
@@ -14,7 +14,6 @@ is_ssh_session() {
     if [[ -n "${SSH_CONNECTION:-}" || -n "${SSH_CLIENT:-}" || -n "${SSH_TTY:-}" ]]; then
         return 0
     fi
-
     # sudo commonly removes SSH_* variables. Process ancestry remains
     # available and prevents an accidental network cut-off in that case.
     local pid="${PPID:-0}"
@@ -33,12 +32,12 @@ is_ssh_session() {
 }
 
 usage() {
-    cat <<'EOF'
+    cat <<'USAGE'
 Usage: sudo ./raspi/configure-network.sh [--force] [--defer-activation]
 
   --force               allow immediate activation while running over SSH
   --defer-activation    write profiles now; activate them on the next boot
-EOF
+USAGE
 }
 
 while (($#)); do
@@ -111,34 +110,9 @@ confirm_default_yes() {
     esac
 }
 
-update_platform_mac() {
-    local new_mac="$1"
-    local config_temp owner_id group_id file_mode
-    config_temp="$(mktemp "${CONFIG_FILE}.poc.XXXXXX")"
-    owner_id="$(stat -c %u "$CONFIG_FILE")"
-    group_id="$(stat -c %g "$CONFIG_FILE")"
-    file_mode="$(stat -c %a "$CONFIG_FILE")"
-    awk -v mac="$new_mac" '
-        /^PLATFORM_MAC[[:space:]]*=/ {
-            print "PLATFORM_MAC=" mac
-            updated = 1
-            next
-        }
-        { print }
-        END {
-            if (!updated) {
-                print "PLATFORM_MAC=" mac
-            }
-        }
-    ' "$CONFIG_FILE" >"$config_temp"
-    install -o "$owner_id" -g "$group_id" -m "$file_mode" \
-        "$config_temp" "$CONFIG_FILE"
-    rm -f "$config_temp"
-}
-
 install_wifi_disable_service() {
     local service_path="/etc/systemd/system/$WIFI_DISABLE_SERVICE"
-    cat >"$service_path" <<'EOF'
+    cat >"$service_path" <<'SERVICE'
 [Unit]
 Description=Disable Wi-Fi for POC appliance operation
 After=NetworkManager.service
@@ -151,7 +125,7 @@ RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
-EOF
+SERVICE
     chmod 644 "$service_path"
     systemctl daemon-reload
     systemctl enable "$WIFI_DISABLE_SERVICE" >/dev/null
@@ -169,14 +143,9 @@ remove_wifi_disable_service() {
 }
 
 PLATFORM_INTERFACE="$(read_setting PLATFORM_INTERFACE)"
-PLATFORM_MAC="$(read_setting PLATFORM_MAC)"
 PLATFORM_ADDRESS="$(read_setting PLATFORM_ADDRESS)"
 DEVELOPMENT_INTERFACE="$(read_setting DEVELOPMENT_INTERFACE)"
 
-if [[ ! "$PLATFORM_MAC" =~ ^([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$ ]]; then
-    echo "ERROR: invalid platform adapter MAC address: $PLATFORM_MAC" >&2
-    exit 1
-fi
 if [[ "$PLATFORM_INTERFACE" == "$DEVELOPMENT_INTERFACE" ]]; then
     echo "ERROR: platform and development interfaces must be different" >&2
     exit 1
@@ -190,7 +159,6 @@ done
 python3 - "$PLATFORM_ADDRESS" <<'PY'
 import ipaddress
 import sys
-
 try:
     interface = ipaddress.ip_interface(sys.argv[1])
 except ValueError as exc:
@@ -199,8 +167,7 @@ if interface.version != 4:
     raise SystemExit("ERROR: PLATFORM_ADDRESS must be IPv4")
 PY
 
-PLATFORM_ADDRESS_FILE="/sys/class/net/$PLATFORM_INTERFACE/address"
-if [[ ! -r "$PLATFORM_ADDRESS_FILE" ]]; then
+if [[ ! -d "/sys/class/net/$PLATFORM_INTERFACE" ]]; then
     echo "ERROR: configured platform interface $PLATFORM_INTERFACE was not found" >&2
     echo "NETWORK ADAPTERS NEED CONFIGURING: edit $CONFIG_FILE" >&2
     exit 1
@@ -210,18 +177,6 @@ if [[ "$PLATFORM_TYPE" != "ethernet" ]]; then
     echo "ERROR: $PLATFORM_INTERFACE is $PLATFORM_TYPE, not Ethernet" >&2
     echo "NETWORK ADAPTERS NEED CONFIGURING: edit $CONFIG_FILE" >&2
     exit 1
-fi
-ACTUAL_PLATFORM_MAC="$(tr '[:upper:]' '[:lower:]' <"$PLATFORM_ADDRESS_FILE")"
-if [[ "$ACTUAL_PLATFORM_MAC" != "${PLATFORM_MAC,,}" ]]; then
-    if confirm_default_yes \
-        "$PLATFORM_INTERFACE MAC is ($ACTUAL_PLATFORM_MAC), use this as the built-in platform adapter? [Y/n] "; then
-        update_platform_mac "$ACTUAL_PLATFORM_MAC"
-        PLATFORM_MAC="$ACTUAL_PLATFORM_MAC"
-        echo "Updated PLATFORM_MAC in $CONFIG_FILE"
-    else
-        echo "ERROR: platform adapter was not confirmed; network configuration unchanged" >&2
-        exit 1
-    fi
 fi
 if [[ -d "/sys/class/net/$DEVELOPMENT_INTERFACE" ]]; then
     DEVELOPMENT_TYPE="$(nmcli -g GENERAL.TYPE device show "$DEVELOPMENT_INTERFACE")"
@@ -266,8 +221,10 @@ ensure_connection() {
 ensure_connection "$PLATFORM_PROFILE" "$PLATFORM_INTERFACE"
 ensure_connection "$DEVELOPMENT_PROFILE" "$DEVELOPMENT_INTERFACE"
 
+# Platform identity is the configured interface name, not a specific adapter MAC.
+# Clear any MAC binding left by earlier POC releases.
 nmcli connection modify "$PLATFORM_PROFILE" \
-    802-3-ethernet.mac-address "$PLATFORM_MAC" \
+    802-3-ethernet.mac-address "" \
     connection.autoconnect-priority 100 \
     ipv4.method manual \
     ipv4.addresses "$PLATFORM_ADDRESS" \
@@ -275,7 +232,6 @@ nmcli connection modify "$PLATFORM_PROFILE" \
     ipv4.dns "" \
     ipv4.never-default yes \
     ipv6.method disabled
-
 nmcli connection modify "$DEVELOPMENT_PROFILE" \
     802-3-ethernet.mac-address "" \
     connection.autoconnect-priority 100 \
@@ -312,7 +268,6 @@ else
         echo "$DEVELOPMENT_INTERFACE is absent; DHCP profile retained for any USB Ethernet adapter."
     fi
     nmcli connection up "$PLATFORM_PROFILE" ifname "$PLATFORM_INTERFACE"
-
     echo
     echo "POC network profiles applied."
 fi

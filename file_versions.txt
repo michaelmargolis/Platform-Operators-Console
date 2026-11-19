@@ -1,5 +1,5 @@
-#file_versions.txt  ver 214
-# Application baseline: v217 SHS startup installer path confirmation + Ride Analyzer v0.2.28
+#file_versions.txt  ver 220
+# Application baseline: v223 Test Poc installer prerequisite robustness + Ride Analyzer v0.2.28
 # Relative path | expected version
 .gitattributes|1
 config/platforms.py|7
@@ -88,19 +88,22 @@ poc.py|5
 poc_config.json|6
 version_check.py|5
 raspi/setup-console.sh|13
-raspi/start_console.sh|4
+raspi/start_console.sh|5
 raspi/switch-to-runtime.sh|1
 raspi/install-display-assets.sh|4
 raspi/install-desktop-launcher.sh|1
-raspi/configure-network.sh|5
-raspi/network-config.conf|2
-raspi/network_check.py|1
+raspi/configure-network.sh|6
+raspi/network-config.conf|3
+raspi/network_check.py|2
+raspi/start-test-poc.sh|5
+raspi/install-test-poc-launcher.sh|4
+raspi/test-poc-network-helper.sh|1
 raspi/README.md|16
 raspi/assets/README.md|3
 docs/ARCHITECTURE.md|5
 docs/digital_twin/POC_DIGITAL_TWIN_UDP_HANDOVER_v1.md|3
 docs/digital_twin/UNITY_DIGITAL_TWIN_DEVELOPMENT_HANDOFF.md|7
-docs/raspberry_pi/POC_Raspberry_Pi_Technician_Guide.md|10
+docs/raspberry_pi/POC_Raspberry_Pi_Technician_Guide.md|13
 reference_data/README.md|1
 tools/README.md|3
 tools/diagnostics/monitor_activation_switch.py|1
@@ -110,9 +113,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|59
+changelog.txt|66
 README.md|22
-file_versions.txt|213
+file_versions.txt|220
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -330,3 +333,4 @@ tools/sim_player/dynamic_workflow_state.py|1
 tools/sim_player/tests/test_dynamic_workflow_state_v207.py|4
 
 tools/sim_player/tests/test_dynamic_workflow_reopen_v209.py|2
+tests/test_raspi_network_v218.py|6

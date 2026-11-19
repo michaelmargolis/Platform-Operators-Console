@@ -1,4 +1,40 @@
-# changelog.txt ver 60
+# changelog.txt ver 66
+
+
+POC v223 - Test Poc installer prerequisite robustness - 2026-11-19
+- Fix `install-test-poc-launcher.sh` failing with the generic "complete POC runtime/test launcher not found" message when Unix execute bits were lost during file transfer or when the optional POC icon was absent.
+- The installer now reports each genuinely missing required script explicitly, repairs execute bits on the three required Test Poc scripts, and falls back to the system terminal icon if `images/POC.png` is not present.
+- No change to Test Poc network privileges or runtime behavior.
+
+
+POC v222 - Password-free Test Poc runtime networking - 2026-11-19
+- Remove the interactive `sudo -v` authentication and sudo timestamp keepalive from `start-test-poc.sh`; clicking Test Poc no longer asks for an administrator password before POC starts or when the original network profile is restored.
+- Add `raspi/test-poc-network-helper.sh`, a fixed-function helper that can only probe, remove the temporary profile, check the test address, activate the temporary profile, or restore a supplied NetworkManager UUID. The installer copies this helper outside the user-writable Runtime tree to `/usr/local/libexec/poc-test-network-helper` as root-owned mode 755.
+- `install-test-poc-launcher.sh` now installs and validates `/etc/sudoers.d/poc-test-poc-network`, granting the selected desktop user passwordless sudo access to the root-owned helper only. It does not grant passwordless shells, arbitrary `nmcli`/`arping`, or the Runtime copy of the helper. The installer itself still requires one deliberate `sudo` run.
+- Preserve the v219-v221 touch confirmation, GTK warning suppression, normal display auto-selection, in-memory NetworkManager profile, duplicate-IP check when `arping` is available, and restore-on-exit/reboot recovery. No package download or internet access is introduced.
+
+POC v221 - Test Poc Zenity accessibility-bus warning suppression - 2026-11-19
+- Run only the Test Poc Zenity confirmation with `GTK_A11Y=none` in addition to `GSK_RENDERER=cairo`. This suppresses the GTK accessibility-bus/GDBus warning seen on the Raspberry Pi test display while keeping the workaround scoped to the one-shot confirmation dialog.
+- Do not export either GTK variable to `start_console.sh` or POC. Zenity remains optional, the terminal confirmation fallback remains available, and no package installation or internet access is attempted.
+
+POC v220 - Test Poc Zenity software renderer - 2026-11-19
+- Run only the Test Poc Zenity confirmation with `GSK_RENDERER=cairo` so GTK does not attempt the failing GL context path seen on the Raspberry Pi touch display. This removes the GL-context warning/delay without changing POC rendering.
+- Keep the workaround scoped to the Zenity command; no renderer environment variable is exported to `start_console.sh` or POC. Zenity remains optional and the existing terminal confirmation fallback remains available with no package installation or internet access.
+
+POC v219 - Test Poc touch confirmation and normal display selection - 2026-11-19
+- Test Poc now prefers a Zenity Continue/Cancel confirmation so the temporary-network acknowledgement can be made by touch or mouse when no keyboard is connected. Closing the dialog or selecting Cancel leaves networking unchanged.
+- Keep the existing terminal y/N confirmation as a fallback when Zenity is unavailable. Neither the Test Poc launcher installer nor runtime script attempts to download/install Zenity or otherwise requires internet access.
+- Remove the Test Poc compact-UI override. Test Poc now starts through normal `start_console.sh` with no display override, so the existing POC resolution detection selects compact layout only where appropriate (for example 800 x 480) and preserves the normal Touch Display 2 / 1280 x 720 and 1280 x 800 layouts.
+- Correct the Test Poc desktop comment and Raspberry Pi technician documentation accordingly. No permanent NetworkManager profile, simulator, kinematic, Festo or motion-control behaviour changed.
+
+
+POC v218 - eth0 network identity and temporary low-resolution Test Poc launcher - 2026-11-19
+- Remove Raspberry Pi platform-network MAC identity requirements. `PLATFORM_INTERFACE` (normally `eth0`) and `PLATFORM_ADDRESS` are now authoritative; legacy `PLATFORM_MAC` values are ignored. `configure-network.sh` clears any old NetworkManager MAC binding from the managed static profile.
+- Replace the startup MAC check with a configured IPv4-address check on the selected platform interface, including a short wait for NetworkManager during desktop startup. A missing interface or wrong address still prevents POC starting with a clear network-configuration error.
+- Add opt-in `raspi/install-test-poc-launcher.sh` and `raspi/start-test-poc.sh`. The resulting **Test Poc** desktop icon creates an in-memory `POC Test Temporary` NetworkManager profile (`save no`) using the platform address from `raspi/network-config.conf`, forces the compact POC UI, and restores the previously active eth0 profile on normal exit. The saved visualizer/network profile is never modified; reboot also removes the temporary profile.
+- Test Poc warns before changing networking and optionally uses `arping` for duplicate-IP detection when available. It is not installed by normal POC setup and therefore cannot appear on production consoles unless explicitly requested.
+- Add focused host-independent tests for legacy-MAC tolerance, configured-address validation, removal of persistent MAC binding, in-memory test networking, explicit launcher installation and compact-UI startup. No simulator, kinematic, Festo or motion-control behavior changed.
+
 
 POC v217 - SHS startup installer path confirmation - 2026-11-19
 - SHS startup installer now displays the resolved repository DRIVE and ROOT on separate prominent lines, plus the full checkout path, start_shs.cmd target and Startup shortcut destination before making any change.
