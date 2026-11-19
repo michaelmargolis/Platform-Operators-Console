@@ -1,4 +1,4 @@
-#poc_core.py ver 58
+#poc_core.py ver 59
 from __future__ import annotations
 
 import logging
@@ -319,6 +319,32 @@ class PocCore(QtCore.QObject):
         self.simChanged.emit(key)
         self.simStatusChanged.emit(self.get_sim_status())
         self.config_store.set("selected_sim", key)
+        return True
+
+    def reload_nl2_variants(self) -> bool:
+        """Refresh an imported NL2 candidate without restarting POC.
+
+        Import is permitted only while the platform is deactivated and parked.
+        The NL2 adapter accepts append-only catalogue growth so the currently
+        loaded park and its stable internal index remain untouched.
+        """
+        if self.platform.state is not PlatformState.DEACTIVATED or not self.platform.parked:
+            raise RuntimeError("NoLimits2 variants can only be refreshed while the platform is deactivated and parked")
+        if self.sim_key != "nolimits2" or self.sim is None:
+            return False
+        from sims.nolimits2.variant_store import VariantStore
+        from core.dynamic_profiles import audit_dynamic_store
+        store = VariantStore.load(self.platform_key)
+        deployments = audit_dynamic_store(
+            store, TelemetryConfig(Path(__file__).resolve().parent.parent /
+                                   "sims/nolimits2/telemetry_config.ini").snapshot(),
+            error_log=self.dynamic_error_log)
+        store.validate_display()
+        self.sim.reload_variant_store(store)
+        self._dynamic_deployments = deployments
+        self.experiencesChanged.emit(
+            list(self.sim.get_experiences()), self.sim.get_selected_experience_index())
+        self.simStatusChanged.emit(self.get_sim_status())
         return True
 
     def simulator_hot_switch_supported(self, key: str) -> bool:

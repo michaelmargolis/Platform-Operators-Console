@@ -1,4 +1,4 @@
-# app.py ver 13
+# app.py ver 14
 """MDX Ride Analyzer: offline ride-analysis controller (PyQt6 only).
 
 UI layout is in player_ui.py; presentation panels in panels.py. This module
@@ -851,7 +851,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
             self._send_twin()
 
     def capture_dynamic_source(self):
-        """Launch the modal dynamic-study capture workflow.
+        """Launch the modal dynamic-source capture-session workflow.
 
         The Ride Analyzer only orchestrates the existing capture tool; it does
         not duplicate or bypass its NL2 loading, dispatch or recording logic.
@@ -898,13 +898,14 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         if session:
             label = Path(str(session)).name
             self.dynamic_study_context_label.setText(
-                f'Dynamic study: {label}  /  {self._dynamic_ride_context.get("ride", "")}' )
+                f'Dynamic source session: {label}  /  {self._dynamic_ride_context.get("ride", "")}' )
         if hasattr(self, 'return_to_dynamic_study_action'):
             self.return_to_dynamic_study_action.setEnabled(bool(session))
 
     def pick_dynamic_source(self):
-        """Open a primary recording from a completed dynamic-source study."""
-        root = Path.cwd() / "captures" / "dynamic_source"
+        """Open a primary recording from a completed dynamic-source session."""
+        from .dynamic_source import DEFAULT_OUTPUT_ROOT
+        root = DEFAULT_OUTPUT_ROOT
         directory = str(root if root.exists() else root.parent)
         dialog = QFileDialog(self)
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)

@@ -1,4 +1,4 @@
-# dynamic_source_dialog.py ver 4
+# dynamic_source_dialog.py ver 5
 """Modal Ride Analyzer workflow for creating dynamic-source recordings."""
 from __future__ import annotations
 
@@ -42,15 +42,15 @@ class CheckableRideList(QListWidget):
 
 
 class RideSelectionDialog(QDialog):
-    """Small engineering-only multi-select list for explicit study rides."""
+    """Small engineering-only multi-select list for explicit capture-session rides."""
 
     def __init__(self, selected=(), parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Choose rides for dynamic study")
+        self.setWindowTitle("Choose rides for capture session")
         self.resize(470, 430)
         layout = QVBoxLayout(self)
         hint = QLabel(
-            "Choose the NoLimits rides to record in this dynamic study. "
+            "Choose the NoLimits rides to record in this dynamic-source session. "
             "Operator-hidden parks are not listed."
         )
         hint.setWordWrap(True)
@@ -76,7 +76,7 @@ class RideSelectionDialog(QDialog):
 
     def _accept_if_selected(self):
         if not self.selected_keys():
-            QMessageBox.information(self, "Select a ride", "Select at least one ride for the dynamic study.")
+            QMessageBox.information(self, "Select a ride", "Select at least one ride for the capture session.")
             return
         self.accept()
 
@@ -94,7 +94,7 @@ class DynamicSourceCaptureDialog(QDialog):
 
     capture_started = pyqtSignal()
 
-    def __init__(self, current_ride_key=None, parent=None):
+    def __init__(self, current_ride_key=None, parent=None, *, output_root=None):
         super().__init__(parent)
         self.setWindowTitle("Capture Dynamic Source Recordings")
         self.setModal(True)
@@ -112,7 +112,7 @@ class DynamicSourceCaptureDialog(QDialog):
 
         layout = QVBoxLayout(self)
         intro = QLabel(
-            "Create a dynamic study containing repeated NoLimits ride recordings and the "
+            "Create a dynamic-source session containing repeated NoLimits ride recordings and the "
             "timing/provenance data required to generate and validate dynamic profiles. "
             "Qualification recordings should be made on a deployment PC with VR active."
         )
@@ -134,13 +134,13 @@ class DynamicSourceCaptureDialog(QDialog):
         self.scope = QComboBox()
         self.scope.addItem("Current ride", "current")
         self.scope.addItem("Custom rides", "selected")
-        self.scope.addItem("Quick study", "quick")
-        self.scope.addItem("Standard study", "standard")
-        self.scope.addItem("Extended study", "extended")
+        self.scope.addItem("Quick", "quick")
+        self.scope.addItem("Standard", "standard")
+        self.scope.addItem("Extended", "extended")
         if current_ride_key is None:
             self.scope.setCurrentIndex(self.scope.findData("quick"))
         self.scope.currentIndexChanged.connect(self._scope_changed)
-        self.form.addRow("Study scope", self.scope)
+        self.form.addRow("Capture scope", self.scope)
 
         self.rides_label = QLabel()
         self.rides_label.setWordWrap(True)
@@ -178,9 +178,9 @@ class DynamicSourceCaptureDialog(QDialog):
         self.form.addRow("Test conditions (optional)", self.conditions)
         self.extend_uncertain = QCheckBox("Add up to two recordings when coverage/drift/gaps warrant it")
         self.extend_uncertain.toggled.connect(self._update_estimate)
-        self.form.addRow("Extend uncertain study", self.extend_uncertain)
+        self.form.addRow("Extend uncertain capture", self.extend_uncertain)
 
-        self.output = QLineEdit(str(DEFAULT_OUTPUT_ROOT)); self.output.setReadOnly(True)
+        self.output = QLineEdit(str(Path(output_root or DEFAULT_OUTPUT_ROOT))); self.output.setReadOnly(True)
         self.output_browse = QPushButton("Browse...")
         self.output_browse.clicked.connect(self._browse_output)
         output_row = QWidget(); output_layout = QHBoxLayout(output_row)
@@ -191,7 +191,7 @@ class DynamicSourceCaptureDialog(QDialog):
 
         note = QLabel(
             "The selected Ride Analyzer candidate is not used. Dynamic source recordings capture the "
-            "simulator trajectory so the same study can support different later motion configurations. "
+            "simulator trajectory so the same session can support different later motion configurations. "
             "Video is not recorded by this capture workflow."
         )
         note.setWordWrap(True)
@@ -215,7 +215,7 @@ class DynamicSourceCaptureDialog(QDialog):
         self.abort_button.clicked.connect(self.abort_capture)
         action_row.addWidget(self.abort_button)
         action_row.addStretch(1)
-        self.open_report_button = QPushButton("Open study report")
+        self.open_report_button = QPushButton("Open session report")
         self.open_report_button.setEnabled(False)
         self.open_report_button.clicked.connect(self.open_report)
         action_row.addWidget(self.open_report_button)
@@ -337,7 +337,7 @@ class DynamicSourceCaptureDialog(QDialog):
             plan = self._plan()
             args = plan.command_arguments()
         except (ValueError, OSError) as exc:
-            QMessageBox.warning(self, "Dynamic study not started", str(exc))
+            QMessageBox.warning(self, "Capture session not started", str(exc))
             return
         if not self._api_reachable():
             self.refresh_api_status()
@@ -350,7 +350,7 @@ class DynamicSourceCaptureDialog(QDialog):
         try:
             Path(plan.output_root).mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            QMessageBox.warning(self, "Dynamic study not started", f"Cannot create the output folder:\n{exc}")
+            QMessageBox.warning(self, "Capture session not started", f"Cannot create the output folder:\n{exc}")
             return
         self.progress.clear(); self.session_dir = None; self.report_path = None
         self.open_recording_path = None; self._partial = ""; self._aborting = False
@@ -361,7 +361,7 @@ class DynamicSourceCaptureDialog(QDialog):
         self.open_report_button.setEnabled(False); self.open_recording_button.setEnabled(False)
         self._set_form_enabled(False)
         self.start_button.setEnabled(False); self.abort_button.setEnabled(True)
-        self.status.setText("Dynamic study running. Keep NoLimits in the intended test configuration.")
+        self.status.setText("Capture session running. Keep NoLimits in the intended test configuration.")
         self.capture_started.emit()
         self.process.setWorkingDirectory(str(ROOT))
         self.process.start(sys.executable, args)
@@ -410,7 +410,7 @@ class DynamicSourceCaptureDialog(QDialog):
     def _process_error(self, error):
         if self.process.state() == QProcess.ProcessState.NotRunning:
             name = getattr(error, "name", str(error))
-            self.status.setText(f"Dynamic study process error: {name}")
+            self.status.setText(f"Capture session process error: {name}")
             self._set_form_enabled(True)
             self.start_button.setEnabled(True)
             self.abort_button.setEnabled(False)
@@ -438,14 +438,14 @@ class DynamicSourceCaptureDialog(QDialog):
         self.open_recording_button.setEnabled(bool(recordings))
         if self._aborting:
             self.estimate_label.setText("Capture aborted")
-            self.status.setText("Capture aborted. Completed recordings remain in the dynamic study; the current recording may be incomplete.")
+            self.status.setText("Capture aborted. Completed recordings remain in the session; the current recording may be incomplete.")
         elif exit_code == 0:
             self.estimate_label.setText("Complete")
-            self.status.setText(f"Dynamic study complete. {len(recordings)} usable dynamic source recording(s).")
+            self.status.setText(f"Capture session complete. {len(recordings)} usable dynamic-source recording(s).")
         else:
             self.estimate_label.setText("Finished with errors")
             self.status.setText(
-                f"Dynamic study finished with errors (exit code {exit_code}). "
+                f"Capture session finished with errors (exit code {exit_code}). "
                 f"{len(recordings)} completed recording(s) remain available."
             )
         self.refresh_api_status()
@@ -454,7 +454,7 @@ class DynamicSourceCaptureDialog(QDialog):
         if self.process.state() == QProcess.ProcessState.NotRunning:
             return
         answer = QMessageBox.question(
-            self, "Abort dynamic study?",
+            self, "Abort capture session?",
             "Abort the capture process now? Completed recordings are retained, but the current recording may be incomplete.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -463,7 +463,7 @@ class DynamicSourceCaptureDialog(QDialog):
             return
         self._aborting = True
         self.abort_button.setEnabled(False)
-        self.status.setText("Aborting dynamic study...")
+        self.status.setText("Aborting capture session...")
         self.process.kill()
 
     def open_report(self):
@@ -473,7 +473,7 @@ class DynamicSourceCaptureDialog(QDialog):
     def open_recording(self):
         recordings = source_recordings(self.session_dir)
         if not recordings:
-            QMessageBox.information(self, "No completed recordings", "This study does not yet contain a completed measured recording.")
+            QMessageBox.information(self, "No completed recordings", "This session does not yet contain a completed measured recording.")
             return
         if len(recordings) == 1:
             selected = recordings[0]
@@ -488,15 +488,15 @@ class DynamicSourceCaptureDialog(QDialog):
 
     def reject(self):
         if self.process.state() != QProcess.ProcessState.NotRunning:
-            QMessageBox.information(self, "Dynamic study running", "Abort or allow the current dynamic study to finish before closing this dialog.")
+            QMessageBox.information(self, "Capture session running", "Abort or allow the current capture session to finish before closing this dialog.")
             return
         super().reject()
 
     def closeEvent(self, event):
         if self.process.state() != QProcess.ProcessState.NotRunning:
             QMessageBox.information(
-                self, "Dynamic study running",
-                "Abort or allow the current dynamic study to finish before closing this dialog."
+                self, "Capture session running",
+                "Abort or allow the current capture session to finish before closing this dialog."
             )
             event.ignore()
             return

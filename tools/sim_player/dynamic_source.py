@@ -1,4 +1,4 @@
-# dynamic_source.py ver 4
+# dynamic_source.py ver 5
 """Qt-free helpers for Ride Analyzer dynamic-source capture.
 
 The actual NoLimits capture implementation remains in ``tools.nl2_timing_study``.
@@ -33,7 +33,7 @@ class DynamicSourceRide:
 
 @dataclass(frozen=True)
 class DynamicSourcePlan:
-    """One requested dynamic-study capture run."""
+    """One requested dynamic-source capture session."""
 
     scope: str
     rides: tuple[str, ...] = ()
@@ -45,9 +45,9 @@ class DynamicSourcePlan:
 
     def validate(self) -> None:
         if self.scope not in SCOPE_KEYS:
-            raise ValueError(f"Unknown dynamic-study scope: {self.scope!r}")
+            raise ValueError(f"Unknown capture scope: {self.scope!r}")
         if self.scope in ("current", "selected") and not self.rides:
-            raise ValueError("Select at least one ride for this dynamic study")
+            raise ValueError("Select at least one ride for this capture session")
         if not 1 <= int(self.repeats) <= 10:
             raise ValueError("Measured recordings must be between 1 and 10")
         if not 0 <= int(self.warmups) <= 5:
@@ -65,7 +65,7 @@ class DynamicSourcePlan:
             # Keep the established short diagnostic set and accurate preset provenance.
             args += ["--preset", "quick"]
         elif self.scope in ("standard", "extended"):
-            # Ride Analyzer studies follow the current operator-visible park set,
+            # Ride Analyzer capture sessions follow the current operator-visible park set,
             # not the timing-study tool's historical deferred-park preset.  Pass
             # the matching preset as provenance while overriding its ride list.
             ride_keys = operator_available_ride_keys()
@@ -117,7 +117,7 @@ def _windows_cpu_model() -> str:
 
 
 def default_test_conditions() -> str:
-    """Build the default descriptive study conditions for the local PC.
+    """Build the default descriptive capture conditions for the local PC.
 
     The timing-study stack already probes Windows display controllers.  Reuse
     that information here and supplement its generic Windows processor string
@@ -153,11 +153,11 @@ def default_test_conditions() -> str:
 
 
 def annotate_session_scope(session_dir: Path | str | None, scope: str) -> bool:
-    """Add Ride Analyzer study-scope provenance after the child process exits.
+    """Add Ride Analyzer capture-scope provenance after the child process exits.
 
     The low-level timing-study preset remains its own capture-planning field.
-    This separate field records the Analyzer workflow, including Current and
-    Custom scopes that are not timing-study presets.
+    The existing ``study_scope`` JSON key is retained for file-format compatibility;
+    in the UI this is called capture scope. Current and Custom are not timing-study presets.
     """
     if session_dir is None or scope not in _SCOPE_PROVENANCE:
         return False
@@ -181,7 +181,7 @@ class DynamicSourceDurationEstimate:
 
 
 def plan_ride_keys(plan: DynamicSourcePlan) -> tuple[str, ...]:
-    """Resolve the ride keys represented by a dynamic-study plan."""
+    """Resolve the ride keys represented by a capture-session plan."""
     if plan.scope == "quick":
         return tuple(key for key in QUICK_RIDES if key not in ride_config.POC_HIDDEN_PARKS)
     if plan.scope in ("standard", "extended"):
@@ -264,7 +264,7 @@ def available_rides() -> tuple[DynamicSourceRide, ...]:
 
 
 def operator_available_ride_keys() -> tuple[str, ...]:
-    """Stable keys for every ride included by Standard/Extended dynamic studies."""
+    """Stable keys for every ride included by Standard/Extended capture sessions."""
     return tuple(ride.key for ride in available_rides())
 
 
@@ -281,9 +281,9 @@ def park_key_for_recording(recording) -> str | None:
 def translated_capture_output(text: str) -> str:
     """Present the shared timing-capture tool using Ride Analyzer terminology."""
     line = str(text).rstrip("\r\n")
-    line = line.replace("Timing study:", "Dynamic study:")
-    line = line.replace("STUDY ERROR:", "DYNAMIC STUDY ERROR:")
-    line = line.replace("Stopped. Partial capture is retained", "Stopped. Partial dynamic study is retained")
+    line = line.replace("Timing study:", "Dynamic source session:")
+    line = line.replace("STUDY ERROR:", "CAPTURE SESSION ERROR:")
+    line = line.replace("Stopped. Partial capture is retained", "Stopped. Partial capture session is retained")
     line = re.sub(r"^(\d+) parks x (\d+) measured runs; (\d+) warmups per park\.$",
                   r"\1 rides x \2 dynamic source recordings; \3 warm-ups per ride.", line)
     line = re.sub(r"^MEASURED (.+) (\d+)$", r"DYNAMIC SOURCE \1 \2", line)
@@ -293,7 +293,7 @@ def translated_capture_output(text: str) -> str:
 
 
 def session_path_from_output(text: str) -> Path | None:
-    """Extract the newly created study directory from capture-tool output."""
+    """Extract the newly created session directory from capture-tool output."""
     match = re.search(r"; output (.+)$", str(text).strip())
     return Path(match.group(1).strip()) if match else None
 

@@ -1,4 +1,4 @@
-#main_window.py  ver 77
+#main_window.py  ver 79
 from __future__ import annotations
 
 import csv
@@ -66,6 +66,136 @@ def readiness_indicator_key(platform_state, experience_state, sim_status, parkin
     ):
         return "ok"
     return "warning"
+
+
+
+class _DynamicCandidateImportDialog(QtWidgets.QDialog):
+    """Platform-aware chooser for Analyzer-exported dynamic candidate ZIPs."""
+
+    def __init__(self, platform_key, directory, parent=None):
+        super().__init__(parent)
+        self.platform_key = str(platform_key)
+        self.directory = Path(directory).expanduser().resolve()
+        self._packages = ()
+        self.setWindowTitle('Import dynamic candidate')
+        self.resize(760, 470)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        platform_name = PLATFORMS.get(self.platform_key, {}).get(
+            'platform_name', self.platform_key)
+        intro = QtWidgets.QLabel(
+            f'Showing Analyzer-qualified packages for the currently selected physical '
+            f'platform: <b>{platform_name}</b>. Packages already present in this '
+            'platform catalogue are hidden.'
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        folder_row = QtWidgets.QHBoxLayout()
+        folder_row.addWidget(QtWidgets.QLabel('Folder'))
+        self.folder_label = QtWidgets.QLineEdit(str(self.directory))
+        self.folder_label.setReadOnly(True)
+        folder_row.addWidget(self.folder_label, 1)
+        browse = QtWidgets.QPushButton('Choose folder...')
+        browse.clicked.connect(self._browse)
+        folder_row.addWidget(browse)
+        refresh = QtWidgets.QPushButton('Refresh')
+        refresh.clicked.connect(self._reload)
+        folder_row.addWidget(refresh)
+        layout.addLayout(folder_row)
+
+        self.package_list = QtWidgets.QListWidget()
+        self.package_list.currentRowChanged.connect(self._selection_changed)
+        self.package_list.itemDoubleClicked.connect(lambda _item: self._accept_selected())
+        layout.addWidget(self.package_list, 1)
+
+        self.summary = QtWidgets.QLabel()
+        self.summary.setWordWrap(True)
+        layout.addWidget(self.summary)
+        self.detail = QtWidgets.QLabel()
+        self.detail.setWordWrap(True)
+        self.detail.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        layout.addWidget(self.detail)
+
+        buttons = QtWidgets.QDialogButtonBox(QtCore.Qt.Horizontal)
+        self.import_button = buttons.addButton(
+            'Import selected', QtWidgets.QDialogButtonBox.AcceptRole)
+        self.import_button.setEnabled(False)
+        cancel = buttons.addButton(QtWidgets.QDialogButtonBox.Cancel)
+        self.import_button.clicked.connect(self._accept_selected)
+        cancel.clicked.connect(self.reject)
+        layout.addWidget(buttons)
+        self._reload()
+
+    def _browse(self):
+        path = QtWidgets.QFileDialog.getExistingDirectory(
+            self, 'Choose folder containing dynamic candidate ZIPs', str(self.directory))
+        if path:
+            self.directory = Path(path).expanduser().resolve()
+            self.folder_label.setText(str(self.directory))
+            self._reload()
+
+    def _reload(self):
+        from core.dynamic_import import discover_candidate_packages
+        from sims.nolimits2 import ride_config
+
+        self.package_list.clear()
+        try:
+            packages, counts = discover_candidate_packages(
+                self.directory, platform_key=self.platform_key)
+        except Exception as exc:
+            self._packages = ()
+            self.summary.setText('Could not scan this folder: ' + str(exc))
+            self.detail.clear()
+            self.import_button.setEnabled(False)
+            return
+        self._packages = packages
+        for info in packages:
+            ride_name = ride_config.PARKS.get(info.park, {}).get('name', info.park)
+            item = QtWidgets.QListWidgetItem(f'{ride_name}  -  {info.label}')
+            item.setToolTip(str(info.path))
+            self.package_list.addItem(item)
+
+        hidden = []
+        if counts['already_imported']:
+            hidden.append(f"{counts['already_imported']} already imported")
+        if counts['other_platform']:
+            hidden.append(f"{counts['other_platform']} for the other platform")
+        if counts['invalid']:
+            hidden.append(f"{counts['invalid']} invalid/non-candidate")
+        text = f"{counts['available']} package(s) available"
+        if hidden:
+            text += '. Hidden: ' + ', '.join(hidden) + '.'
+        elif counts['total'] == 0:
+            text += '. No ZIP packages were found in this folder.'
+        self.summary.setText(text)
+        if packages:
+            self.package_list.setCurrentRow(0)
+        else:
+            self.detail.setText(
+                'Copy an Analyzer export for this physical platform into this folder, '
+                'or choose another folder.')
+            self.import_button.setEnabled(False)
+
+    def _selection_changed(self, row):
+        if not (0 <= row < len(self._packages)):
+            self.detail.clear()
+            self.import_button.setEnabled(False)
+            return
+        from sims.nolimits2 import ride_config
+        info = self._packages[row]
+        ride_name = ride_config.PARKS.get(info.park, {}).get('name', info.park)
+        self.detail.setText(
+            f'Ride: {ride_name}\nCandidate: {info.label}\nFile: {info.path.name}')
+        self.import_button.setEnabled(True)
+
+    def _accept_selected(self):
+        if self.package_list.currentRow() >= 0:
+            self.accept()
+
+    def selected_package(self):
+        row = self.package_list.currentRow()
+        return self._packages[row] if 0 <= row < len(self._packages) else None
 
 
 class _ActivateSwitchWarningDialog(QtWidgets.QDialog):
@@ -172,7 +302,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.txt_profile_state)
         controls = QtWidgets.QHBoxLayout()
         self.btn_dynamic_import = QtWidgets.QPushButton('Import dynamic candidate ZIP...', tab)
-        self.btn_dynamic_import.setToolTip('Commissioning only. Import an Analyzer-qualified candidate while parked; restart POC to select it.')
+        self.btn_dynamic_import.setToolTip('Commissioning only. While parked, choose an Analyzer-qualified candidate for this physical platform; already-imported packages are hidden and the NoLimits2 ride list refreshes immediately.')
         self.btn_dynamic_import.clicked.connect(self._import_dynamic_candidate)
         controls.addWidget(self.btn_dynamic_import)
         self.btn_ground_clearance = QtWidgets.QPushButton('Adjust floor clearance...', tab)
@@ -222,30 +352,52 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, 'Platform active',
                 'Deactivate and fully park before importing a dynamic candidate.')
             return
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, 'Import Analyzer-qualified dynamic candidate',
-            str(Path.home()), 'Dynamic candidate package (*.zip)')
-        if not path:
+        from core.dynamic_import import default_import_directory
+        import_dir = default_import_directory()
+        try:
+            import_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            import_dir = Path.home()
+
+        dialog = _DynamicCandidateImportDialog(
+            self.core.platform_key, import_dir, self)
+        if dialog.exec_() != QtWidgets.QDialog.Accepted:
             return
+        package = dialog.selected_package()
+        if package is None:
+            return
+        from sims.nolimits2 import ride_config
+        ride_name = ride_config.PARKS.get(package.park, {}).get('name', package.park)
         choice = QtWidgets.QMessageBox.question(
             self, 'Import dynamic candidate',
-            'This adds a new candidate to this platform catalogue without replacing '
-            'existing variants. The qualified recording does NOT constitute physical commissioning. '
-            'Import and restart POC?', QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            f'Ride: {ride_name}\nCandidate: {package.label}\n\n'
+            'This adds one new candidate to the currently selected platform catalogue '
+            'without replacing existing variants. The qualified recording does NOT '
+            'constitute physical commissioning. Import candidate now?',
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
             QtWidgets.QMessageBox.No)
         if choice != QtWidgets.QMessageBox.Yes:
             return
         try:
             from core.dynamic_import import import_candidate
-            label, manifest = import_candidate(path, platform_key=self.core.platform_key)
+            label, manifest = import_candidate(
+                package.path, platform_key=self.core.platform_key)
         except Exception as exc:
             QtWidgets.QMessageBox.warning(self, 'Import rejected', str(exc))
             return
+        refresh_note = 'It will be loaded automatically next time NoLimits2 is selected.'
+        try:
+            if self.core.reload_nl2_variants():
+                refresh_note = 'The NoLimits2 ride list has been refreshed; no POC restart is required.'
+        except Exception as exc:
+            log.exception('Dynamic candidate imported but live catalogue refresh failed')
+            refresh_note = (
+                'The candidate was imported, but the live ride list could not be refreshed: '
+                f'{exc}\nReload NoLimits2 or restart POC before selecting it.')
         QtWidgets.QMessageBox.information(self, 'Dynamic candidate imported',
-            f'Added candidate: {label}\n\nBundle: {manifest}\n\n'
-            'Restart POC to load the new candidate. If this ride already has a '
-            'preferred variant, the new candidate will be hidden until the review '
-            'status is changed during commissioning.')
+            f'Added candidate: {label}\n\nBundle: {manifest}\n\n{refresh_note}\n\n'
+            'If this ride already has a preferred variant, the new candidate will be '
+            'hidden until the review status is changed during commissioning.')
 
     def _update_profile(self, force=False):
         if not force and self.tabWidget.currentWidget() is not self.tab_profile:

@@ -1,9 +1,9 @@
-<!-- README.md ver 12 -->
+<!-- README.md ver 17 -->
 # MDX Ride Analyzer
 
-Current workspace version: **v0.2.24**. Dynamic ride preparation is now a guided, state-driven workflow: the workspace shows Source / Generate / Review / Prepare / Export progress, recommends qualified Strict profiles first, presents one clear next action, and keeps source recordings, reports, regeneration, dismissal and optimiser logs as secondary controls.
+Current workspace version: **v0.2.28**. Dynamic ride preparation is a three-stage wizard: Source / Generate / Review & Export. Source sessions and Ride rows show retained generation/review/export state, selected platforms show the prior profile-set date/name, and a compatible existing result is an explicit **Use existing profile(s)** choice alongside **Generate new profiles**. Generation owns its live progress/abort controls, and reviewed platform profiles can be named and exported directly for POC.
 
-**Current workspace:** v0.2.24
+**Current workspace:** v0.2.28
 
 **MDX Ride Analyzer** is the offline ride-development and commissioning application for recorded NoLimits motion data.
 
@@ -27,99 +27,87 @@ The main menu is:
 
 **File / Open / Study / View / Advanced / Twin / Help**
 
-## Dynamic studies and source recordings
+## Dynamic-source sessions and recordings
 
 Use **Study > Capture dynamic source...** to create the repeated NoLimits recordings used to generate and validate dynamic profiles.
 
-A **dynamic source recording** is one measured ride run. A **dynamic study** is the complete capture session containing multiple dynamic source recordings together with the timing, lifecycle and provenance files required by profile generation.
+A **dynamic-source recording** is one measured ride run. A **dynamic-source session** is one `session_*` folder containing repeated recordings together with the timing, lifecycle and provenance files required by profile generation. In the UI and current documentation, **capture** refers to the act of acquiring a session; it is not the name of the saved data object.
 
-The Ride Analyzer launches the existing `tools.nl2_timing_study` capture implementation in a child process; it does not duplicate or bypass the established NL2 loading, dispatch or recording logic. The human-facing workflow uses dynamic-study terminology because these recordings are being acquired as source evidence for dynamic variants.
+The Ride Analyzer launches the existing `tools.nl2_timing_study` capture implementation in a child process; it does not duplicate or bypass the established NL2 loading, dispatch or recording logic. The human-facing workflow uses **session** for one `session_*` capture directory and **recording** for one completed ride repeat. The word **study** is reserved for optimiser/research artifacts and the Study menu category.
 
-By default Ride Analyzer dynamic studies are stored below:
+By default Ride Analyzer dynamic-source sessions are stored below:
 
 ```text
 captures/dynamic_source/
 ```
 
-The normal player-compatible telemetry CSV from a completed trial can be opened directly in Ride Analyzer. Keep the complete dynamic-study directory for profile generation; `_timing.csv`, `_trial.json` and the other companion files contain required synchronisation/provenance evidence and are not ordinary ride captures.
+The normal player-compatible telemetry CSV from a completed trial can be opened directly in Ride Analyzer. Keep the complete dynamic-source session directory for profile generation; `_timing.csv`, `_trial.json` and the other companion files contain required synchronisation/provenance evidence and are not standalone playback recordings.
 
-Dynamic-source capture does **not** use the currently selected motion Candidate. It records the simulator trajectory so the same source study can later support different base variants and profile-generation experiments.
+Dynamic-source capture does **not** use the currently selected motion Candidate. It records the simulator trajectory so the same source session can later support different base variants and profile-generation experiments.
 
-For qualification, create dynamic source recordings on a **deployment PC with VR active**. VR-off capture may be useful for later testing, but it is not yet treated as an equivalent qualification condition. **Standard study** uses every current operator-available, non-hidden NoLimits ride with three measured recordings per ride; **Extended study** uses the same ride set with five measured recordings per ride. **Quick study** remains the short Blackbird/Fenrir/Tilt Coaster set. Scenic Run is retired from normal POC/Ride Analyzer selection and is not included.
+For qualification, create dynamic source recordings on a **deployment PC with VR active**. VR-off capture may be useful for later testing, but it is not yet treated as an equivalent qualification condition. **Standard** capture scope uses every current operator-available, non-hidden NoLimits ride with three measured recordings per ride; **Extended** uses the same ride set with five measured recordings per ride. **Quick** remains the short Blackbird/Fenrir/Tilt Coaster set. Scenic Run is retired from normal POC/Ride Analyzer selection and is not included.
 
 The dialog shows an **Estimated capture time** calculated from typical ride durations and the requested recording count. Installed canonical ride trajectories are used when available; existing timing-study duration hints provide a fallback. The remaining estimate is refreshed at the start of each recording. Loading/reset/retry delays and optional uncertainty-extension recordings are not included.
 
-The capture dialog provides **Test conditions (optional)** for descriptive provenance. It is prefilled with **Normal deployed configuration** plus the local CPU and physical GPU names when they can be detected; edit the text when the test configuration is unusual. VR state itself is recorded automatically by the underlying capture tool. The completed session also records the Ride Analyzer study scope (Current, Custom, Quick, Standard or Extended). Monitor count remains available only in the low-level timing-study CLI and is not part of the Ride Analyzer dynamic-source workflow.
+The capture dialog provides **Test conditions (optional)** for descriptive provenance. It is prefilled with **Normal deployed configuration** plus the local CPU and physical GPU names when they can be detected; edit the text when the test configuration is unusual. VR state itself is recorded automatically by the underlying capture tool. The completed session also records the Ride Analyzer capture scope (Current, Custom, Quick, Standard or Extended). Monitor count remains available only in the low-level timing-study CLI and is not part of the Ride Analyzer dynamic-source workflow.
 
 Normal analysis/replay does not connect to live NoLimits, SHS or Festo. **Study > Capture dynamic source...** is the deliberate exception: it connects to the local NoLimits API for the duration of capture. The capture workflow does not record video.
 
-## Prepare dynamic rides for POC (v0.2.24)
+## Prepare dynamic rides for POC (v0.2.28)
 
-Use **Study > Dynamic rides - prepare for POC...**. This is the documented
-operator-facing preparation route: **choose a complete study** (best-quality
-studies first), select Blackbird or Mdx Logo Coaster, select one or both
-platforms, and optionally play one of the recordings. Recordings are sorted
-Suggested / Good / Caution / Unrated / Avoid; the selected individual CSV is
-**not** the optimisation reference selection. The optimiser chooses reference,
-fit and independent held-out recordings from the complete study itself.
+Use **Study > Dynamic rides - prepare for POC...**. The normal workflow is a
+three-page wizard rather than one all-at-once control surface:
 
-The workspace is intentionally state-driven rather than a row of equally weighted
-engineering buttons. A progress strip shows **Source / Generate / Review / Prepare /
-Export** for the selected candidate, and the **Next step** panel presents one large
-primary action. Source recordings are collapsed under **Source recordings
-(optional)** because they are for inspection, not reference selection. Generation
-progress is also collapsed after a successful run and expands automatically when
-generation is running or fails.
+1. **Source** starts at `captures/dynamic_source`. The Session dropdown lists
+   direct `session_*` folders only. Its row/tooltip shows captured rides plus
+   retained Partial / Generated / Reviewed / Exported state derived from
+   `studies/nl2/dynamic_profiles`. Selecting a session rebuilds Ride from data
+   actually present in that session. Choose **Chair V3**, **Ground-Loading
+   Platform**, or both with checkboxes. Existing completed work is resumed when
+   possible; the wizard does not require regeneration merely because another
+   session/ride was used most recently. Source recording playback remains an
+   optional inspection tool and never chooses the optimiser reference.
+2. **Generate** runs the existing offline optimiser as a managed process. The
+   live optimiser output is always visible on this page and **Abort generation**
+   stops the child process. Incomplete runs cannot be exported. On success the
+   wizard moves automatically to Review & Export. If a previous complete result
+   exists, a failed regeneration does not delete it.
+3. **Review & Export** shows one section for each selected physical platform.
+   Analyzer still recommends qualified **Strict** first and **Relaxed 5%** only
+   when no qualifying Strict candidate is available. **Review profile** opens
+   normal Video / Plot / Overlay playback. After **Return to dynamic
+   preparation**, that exact profile is marked reviewed, its POC profile name
+   becomes editable, and **Export for POC** is enabled. Export performs the same
+   qualification checks as the former Prepare step and writes one immutable ZIP
+   under `exports/dynamic_candidates/`. Existing generation report, regeneration,
+   alternative-candidate and dismiss/restore controls remain secondary
+   engineering actions.
 
-After generation, Analyzer prefers a qualified **Strict** candidate for each
-platform. **Relaxed 5%** is recommended only when no qualifying Strict candidate
-is available. Alternative and dismissed candidates remain selectable for
-engineering work. **View generation report**, **Regenerate profiles...** and
-**Dismiss candidate** are secondary actions rather than competing next steps.
+Export naming defaults to the first unused `Ride [Dynamic X]` label found in
+the Analyzer export folder. A duplicate platform/ride label already present in
+that folder is rejected before export. Export is engineering qualification, not
+physical commissioning.
 
-If a candidate has already been reviewed, reopening the workspace keeps that
-review state and advances the primary action to **Prepare for POC...**. A
-secondary **Review profile again** action remains available so the engineer can
-reopen the selected profile at any time without moving the workflow backwards.
-
-**Show generation summary** is useful after the generation process has ended or
-a workspace has been reopened. It shows the generated-study path, report path and
-candidate/review/preparation state. New generations also retain optimiser stdout
-in `analyzer_generation_output.txt` inside the generated study; older studies
-without that file still show the derived summary and point to the HTML report.
-
-Choose **Review selected profile** to open normal Analyzer playback. When you use
-**Return to dynamic study**, that candidate is remembered as reviewed and the
-primary action advances to **Prepare for POC...**. Preparation validates Analyzer's
-nominal + independent-heldout + static-fallback evidence against the platform's
-fixed 5% requested muscle-range envelope and applicable floor clearance, then
-builds one immutable ZIP in `exports/dynamic_candidates/`. The workspace then
-shows the prepared package and changes the primary action to **Open package
-folder**; **Copy folder path** is available alongside it. A large muscle-length
-step remains a ride-quality metric, not an automatic rejection. Qualification is
-not physical commissioning.
-
-Transfer the ZIP to the target POC and use **Profile > Import dynamic candidate
-ZIP...**, while deactivated and fully parked. POC verifies the package and
-Analyzer qualification report, adds only the named candidate to the selected
-platform's catalogue, and requests a restart. **Do not overwrite the entire
-working POC catalogue.** POC may warn about changed code revision, NL2
-version or frozen settings instead of rejecting a complete, qualified bundle.
-Malformed, missing, corrupt, wrong-platform or wrong-ride packages are still
-rejected; POC retains its per-frame physical workspace/output protection.
+On POC, **Profile > Import dynamic candidate ZIP...** opens at
+`exports/dynamic_candidates`, shows only valid packages for the POC's currently
+selected physical platform, and hides candidates already present in that
+platform catalogue. Filtering uses the package manifest (platform, candidate
+label and deployment path), not the ZIP filename. Import remains available only
+while fully deactivated and parked. A successful append-only import refreshes
+the NoLimits ride catalogue live; a normal POC restart is not required.
 
 For Ground-Loading Platform, **Profile > Adjust floor clearance...** changes
 the persistent minimum operating underside-to-floor clearance between 5 mm and
 75 mm (default 15 mm). This applies to static and dynamic rides, only while
 fully parked/deactivated, and does not move the platform directly or alter CAD
 geometry or parking. Verify actual physical clearance after any adjustment.
-Refer to `docs/POC_DYNAMIC_PREPARATION_V202.md` and the updated POC manual.
+Refer to `docs/POC_DYNAMIC_PREPARATION_V202.md` for the complete current path.
 
 ### Static and dynamic candidate analysis
 
-- Static optimiser results can be opened as independent A/B working copies and tuned without modifying the source study.
+- Static optimiser results can be opened as independent A/B working copies and tuned without modifying the source optimiser data.
 - Dynamic profiles can be compared with another profile, their unity-gain static baseline or independently validated fallback.
-- Dynamic multiplier curves are still read-only in Analyzer. To change them, regenerate a candidate from the source study.
+- Dynamic multiplier curves are still read-only in Analyzer. To change them, regenerate a candidate from the source session.
 - Creating/exporting a candidate does not make it preferred or physically commissioned in POC.
 
 ## Reference video

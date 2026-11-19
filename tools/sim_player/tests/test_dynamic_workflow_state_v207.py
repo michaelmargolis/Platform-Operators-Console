@@ -1,4 +1,4 @@
-# test_dynamic_workflow_state_v207.py ver 2
+# test_dynamic_workflow_state_v207.py ver 4
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -57,16 +57,21 @@ def test_workflow_stage_advances_in_one_direction_for_selected_candidate():
                           has_candidate=True, reviewed=True, prepared=True) == 'export'
 
 
-def test_workspace_source_contract_is_guided_not_flat_button_grid():
+def test_workspace_source_contract_is_three_stage_wizard():
     source = (Path(__file__).parents[1] / 'dynamic_ride_workspace.py').read_text(encoding='utf-8')
-    assert "('1 Source', '2 Generate', '3 Review', '4 Prepare', '5 Export')" in source
-    assert 'class WorkflowProgressStrip(QWidget):' in source
-    assert 'self.progress_strip = WorkflowProgressStrip(self)' in source
-    assert 'Current step:' in source
-    assert 'Next action:' in source
-    assert 'self.primary_btn = QPushButton()' in source
-    assert 'self.primary_btn.setMaximumWidth(280)' in source
-    assert 'self.source_toggle.setMaximumWidth(320)' in source
-    assert 'Show generation details' in source
-    assert 'Prepared package: none' not in source
-    assert 'Recommended for this platform' in source
+    assert "('1 Source', '2 Generate', '3 Review & Export')" in source
+    assert 'self.pages = QStackedWidget(self)' in source
+    assert "self.platform_chair = QCheckBox('Chair V3')" in source
+    assert "self.platform_ground = QCheckBox('Ground-Loading Platform')" in source
+    assert "self.source_next_btn = QPushButton('Generate profiles →')" in source
+    assert "self.source_generate_new_btn = QPushButton('Generate new profiles →')" in source
+    assert "'Use existing profile(s) →' if existing_ready else 'Generate profiles →'" in source
+    assert "self.abort_generation_btn = QPushButton('Abort generation')" in source
+    assert "export_btn = QPushButton('Export for POC')" in source
+    assert "review_btn = QPushButton('Review profile')" in source
+    assert 'self._refresh_review_panels()' in source
+    assert 'Current step:' not in source
+    assert 'Next action:' not in source
+    assert "'4 Prepare'" not in source
+    assert "'5 Export'" not in source
+

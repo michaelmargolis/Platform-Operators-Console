@@ -1,4 +1,4 @@
-# test_dynamic_source_capture_v0211.py ver 4
+# test_dynamic_source_capture_v0211.py ver 6
 """Headless contracts for Ride Analyzer dynamic-source capture integration."""
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from tools.sim_player.dynamic_source import (
 def test_product_name_changes_without_internal_package_rename():
     assert PRODUCT_NAME == "MDX Ride Analyzer"
     assert PRODUCT_SHORT_NAME == "Ride Analyzer"
-    assert WORKSPACE_VERSION == "0.2.14"
+    assert WORKSPACE_VERSION == "0.2.27"
 
 
 def test_current_ride_plan_launches_existing_capture_module(tmp_path):
@@ -63,10 +63,10 @@ def test_explicit_ride_list_follows_operator_visibility():
     assert tuple(rides) == operator_available_ride_keys()
 
 
-def test_capture_output_is_presented_as_dynamic_study():
+def test_capture_output_is_presented_as_dynamic_source_session():
     line = "Timing study: HOST; NL2 127.0.0.1:15151; output C:/repo/captures/dynamic_source/session_1"
     shown = translated_capture_output(line)
-    assert shown.startswith("Dynamic study:")
+    assert shown.startswith("Dynamic source session:")
     assert "Timing study:" not in shown
     assert session_path_from_output(line) == Path("C:/repo/captures/dynamic_source/session_1")
     assert translated_capture_output("MEASURED Blackbird 2") == "DYNAMIC SOURCE Blackbird 2"

@@ -1,4 +1,4 @@
-# __main__.py ver 1
+# __main__.py ver 2
 """Offline dynamic-profile batch. Use from a complete POC repository root."""
 from __future__ import annotations
 import argparse
@@ -19,7 +19,7 @@ ROOT=Path(__file__).resolve().parents[2]
 def parser():
     p=argparse.ArgumentParser(description='Phase 1 offline dynamic motion profiles; no NL2 or hardware connection.')
     p.add_argument('inputs',type=Path,nargs='+',help='Extracted timing-study session(s); each park needs >=2 completed compatible runs')
-    p.add_argument('--rides',default='mdxlogo,blackbird',help='Initial scope: mdxlogo (mdxlogocoaster alias) and blackbird')
+    p.add_argument('--rides',default='mdxlogo,blackbird',help='Comma-separated configured ride keys/names; Analyzer passes the selected session ride explicitly')
     p.add_argument('--platforms',choices=('both','chair_v3','platform_v2'),default='both')
     p.add_argument('--output',type=Path,default=Path('studies/nl2/dynamic_profiles'))
     p.add_argument('--list',action='store_true',help='Validate/discover input metadata without running optimisation')
@@ -62,10 +62,25 @@ def run(args):
     from .replay import prepare,processing_identity,verify_production
     from .evaluate import calculate,metrics,diagnostic_rows
     from .output import json_write,csv_write,report
-    rides={x.strip().casefold() for x in args.rides.split(',') if x.strip()}
-    aliases={'mdxlogocoaster':'mdxlogo','mdx logo coaster':'mdxlogo'}
-    rides={aliases.get(x,x) for x in rides}
-    if not rides or not rides.issubset({'mdxlogo','blackbird'}):raise ValueError('Phase 1 initial scope is mdxlogo and blackbird')
+    from sims.nolimits2 import ride_config
+    aliases={}
+    for key,park in ride_config.PARKS.items():
+        for value in (key,park['name'],Path(park['path']).stem):
+            aliases[''.join(ch for ch in str(value).casefold() if ch.isalnum())]=key
+    requested=[x.strip() for x in args.rides.split(',') if x.strip()]
+    rides=set()
+    unknown=[]
+    for value in requested:
+        token=''.join(ch for ch in value.casefold() if ch.isalnum())
+        key=aliases.get(token)
+        if key is None:
+            unknown.append(value)
+        else:
+            rides.add(key)
+    if unknown:
+        raise ValueError('Unknown configured ride(s): '+', '.join(sorted(unknown)))
+    if not rides:
+        raise ValueError('At least one configured ride is required')
     if args.variant and len(rides)>1:raise ValueError('--variant requires exactly one park')
     if args.evaluations<80 or not .5<=args.knot_seconds<=5 or not 1<=args.sweeps<=3:
         raise ValueError('Need evaluations>=80, knot-seconds 0.5..5, sweeps 1..3')

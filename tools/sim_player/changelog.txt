@@ -1,4 +1,27 @@
-# changelog.txt ver 14
+# changelog.txt ver 18
+
+MDX Ride Analyzer v0.2.28 - 2026-11-17
+- Show retained dynamic-profile work directly in the Ride selector and beside Chair V3 / Ground-Loading Platform, including workflow state and generated-profile-set timestamp/name. This lets operators skip rides/platforms already processed without opening them.
+- Match resumable results by session + ride + selected platform set, not session/ride alone. A result is reused only when it actually contains every selected platform.
+- Replace the ambiguous automatic **Continue to review** action with explicit **Use existing profile(s)** and **Generate new profiles** choices when a matching completed result exists; otherwise Source continues to offer **Generate profiles**.
+
+MDX Ride Analyzer v0.2.27 - 2026-11-17
+- Replace the flat Dynamic Ride preparation workspace with a three-stage Source -> Generate -> Review & Export wizard-style workflow while preserving the existing optimiser, qualification, candidate recommendation and profile-review mechanisms.
+- Source selects a dynamic-source session, ride and one or both physical platforms with checkboxes. Session rows now summarise rides plus partial/generated/reviewed/exported work, and each selected platform shows its retained workflow state so existing work can be resumed instead of regenerated.
+- Generate owns the live optimiser output and Abort control. Successful generation advances directly to Review & Export; cancelled/failed generation remains visibly incomplete and cannot be exported. Existing completed profile sets are retained and can be reopened.
+- Review & Export provides an independent panel for each selected platform. The Analyzer continues to recommend qualified Strict first (Relaxed 5% only when needed); Review opens the normal player, and returning from that exact review enables a validated unique profile name and Export for POC. The old separate Prepare and Export stages are combined into the single export action.
+- POC exports continue to use the immutable qualified candidate-package format under exports/dynamic_candidates; no optimiser mathematics, qualification thresholds, dynamic profile schema, matcher, kinematics or physical-output behaviour changed.
+
+MDX Ride Analyzer v0.2.26 - 2026-11-17
+- Dynamic Ride preparation always starts at captures/dynamic_source and shows the active parent folder. Session selection is now explicit: the Session dropdown contains only direct session_* folders from that parent, and hover text lists the rides/recording count in each session.
+- Selecting a session rebuilds Ride from that session's actual recordings; alternate folders apply only to the open workspace. Capture new session uses the displayed folder and selects the newly created session afterwards.
+- Standardise UI/help terminology around dynamic-source session / recording / capture / generated profile set, rename Return to dynamic study to Return to dynamic preparation, and make normal push-buttons more visually distinct from dropdown fields.
+
+
+MDX Ride Analyzer v0.2.25 - 2026-11-17
+- Dynamic Ride preparation now derives the Ride selector from primary recordings actually present in the selected source session; uncaptured rides are never offered, and all configured captured rides can be generated.
+- Remove the original Blackbird/Mdx Logo-only generator/package restriction; verified the generic path with the Extended eight-ride session and a completed Fenrir candidate generation/package test.
+- Prevent generated candidates from a different source session/ride appearing after source selection changes, require at least two non-Avoid recordings before enabling generation, and make push-buttons visibly distinct from dropdown fields and passive text.
 
 MDX Ride Analyzer v0.2.24 - 2026-11-15
 - Keep a Review profile again secondary action available in Prepare/Export states, allowing a previously reviewed dynamic candidate to be reopened without changing its workflow state.

@@ -1,4 +1,4 @@
-#test_dynamic_candidate_import_v202.py ver 1
+#test_dynamic_candidate_import_v202.py ver 2
 """No-hardware exporter/importer and qualification-envelope acceptance tests."""
 from __future__ import annotations
 import json
@@ -14,14 +14,15 @@ from core.dynamic_import import import_candidate
 from tools.nl2_dynamic_profiles.package import prepare_bundle
 from tools.nl2_sync.profile import DynamicProfile
 from sims.nolimits2.variant_store import VariantStore
+from sims.nolimits2 import ride_config
 from tests.test_dynamic_runtime_v201 import _fixture
 
 
 @pytest.mark.parametrize('platform', ('chair_v3', 'platform_v2'))
-@pytest.mark.parametrize('park', ('blackbird', 'mdxlogo'))
+@pytest.mark.parametrize('park', ('blackbird', 'mdxlogo', 'fenrir'))
 def test_analyzer_package_poc_import_roundtrip(tmp_path, platform, park):
     root, source, catalog, globals = _fixture(tmp_path, platform, park)
-    title = ('Blackbird' if park == 'blackbird' else 'Mdx Logo Coaster') + ' [D202]'
+    title = ride_config.PARKS[park]['name'] + ' [D202]'
     export, rel, summary = prepare_bundle(source, title, export_dir=tmp_path / 'exports', token='aabbccddeeff')
     assert export.is_file()
     assert summary['source_recordings'] == 2

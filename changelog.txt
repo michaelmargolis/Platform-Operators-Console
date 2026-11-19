@@ -1,4 +1,41 @@
-# changelog.txt ver 53
+# changelog.txt ver 59
+
+POC v216 / MDX Ride Analyzer v0.2.28 - Existing dynamic-profile visibility and explicit reuse - 2026-11-17
+- Make previous dynamic generation visible on the Source page instead of silently changing the primary action. Ride rows now summarize retained Chair/Ground state, and each platform checkbox shows Partial/Generated/Reviewed/Exported plus the profile-set timestamp/name with the full path in its tooltip.
+- Resume matching now includes the selected platform combination. Analyzer adopts only a completed result containing every selected platform; changing platform selection re-evaluates the retained result instead of reusing an unrelated session/ride run.
+- When a compatible completed result exists, Source explicitly offers **Use existing profile(s)** plus a separate **Generate new profiles** action. Otherwise the action remains **Generate profiles**. Existing optimiser maths, qualification, profile format and POC import/runtime behaviour are unchanged.
+
+POC v215 - Dynamic Ride wizard and platform-aware candidate import - 2026-11-17
+- Ride Analyzer v0.2.27 replaces the Dynamic Ride preparation control grid with a three-stage Source -> Generate -> Review & Export workflow. Source uses session/ride selection plus independent Chair V3 and Ground-Loading Platform checkboxes; Generate exposes live optimiser output and Abort; Review & Export provides one profile panel per selected platform and combines qualification/package preparation with Export for POC.
+- Dynamic-source session selection now surfaces retained processing state (partial, generated, reviewed, exported) for rides/platforms and reopens matching completed profile sets where possible. Existing generated results are retained; the wizard can continue to review instead of forcing regeneration.
+- POC Profile > Import dynamic candidate ZIP... now uses a platform-aware package chooser. It validates package manifests before display, shows only packages for the currently selected physical platform, and hides candidates already represented in that platform catalogue by label or deployed dynamic-profile path. Renamed/copied ZIP filenames therefore cannot bypass duplicate filtering.
+- Import still performs the complete package validation again at commit time and retains the parked/deactivated interlock, qualification/checksum/platform/park validation, atomic catalogue append, v214 same-filesystem staging and live catalogue refresh. No motion-state, kinematic, matcher, Festo or physical-output behaviour changed.
+
+
+POC v214 - Dynamic candidate import reliability and live refresh - 2026-11-17
+- Fix Raspberry Pi dynamic candidate import failing with `OSError: [Errno 18] Invalid cross-device link`: the importer previously staged under the system temporary directory and then attempted an atomic directory rename into the POC Runtime tree. On Pi `/tmp` may be a different filesystem (for example tmpfs), so the staging tree is now created under the POC repository root and the final publish remains an atomic same-filesystem rename.
+- Default Profile > Import dynamic candidate ZIP... to the Analyzer export folder `exports/dynamic_candidates` instead of the user's home directory. The folder is created on demand when possible, with the home directory retained only as a filesystem-error fallback.
+- Remove the normal full-POC restart requirement after import. While deactivated and fully parked, POC now reloads the NoLimits2 variant catalogue in memory using an append-only safety check, re-audits dynamic bundles, refreshes the ride selector, and preserves existing loaded/pending ride indices. If an existing catalogue entry changed externally, live refresh is rejected and the already-imported candidate is left for a later normal NL2 reload/restart.
+- Update import prompts/tooltips to describe immediate catalogue refresh rather than restart. Existing qualification, platform/park, checksum, catalogue-conflict and commissioning gates are unchanged.
+- Add regressions for repository-filesystem staging, Analyzer-export default directory, append-only live variant refresh, and rejection of existing-definition mutation.
+
+POC v213 - NL2 station-service timestamp race fix - 2026-11-17
+- Fix a service-loop timestamp race that could leave POC in RESETTING for minutes after RESET_PARK even though NL2 had already returned fresh in-station/manual/can-dispatch state. Sim.service() previously captured `now` before draining NL2 replies, while NL2Protocol timestamped those replies during client.service(); the station-mode freshness guard could therefore reject every just-received telemetry sample as being in the future.
+- Refresh the cycle timestamp immediately after client.service() before connectivity, station discovery/manual-mode and station-poll timing checks. This does not relax train/station, manual-mode, dispatch, stale-data or post-reset safety gates.
+- Add a fake-only regression requiring the timestamp passed to station-mode service to be at least as new as telemetry processed in the same service cycle.
+
+POC v212 / MDX Ride Analyzer v0.2.26 - 2026-11-17
+- Dynamic Ride preparation now always opens at captures/dynamic_source, displays the active parent folder explicitly, and lists only direct session_* folders from that parent in the Session selector. Alternate folders are per-workspace choices and are not persisted as the next startup root.
+- Session rows expose captured rides in hover tooltips; selecting a session rebuilds the Ride selector from recordings actually present in that session, retaining the previous ride only when valid. Capture new session writes to the displayed folder and preselects the new session on completion.
+- Standardise user-facing terminology: session = one session_* folder, recording = one completed ride repeat, capture = acquisition process, generated profile set = optimiser output. Rename Return to dynamic study to Return to dynamic preparation and update Analyzer Help/README/current workflow documentation.
+- Strengthen normal push-button styling relative to dropdown/input fields. No optimiser mathematics, qualification limits, POC dynamic runtime, kinematics or physical-output behaviour changed.
+
+
+POC v211 / MDX Ride Analyzer v0.2.25 - 2026-11-17
+- Dynamic Ride preparation: populate the Ride selector from primary recordings actually present in the selected source session, preserving the prior ride only when it exists in the newly selected session.
+- Extend the offline dynamic generator/package path from the initial Blackbird/Mdx Logo scope to any configured captured ride; verified all eight rides in the Extended study are discovered and completed a Fenrir Chair V3 generation/package run.
+- Prevent stale generated candidates from a different source session/ride being shown, require at least two non-Avoid recordings before generation is enabled, and strengthen button styling so actions are visually distinct from dropdowns and labels.
+- Correct the previously identified test_dynamic_workflow_state_v207.py header/manifest mismatch. No POC motion-runtime or physical-output behaviour changed.
 
 
 POC v210 - Raspberry Pi shell line-ending protection - 2026-11-17

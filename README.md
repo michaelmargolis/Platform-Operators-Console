@@ -1,4 +1,4 @@
-<!-- README.md ver 19 -->
+<!-- README.md ver 22 -->
 # Platform Operators Console
 
 The Platform Operators Console (POC) is the Raspberry Pi operator console for
@@ -9,17 +9,22 @@ telemetry processing, platform kinematics, Festo pressure output and
 The live Raspberry Pi installation is `/home/poc/Runtime` and starts as a
 desktop-autostart application. It is not installed as a system service.
 
-## POC v202 / MDX Ride Analyzer v0.2.17 dynamic workflow (engineering)
+## POC v216 / MDX Ride Analyzer v0.2.28 dynamic workflow (engineering)
 
-Ride Analyzer now has a complete **Study > Dynamic rides - prepare for POC...**
-workflow: select/rank a study, generate a profile, inspect the report, replay,
-prepare/export a qualified ZIP, then import in POC's Profile tab without
-command-line promotion or overwriting a working ride catalogue. V202 requires
-an Analyzer qualification report; strict SHA256 integrity still applies to
-bundle files, but unrelated Python source byte and NL2 version differences
-are advisory. A Ground-Loading Platform-only Profile control adjusts the
-persistent minimum operating underside-to-floor clearance while fully parked
-and deactivated. See `docs/POC_DYNAMIC_PREPARATION_V202.md`.
+Ride Analyzer dynamic preparation uses a three-stage **Source / Generate /
+Review & Export** wizard. Source now makes previous work explicit rather than
+silently skipping a stage: Ride rows and platform checkboxes show retained
+Partial/Generated/Reviewed/Exported state plus the profile-set date/name. When
+a compatible completed result exists for every selected platform, **Use existing
+profile(s)** and **Generate new profiles** are both offered. The optimiser,
+qualification limits and package format are unchanged.
+
+POC **Profile > Import dynamic candidate ZIP...** is now platform-aware: it
+scans package manifests, shows only candidates for the running POC's selected
+physical platform, and hides candidates already present by label or deployment
+path. It starts in `exports/dynamic_candidates`, retains the v214 same-filesystem
+atomic import fix, and refreshes an append-only NoLimits catalogue live without a
+normal full POC restart. See `docs/POC_DYNAMIC_PREPARATION_V202.md`.
 
 This is an **engineering release, not physical commissioning approval**.
 

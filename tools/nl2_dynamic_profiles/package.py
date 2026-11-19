@@ -1,4 +1,4 @@
-#package.py ver 1
+#package.py ver 2
 """Ride Analyzer candidate-package exporter (Qt-free; never changes POC catalogue).
 
 The exported ZIP is the documented handoff to POC. It contains a complete
@@ -43,8 +43,8 @@ def prepare_bundle(profile_directory, label, *, export_dir=None, token=None):
     profile = DynamicProfile.load(profile_path)
     load_reference(profile_path, profile)
     platform, park = profile.identity['platform'], profile.identity['park']
-    if park not in ('blackbird', 'mdxlogo'):
-        raise ValueError('Initial dynamic runtime supports Blackbird and Mdx Logo Coaster')
+    if park not in ride_config.PARKS:
+        raise ValueError('Dynamic profile refers to an unknown configured ride: ' + str(park))
     ride_config.validate_variant_label_format(label, park)
     report = make_qualification(profile, validation_path)
     summary = read_and_validate_qualification(profile, report)

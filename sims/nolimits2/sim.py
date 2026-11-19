@@ -1,4 +1,4 @@
-#sim.py  ver 47
+#sim.py  ver 49
 from __future__ import annotations
 
 import logging
@@ -253,6 +253,11 @@ class Sim(SimInterface):
             return
 
         self.client.service()
+        # NL2Protocol timestamps replies while client.service() drains its receive
+        # queue. Refresh the cycle timestamp afterwards so freshly processed
+        # telemetry/station replies can never appear to come from the future.
+        # In particular, _service_station_modes() rejects received_at > now.
+        now = time.monotonic()
         self._service_dispatch_preparation()
         self._service_flyer_dispatch_confirmation()
 
@@ -573,6 +578,35 @@ class Sim(SimInterface):
         self._refresh_visible_experiences()
         # Intentionally do not change _selected, _loaded_index, cue or station
         # state: the current rejected ride can still be reactivated this session.
+
+    def reload_variant_store(self, store):
+        """Adopt an append-only catalogue refresh without reloading the park.
+
+        Dynamic import appends one candidate while POC is parked/deactivated.
+        Existing definition indices must remain stable because loaded/pending
+        ride state stores those indices. Any other catalogue mutation is rejected
+        here and can be picked up by a normal simulator reload instead.
+        """
+        if self._ride_load_pending:
+            raise RuntimeError("Wait for the current NoLimits2 ride load to finish before refreshing variants")
+        if store.platform_key != self.platform_key:
+            raise ValueError("Variant store does not match the physical platform")
+        store.validate_display()
+        old_entries = self.variant_store.entries()
+        new_entries = store.entries()
+        if len(new_entries) < len(old_entries) or tuple(new_entries[:len(old_entries)]) != old_entries:
+            raise RuntimeError(
+                "Existing NoLimits2 variants changed outside this session; reload NoLimits2 before using the imported candidate"
+            )
+        new_rides = tuple((entry["label"], ride_config.PARKS[entry["park"]]["path"])
+                          for entry in new_entries)
+        if tuple(new_rides[:len(self._rides)]) != self._rides:
+            raise RuntimeError("NoLimits2 ride definitions changed while refreshing variants")
+        self.variant_store = store
+        self._rides = new_rides
+        self._park_keys = tuple(entry["park"] for entry in new_entries)
+        self._experiences = tuple(entry["label"] for entry in new_entries)
+        self._refresh_visible_experiences()
 
     def _same_park(self, a, b):
         return (a is not None and b is not None and

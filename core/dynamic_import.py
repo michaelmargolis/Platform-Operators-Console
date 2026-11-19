@@ -1,4 +1,4 @@
-#dynamic_import.py ver 1
+#dynamic_import.py ver 3
 """Atomic import of an Analyzer-prepared dynamic candidate onto POC.
 
 No Qt or hardware. Intended to be called from POC Profile tab only while
@@ -6,6 +6,7 @@ parked/deactivated. Never merges or replaces a whole platform catalogue.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
@@ -73,6 +74,82 @@ def _read_candidate_zip(archive: Path):
         raise DynamicProfileError(f'Invalid dynamic candidate ZIP: {exc}') from exc
 
 
+def default_import_directory(root: Path = ROOT) -> Path:
+    """Return the Analyzer export directory used by the POC import dialog."""
+    return Path(root).resolve() / 'exports' / 'dynamic_candidates'
+
+
+
+
+@dataclass(frozen=True)
+class CandidatePackageInfo:
+    """Validated import-package metadata safe to display in the POC chooser."""
+
+    path: Path
+    label: str
+    platform: str
+    park: str
+    deployment_path: str
+
+
+def discover_candidate_packages(directory, *, platform_key: str, catalog_dir=None):
+    """Return compatible, not-yet-imported packages from one directory.
+
+    Package filenames are deliberately ignored for compatibility decisions.
+    Each ZIP is validated through the same manifest/structure parser used by
+    :func:`import_candidate`. Packages for another physical platform and
+    packages whose candidate label *or deployment path* is already present in
+    this platform catalogue are hidden from the normal chooser. Invalid ZIPs
+    are also hidden, with counts returned for the UI summary.
+
+    Return ``(packages, counts)`` where packages is a tuple of
+    :class:`CandidatePackageInfo` and counts contains total/hidden categories.
+    The function is read-only; it never changes the catalogue or filesystem.
+    """
+    directory = Path(directory).expanduser().resolve()
+    counts = {
+        'total': 0, 'available': 0, 'already_imported': 0,
+        'other_platform': 0, 'invalid': 0,
+    }
+    if not directory.is_dir():
+        return (), counts
+
+    store = VariantStore.load(platform_key, directory=catalog_dir)
+    existing_labels = set(store.labels())
+    existing_deployments = {
+        str(entry.get('dynamic_profile', ''))
+        for entry in store.entries() if entry.get('dynamic_profile')
+    }
+    packages = []
+    for archive in sorted(directory.glob('*.zip'), key=lambda path: path.name.casefold()):
+        if not archive.is_file():
+            continue
+        counts['total'] += 1
+        try:
+            payload, _folder = _read_candidate_zip(archive)
+        except DynamicProfileError:
+            counts['invalid'] += 1
+            continue
+        if payload.get('platform') != platform_key:
+            counts['other_platform'] += 1
+            continue
+        entry = payload['candidate']
+        if (entry.get('label') in existing_labels or
+                entry.get('dynamic_profile') in existing_deployments):
+            counts['already_imported'] += 1
+            continue
+        packages.append(CandidatePackageInfo(
+            path=archive,
+            label=str(entry['label']),
+            platform=str(payload['platform']),
+            park=str(payload['park']),
+            deployment_path=str(entry['dynamic_profile']),
+        ))
+    packages.sort(key=lambda item: (item.park.casefold(), item.label.casefold(), item.path.name.casefold()))
+    counts['available'] = len(packages)
+    return tuple(packages), counts
+
+
 def sha256_file_bytes(data: bytes) -> str:
     import hashlib
     return hashlib.sha256(data).hexdigest()
@@ -92,16 +169,24 @@ def import_candidate(archive, *, platform_key: str, root: Path = ROOT, catalog_d
         raise DynamicProfileError('Candidate belongs to another physical platform')
     entry = payload['candidate']
     store = VariantStore.load(platform_key, directory=catalog_dir)
-    if entry['label'] in store.labels():
-        raise DynamicProfileError('Candidate label already exists; no catalogue overwrite allowed')
+    existing_deployments = {
+        str(row.get('dynamic_profile', ''))
+        for row in store.entries() if row.get('dynamic_profile')
+    }
+    if (entry['label'] in store.labels() or
+            entry.get('dynamic_profile') in existing_deployments):
+        raise DynamicProfileError('Candidate already exists/is imported; no catalogue overwrite allowed')
     bundle_rel = Path(folder)
     dest = root.joinpath(*bundle_rel.parts)
     if dest.exists():
         raise DynamicProfileError('The dynamic bundle directory already exists')
     if not dest.resolve(strict=False).is_relative_to((root/'sims'/'nolimits2'/'ride_profiles').resolve()):
         raise DynamicProfileError('Unsafe dynamic bundle destination')
-    # A normal OS error before publish is safe; staging can be removed.
-    with tempfile.TemporaryDirectory(prefix='poc-dyn-import-') as tmp:
+    # Stage on the POC repository filesystem. Raspberry Pi installations may
+    # mount /tmp as tmpfs, so staging there and Path.rename() into Runtime can
+    # fail with EXDEV / errno 18 (invalid cross-device link). Keeping the
+    # temporary tree under root preserves the intended atomic directory rename.
+    with tempfile.TemporaryDirectory(prefix='.poc-dyn-import-', dir=root) as tmp:
         staged_root = Path(tmp)
         staged = staged_root / bundle_rel
         staged.mkdir(parents=True)

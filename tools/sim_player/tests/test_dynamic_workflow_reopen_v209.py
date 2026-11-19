@@ -1,4 +1,4 @@
-# test_dynamic_workflow_reopen_v209.py ver 1
+# test_dynamic_workflow_reopen_v209.py ver 2
 from pathlib import Path
 
 
@@ -17,5 +17,5 @@ def test_completed_generation_has_useful_reopen_summary():
     source = workspace_source()
     assert "analyzer_generation_output.txt" in source
     assert "Candidates for the current ride/platform selection:" in source
-    assert "Detailed optimiser output was not retained for this older generated study." in source
+    assert "Detailed optimiser output was not retained for this older generated profile set." in source
     assert "noun = 'generation summary'" in source

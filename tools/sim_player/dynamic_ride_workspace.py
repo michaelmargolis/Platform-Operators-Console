@@ -1,5 +1,5 @@
-# dynamic_ride_workspace.py ver 4
-"""Guided engineer workflow: study -> generate -> review -> prepare -> export.
+# dynamic_ride_workspace.py ver 8
+"""Three-stage dynamic-ride workflow: Source -> Generate -> Review & Export.
 
 All expensive profile generation runs in a managed QProcess; no simulator,
 Festo or SHS connection is opened by this dialog. The normal Analyzer playback
@@ -16,13 +16,17 @@ from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame,
     QGroupBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
+    QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QStackedWidget,
+    QLineEdit, QVBoxLayout, QWidget,
 )
 
 from .dynamic_review import ROOT
 from .dynamic_ride_studies import (
-    SUPPORTED_RIDES, find_studies, rated_recordings, recording_ride,
+    available_rides, find_sessions, platform_processing_display, rated_recordings,
+    ride_label, ride_processing_display, session_processing_details,
+    session_status_display,
 )
+from .dynamic_source import DEFAULT_OUTPUT_ROOT as DEFAULT_SOURCE_ROOT
 from .dynamic_workflow_state import (
     candidate_is_qualified, candidate_sort_key, recommended_candidate_paths,
     workflow_stage,
@@ -31,25 +35,23 @@ from tools.nl2_dynamic_profiles.package import prepare_bundle
 from tools.nl2_sync.profile import DynamicProfile
 
 PLATFORM_LABELS = {'chair_v3': 'Chair V3', 'platform_v2': 'Ground-Loading Platform'}
-RIDE_LABELS = {'blackbird': 'Blackbird', 'mdxlogo': 'Mdx Logo Coaster'}
 TARGET_LABELS = {'strict': 'Strict', 'relaxed5': 'Relaxed 5%'}
 
 
 class WorkflowProgressStrip(QWidget):
-    """Passive segmented progress indicator; deliberately not button-like."""
+    """Passive three-stage wizard header; deliberately not button-like."""
 
-    _ORDER = ['source', 'generate', 'review', 'prepare', 'export']
-    _TITLES = ('1 Source', '2 Generate', '3 Review', '4 Prepare', '5 Export')
+    _ORDER = ['source', 'generate', 'review']
+    _TITLES = ('1 Source', '2 Generate', '3 Review & Export')
 
     def __init__(self, parent=None):
         super().__init__(parent)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(6)
-
+        outer.setSpacing(4)
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(2)
+        row.setSpacing(3)
         self._segments = []
         for title in self._TITLES:
             frame = QFrame()
@@ -58,27 +60,22 @@ class WorkflowProgressStrip(QWidget):
             frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             inner = QVBoxLayout(frame)
             inner.setContentsMargins(10, 6, 10, 6)
-            inner.setSpacing(0)
             label = QLabel(title)
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            inner.addStretch(1)
             inner.addWidget(label)
-            inner.addStretch(1)
             row.addWidget(frame, 1)
             self._segments.append((frame, label, title))
         outer.addLayout(row)
-
-        info = QHBoxLayout()
-        info.setContentsMargins(0, 0, 0, 0)
-        info.setSpacing(18)
-        self.current_label = QLabel('Current step: Source')
-        self.next_label = QLabel('Next action: Select or capture a source study')
-        info.addWidget(self.current_label)
-        info.addWidget(self.next_label, 1)
-        outer.addLayout(info)
+        # Kept as non-visible compatibility fields for older code/tests that
+        # call set_stage(current_text=..., next_text=...). The wizard pages now
+        # make the next action self-evident and do not repeat it below the strip.
+        self.current_label = QLabel()
+        self.next_label = QLabel()
 
     def set_stage(self, stage, *, current_text='', next_text=''):
-        current = {'generating': 'generate'}.get(stage, stage)
+        current = {
+            'generating': 'generate', 'prepare': 'review', 'export': 'review'
+        }.get(stage, stage)
         try:
             current_index = self._ORDER.index(current)
         except ValueError:
@@ -103,19 +100,17 @@ class WorkflowProgressStrip(QWidget):
                 )
                 label.setText(title)
             frame.setStyleSheet(style)
-        if current_text:
-            self.current_label.setText('Current step: ' + current_text)
-        if next_text:
-            self.next_label.setText('Next action: ' + next_text)
+        self.current_label.setText(current_text)
+        self.next_label.setText(next_text)
 
 
 class DynamicRideWorkspace(QDialog):
-    """Persistent, state-driven workflow for preparing a dynamic ride."""
+    """Three-stage wizard for generating, reviewing and exporting dynamic rides."""
 
     def __init__(self, settings, parent=None, *, context=None):
         super().__init__(parent)
-        self.setWindowTitle('Dynamic rides - preparation workspace')
-        self.resize(1040, 780)
+        self.setWindowTitle('Dynamic rides - prepare for POC')
+        self.resize(1050, 790)
         self.settings = settings
         self.context = dict(context or {})
         self.action = None
@@ -124,70 +119,137 @@ class DynamicRideWorkspace(QDialog):
         self.output_directory = None
         self._stdout = ''
         self._generation_output = []
-        self.studies = ()
+        self._generation_failed = False
+        self._force_source_page = False
+        self.sessions = ()
+        self._source_root = DEFAULT_SOURCE_ROOT.resolve()
         self._result_dir = None
         self._dismissed = set()
         self._reviewed = set()
         self._prepared = {}
         self._candidate_choices = {}
+        self._all_candidate_choices = {}
         self._recommended = {}
         self._prepared_package = None
+        self._export_name_overrides = {}
+        self._session_processing = {}
+        self._preferred_ride = str(
+            self.context.get('ride') or settings.value('dynamic_ride_workflow_ride', '') or ''
+        )
 
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
-
         self.setStyleSheet(
-            'QComboBox {padding: 5px 30px 5px 8px; border:1px solid #768798; border-radius:4px;}'
-            'QComboBox::drop-down {subcontrol-origin: padding; subcontrol-position: top right; width: 24px; border-left:1px solid #768798;}'
-            'QPushButton {padding: 6px 14px; border:1px solid #6a7d90; border-radius:4px; min-height: 18px;}'
-            'QPushButton#primaryActionButton {padding: 8px 18px; font-weight: 700;}'
+            'QComboBox, QLineEdit {'
+            '  background:#182838; color:#e8eef4; padding:5px 30px 5px 8px;'
+            '  border:1px solid #687d90; border-radius:4px;'
+            '}'
+            'QLineEdit {padding-right:8px;}'
+            'QComboBox:hover, QLineEdit:hover {border-color:#8ea7bc;}'
+            'QComboBox::drop-down {'
+            '  subcontrol-origin:padding; subcontrol-position:top right; width:26px;'
+            '  background:#132231; border-left:1px solid #687d90;'
+            '}'
+            'QPushButton {'
+            '  background:#2f6f9d; color:#ffffff; padding:6px 14px; font-weight:600;'
+            '  border:1px solid #9ac8e6; border-radius:4px; min-height:18px;'
+            '}'
+            'QPushButton:hover {background:#3d82b1; border-color:#c0e0f3;}'
+            'QPushButton:pressed {background:#24597f; border-color:#78aeca;}'
+            'QPushButton:checked {background:#376f91; border-color:#9bc8e5;}'
+            'QPushButton:disabled {'
+            '  background:#1a2733; color:#72808c; border-color:#354553;'
+            '}'
+            'QPushButton#primaryActionButton {'
+            '  background:#147fc8; border:2px solid #62b8ec;'
+            '  padding:8px 18px; font-weight:700;'
+            '}'
+            'QPushButton#primaryActionButton:hover {background:#1d91dc; border-color:#8bd0f7;}'
+            'QPushButton#primaryActionButton:pressed {background:#0f69a8;}'
+            'QPushButton#primaryActionButton:disabled {'
+            '  background:#1b3345; color:#71899a; border-color:#38556a;'
+            '}'
         )
 
         intro = QLabel(
-            'Prepare a dynamic ride as one guided workflow. Analyzer chooses the '
-            'reference and held-out validation runs automatically; source playback '
-            'and alternative candidates remain available for engineering review.'
+            'Create a POC-ready dynamic ride in three steps. Analyzer selects the '
+            'reference and held-out validation runs automatically; engineering '
+            'alternatives remain available without cluttering the normal path.'
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
 
-        # Progress strip: passive segmented indicator, not a control row.
         self.progress_strip = WorkflowProgressStrip(self)
         layout.addWidget(self.progress_strip)
+        self.pages = QStackedWidget(self)
+        layout.addWidget(self.pages, 1)
 
-        source_group = QGroupBox('Source study')
+        # ------------------------------------------------------------------
+        # 1. SOURCE
+        # ------------------------------------------------------------------
+        source_page = QWidget()
+        source_page_layout = QVBoxLayout(source_page)
+        source_group = QGroupBox('Source')
         source_layout = QVBoxLayout(source_group)
-        study_row = QHBoxLayout()
-        self.study = QComboBox()
-        self.study.setMinimumContentsLength(52)
-        study_row.addWidget(self.study, 1)
-        browse = QPushButton('Change / browse study...')
-        browse.setMaximumWidth(190)
-        browse.clicked.connect(self.browse_studies)
-        study_row.addWidget(browse)
-        capture_btn = QPushButton('Capture new study...')
-        capture_btn.setMaximumWidth(170)
-        capture_btn.clicked.connect(self.capture_study)
-        study_row.addWidget(capture_btn)
-        source_layout.addLayout(study_row)
 
-        options = QHBoxLayout()
-        options.addWidget(QLabel('Ride'))
+        folder_row = QHBoxLayout()
+        folder_row.addWidget(QLabel('Folder'))
+        self.source_folder_label = QLabel(str(self._source_root))
+        self.source_folder_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.source_folder_label.setStyleSheet(
+            'background:#132231; color:#d8e4ed; border:1px solid #526779; '
+            'border-radius:4px; padding:6px 8px;'
+        )
+        folder_row.addWidget(self.source_folder_label, 1)
+        browse = QPushButton('Choose folder...')
+        browse.setMaximumWidth(150)
+        browse.clicked.connect(self.browse_sessions_folder)
+        folder_row.addWidget(browse)
+        source_layout.addLayout(folder_row)
+
+        session_row = QHBoxLayout()
+        session_row.addWidget(QLabel('Session'))
+        self.session = QComboBox()
+        self.session.setMinimumContentsLength(52)
+        self.session.setToolTip(
+            'Sessions found directly in the folder above. Hover a session to see rides and processing state.')
+        self.session.view().setMouseTracking(True)
+        session_row.addWidget(self.session, 1)
+        capture_btn = QPushButton('Capture new session...')
+        capture_btn.setMaximumWidth(180)
+        capture_btn.clicked.connect(self.capture_session)
+        session_row.addWidget(capture_btn)
+        source_layout.addLayout(session_row)
+
+        ride_row = QHBoxLayout()
+        ride_row.addWidget(QLabel('Ride'))
         self.ride = QComboBox()
-        for key, name in RIDE_LABELS.items():
-            self.ride.addItem(name, key)
-        options.addWidget(self.ride, 1)
-        options.addWidget(QLabel('Generate for'))
-        self.platform = QComboBox()
-        self.platform.addItem('Both platforms', 'both')
-        for key, name in PLATFORM_LABELS.items():
-            self.platform.addItem(name, key)
-        options.addWidget(self.platform, 1)
-        source_layout.addLayout(options)
+        self.ride.setToolTip('Only rides with primary recordings in the selected session are listed.')
+        ride_row.addWidget(self.ride, 1)
+        source_layout.addLayout(ride_row)
 
-        self.study_note = QLabel()
-        self.study_note.setWordWrap(True)
-        source_layout.addWidget(self.study_note)
+        platform_group = QGroupBox('Generate for platform(s)')
+        platform_layout = QVBoxLayout(platform_group)
+        self.platform_chair = QCheckBox('Chair V3')
+        self.platform_ground = QCheckBox('Ground-Loading Platform')
+        self.platform_status = {
+            'chair_v3': QLabel('Not generated'),
+            'platform_v2': QLabel('Not generated'),
+        }
+        for checkbox, key in ((self.platform_chair, 'chair_v3'),
+                              (self.platform_ground, 'platform_v2')):
+            row = QHBoxLayout()
+            row.addWidget(checkbox)
+            row.addStretch(1)
+            status = self.platform_status[key]
+            status.setStyleSheet('color:#aebdca;')
+            row.addWidget(status)
+            platform_layout.addLayout(row)
+        source_layout.addWidget(platform_group)
+
+        self.session_note = QLabel()
+        self.session_note.setWordWrap(True)
+        source_layout.addWidget(self.session_note)
 
         source_toggle_row = QHBoxLayout()
         self.source_toggle = QPushButton('Source recordings (optional)')
@@ -203,12 +265,11 @@ class DynamicRideWorkspace(QDialog):
         recording_panel_layout = QVBoxLayout(self.recordings_panel)
         recording_panel_layout.setContentsMargins(0, 0, 0, 0)
         self.recordings = QListWidget()
-        self.recordings.setMaximumHeight(135)
+        self.recordings.setMaximumHeight(150)
         recording_panel_layout.addWidget(self.recordings)
         recording_row = QHBoxLayout()
         recording_hint = QLabel(
-            'Playback only. Ratings help inspection; they do not choose the optimiser reference.'
-        )
+            'Playback only. Ratings help inspection; they do not choose the optimiser reference.')
         recording_hint.setWordWrap(True)
         recording_row.addWidget(recording_hint, 1)
         self.open_recording_btn = QPushButton('Play selected recording')
@@ -218,109 +279,162 @@ class DynamicRideWorkspace(QDialog):
         recording_panel_layout.addLayout(recording_row)
         self.recordings_panel.setVisible(False)
         source_layout.addWidget(self.recordings_panel)
-        layout.addWidget(source_group)
+        source_page_layout.addWidget(source_group)
+        source_page_layout.addStretch(1)
 
-        candidate_group = QGroupBox('Generated profiles')
-        candidate_layout = QVBoxLayout(candidate_group)
-        self.candidate_status = QLabel('No profiles generated for the current selection.')
-        self.candidate_status.setWordWrap(True)
-        candidate_layout.addWidget(self.candidate_status)
+        source_action = QHBoxLayout()
+        self.source_generate_new_btn = QPushButton('Generate new profiles →')
+        self.source_generate_new_btn.setMinimumHeight(36)
+        self.source_generate_new_btn.clicked.connect(self.regenerate_profiles)
+        self.source_generate_new_btn.setVisible(False)
+        source_action.addStretch(1)
+        source_action.addWidget(self.source_generate_new_btn)
+        self.source_next_btn = QPushButton('Generate profiles →')
+        self.source_next_btn.setObjectName('primaryActionButton')
+        self.source_next_btn.setMinimumHeight(42)
+        self.source_next_btn.setMinimumWidth(250)
+        self.source_next_btn.clicked.connect(self._source_next)
+        source_action.addWidget(self.source_next_btn)
+        source_page_layout.addLayout(source_action)
+        self.pages.addWidget(source_page)
 
-        candidate_row = QHBoxLayout()
-        candidate_row.addWidget(QLabel('Candidate'))
-        self.candidate = QComboBox()
-        self.candidate.setMinimumContentsLength(50)
-        candidate_row.addWidget(self.candidate, 1)
-        self.show_dismissed = QCheckBox('Show dismissed')
-        self.show_dismissed.toggled.connect(self.populate_candidates)
-        candidate_row.addWidget(self.show_dismissed)
-        candidate_layout.addLayout(candidate_row)
-
-        self.candidate_detail = QLabel()
-        self.candidate_detail.setWordWrap(True)
-        candidate_layout.addWidget(self.candidate_detail)
-
-        secondary = QHBoxLayout()
-        self.report_btn = QPushButton('View generation report')
-        self.report_btn.setMaximumWidth(190)
-        self.report_btn.clicked.connect(self.open_report)
-        secondary.addWidget(self.report_btn)
-        self.review_again_btn = QPushButton('Review profile again')
-        self.review_again_btn.setMaximumWidth(175)
-        self.review_again_btn.clicked.connect(self.review_profile)
-        secondary.addWidget(self.review_again_btn)
-        self.regenerate_btn = QPushButton('Regenerate profiles...')
-        self.regenerate_btn.setMaximumWidth(180)
-        self.regenerate_btn.clicked.connect(self.regenerate_profiles)
-        secondary.addWidget(self.regenerate_btn)
-        self.dismiss_btn = QPushButton('Dismiss candidate')
-        self.dismiss_btn.setMaximumWidth(170)
-        self.dismiss_btn.setToolTip(
-            'Hide this research candidate from the normal list; source evidence is preserved'
-        )
-        self.dismiss_btn.clicked.connect(self.dismiss_profile)
-        secondary.addWidget(self.dismiss_btn)
-        secondary.addStretch(1)
-        candidate_layout.addLayout(secondary)
-        layout.addWidget(candidate_group)
-
-        next_group = QGroupBox('Next step')
-        next_layout = QVBoxLayout(next_group)
-        self.stage_title = QLabel()
-        self.stage_title.setStyleSheet('font-size: 15px; font-weight: 600;')
-        next_layout.addWidget(self.stage_title)
-        self.stage_detail = QLabel()
-        self.stage_detail.setWordWrap(True)
-        next_layout.addWidget(self.stage_detail)
-        primary_row = QHBoxLayout()
-        self.primary_btn = QPushButton()
-        self.primary_btn.setMinimumHeight(42)
-        self.primary_btn.setMinimumWidth(240)
-        self.primary_btn.setMaximumWidth(280)
-        self.primary_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        self.primary_btn.setDefault(True)
-        self.primary_btn.setObjectName('primaryActionButton')
-        self.primary_btn.clicked.connect(self.advance_workflow)
-        primary_row.addWidget(self.primary_btn)
-        primary_row.addStretch(1)
-        next_layout.addLayout(primary_row)
-        layout.addWidget(next_group)
-
-        self.package_group = QGroupBox('Prepared POC package')
-        package_layout = QVBoxLayout(self.package_group)
-        self.package_note = QLabel()
-        self.package_note.setWordWrap(True)
-        package_layout.addWidget(self.package_note)
-        package_buttons = QHBoxLayout()
-        self.open_export_btn = QPushButton('Open package folder')
-        self.open_export_btn.setMaximumWidth(170)
-        self.open_export_btn.clicked.connect(self.open_export_folder)
-        package_buttons.addWidget(self.open_export_btn)
-        self.copy_export_btn = QPushButton('Copy folder path')
-        self.copy_export_btn.setMaximumWidth(150)
-        self.copy_export_btn.clicked.connect(self.copy_export_path)
-        package_buttons.addWidget(self.copy_export_btn)
-        package_buttons.addStretch(1)
-        package_layout.addLayout(package_buttons)
-        self.package_group.setVisible(False)
-        layout.addWidget(self.package_group)
-
-        details_row = QHBoxLayout()
-        self.details_toggle = QPushButton('Show generation details')
-        self.details_toggle.setCheckable(True)
-        self.details_toggle.setChecked(False)
-        self.details_toggle.toggled.connect(self._toggle_generation_details)
-        self.details_toggle.setMaximumWidth(230)
-        details_row.addWidget(self.details_toggle)
-        details_row.addStretch(1)
-        layout.addLayout(details_row)
+        # ------------------------------------------------------------------
+        # 2. GENERATE
+        # ------------------------------------------------------------------
+        generation_page = QWidget()
+        generation_layout = QVBoxLayout(generation_page)
+        self.generation_title = QLabel('Generate dynamic profiles')
+        self.generation_title.setStyleSheet('font-size:16px; font-weight:700;')
+        generation_layout.addWidget(self.generation_title)
+        self.generation_context = QLabel()
+        self.generation_context.setWordWrap(True)
+        generation_layout.addWidget(self.generation_context)
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setMaximumBlockCount(2500)
-        self.log.setMaximumHeight(175)
-        self.log.setPlaceholderText('Generation progress and diagnostic output')
-        self.log.setVisible(False)
-        layout.addWidget(self.log)
+        self.log.setPlaceholderText('Generation progress and optimiser output')
+        generation_layout.addWidget(self.log, 1)
+        generation_buttons = QHBoxLayout()
+        self.generation_back_btn = QPushButton('← Back to source')
+        self.generation_back_btn.clicked.connect(self._go_source)
+        generation_buttons.addWidget(self.generation_back_btn)
+        self.generation_previous_btn = QPushButton('Review previous result')
+        self.generation_previous_btn.clicked.connect(self._go_review)
+        self.generation_previous_btn.setVisible(False)
+        generation_buttons.addWidget(self.generation_previous_btn)
+        generation_buttons.addStretch(1)
+        self.retry_generation_btn = QPushButton('Try again')
+        self.retry_generation_btn.clicked.connect(self.generate_profiles)
+        self.retry_generation_btn.setVisible(False)
+        generation_buttons.addWidget(self.retry_generation_btn)
+        self.abort_generation_btn = QPushButton('Abort generation')
+        self.abort_generation_btn.clicked.connect(self.cancel_generation)
+        generation_buttons.addWidget(self.abort_generation_btn)
+        generation_layout.addLayout(generation_buttons)
+        self.pages.addWidget(generation_page)
+
+        # Compatibility control retained but not shown: generation output is
+        # always visible on the dedicated Generate page.
+        self.details_toggle = QPushButton()
+        self.details_toggle.setCheckable(True)
+
+        # ------------------------------------------------------------------
+        # 3. REVIEW & EXPORT
+        # ------------------------------------------------------------------
+        review_page = QWidget()
+        review_layout = QVBoxLayout(review_page)
+        review_intro = QLabel(
+            'Review the recommended profile for each selected platform. Returning '
+            'from playback marks that exact profile reviewed; its export name then '
+            'becomes editable and Export for POC is enabled.')
+        review_intro.setWordWrap(True)
+        review_layout.addWidget(review_intro)
+
+        self.review_platform = {}
+        for platform_key, platform_label in PLATFORM_LABELS.items():
+            group = QGroupBox(platform_label)
+            gl = QVBoxLayout(group)
+            status = QLabel()
+            status.setWordWrap(True)
+            gl.addWidget(status)
+            candidate_row = QHBoxLayout()
+            candidate_row.addWidget(QLabel('Profile'))
+            selector = QComboBox()
+            selector.setMinimumContentsLength(44)
+            candidate_row.addWidget(selector, 1)
+            review_btn = QPushButton('Review profile')
+            candidate_row.addWidget(review_btn)
+            dismiss_btn = QPushButton('Dismiss')
+            dismiss_btn.setToolTip('Hide/restore this research candidate; generated evidence is preserved.')
+            candidate_row.addWidget(dismiss_btn)
+            gl.addLayout(candidate_row)
+            export_row = QHBoxLayout()
+            export_row.addWidget(QLabel('POC profile name'))
+            name = QLineEdit()
+            name.setPlaceholderText('Review profile before export')
+            export_row.addWidget(name, 1)
+            export_btn = QPushButton('Export for POC')
+            export_row.addWidget(export_btn)
+            open_btn = QPushButton('Open export folder')
+            open_btn.setVisible(False)
+            export_row.addWidget(open_btn)
+            gl.addLayout(export_row)
+            export_note = QLabel()
+            export_note.setWordWrap(True)
+            gl.addWidget(export_note)
+            review_layout.addWidget(group)
+            self.review_platform[platform_key] = {
+                'group': group, 'status': status, 'selector': selector,
+                'review': review_btn, 'dismiss': dismiss_btn, 'name': name,
+                'export': export_btn, 'open': open_btn, 'note': export_note,
+            }
+            selector.currentIndexChanged.connect(
+                lambda _index, key=platform_key: self._review_candidate_changed(key))
+            review_btn.clicked.connect(
+                lambda _checked=False, key=platform_key: self._review_profile_for_platform(key))
+            dismiss_btn.clicked.connect(
+                lambda _checked=False, key=platform_key: self._dismiss_profile_for_platform(key))
+            name.textEdited.connect(
+                lambda text, key=platform_key: self._export_name_edited(key, text))
+            export_btn.clicked.connect(
+                lambda _checked=False, key=platform_key: self._export_profile_for_platform(key))
+            open_btn.clicked.connect(
+                lambda _checked=False, key=platform_key: self._open_platform_export_folder(key))
+
+        engineering = QHBoxLayout()
+        self.report_btn = QPushButton('View generation report')
+        self.report_btn.clicked.connect(self.open_report)
+        engineering.addWidget(self.report_btn)
+        self.regenerate_btn = QPushButton('Regenerate profiles...')
+        self.regenerate_btn.clicked.connect(self.regenerate_profiles)
+        engineering.addWidget(self.regenerate_btn)
+        self.show_dismissed = QCheckBox('Show dismissed')
+        self.show_dismissed.toggled.connect(self.populate_candidates)
+        engineering.addWidget(self.show_dismissed)
+        engineering.addStretch(1)
+        self.process_another_btn = QPushButton('Process another ride')
+        self.process_another_btn.clicked.connect(self._go_source)
+        engineering.addWidget(self.process_another_btn)
+        review_layout.addLayout(engineering)
+        review_layout.addStretch(1)
+        self.pages.addWidget(review_page)
+
+        # Hidden compatibility selectors/state labels used by the established
+        # candidate/review persistence backend. The wizard surfaces one selector
+        # per physical platform instead of one global candidate dropdown.
+        self.candidate = QComboBox()
+        self.candidate_status = QLabel()
+        self.candidate_detail = QLabel()
+        self.dismiss_btn = QPushButton()
+        self.review_again_btn = QPushButton()
+        self.primary_btn = QPushButton()
+        self.stage_title = QLabel()
+        self.stage_detail = QLabel()
+        self.package_group = QWidget()
+        self.package_group.setVisible(False)
+        self.package_note = QLabel()
+        self.open_export_btn = QPushButton()
+        self.copy_export_btn = QPushButton()
 
         close_row = QHBoxLayout()
         close_row.addStretch(1)
@@ -330,23 +444,20 @@ class DynamicRideWorkspace(QDialog):
         close_row.addWidget(close_btn)
         layout.addLayout(close_row)
 
-        self.study.currentIndexChanged.connect(self._source_selection_changed)
-        self.ride.currentIndexChanged.connect(self._source_selection_changed)
-        self.platform.currentIndexChanged.connect(self._source_selection_changed)
+        self.session.currentIndexChanged.connect(self._session_selection_changed)
+        self.ride.currentIndexChanged.connect(self._ride_selection_changed)
+        self.platform_chair.toggled.connect(self._platform_selection_changed)
+        self.platform_ground.toggled.connect(self._platform_selection_changed)
         self.candidate.currentIndexChanged.connect(self.update_workflow_state)
 
-        self.populate_studies()
-        chosen = self.context.get('ride') or settings.value('dynamic_ride_workflow_ride', 'blackbird')
-        idx = self.ride.findData(chosen)
-        if idx >= 0:
-            self.ride.setCurrentIndex(idx)
-        plat = self.context.get('platform') or settings.value('dynamic_ride_workflow_platform', 'both')
-        idx = self.platform.findData(plat)
-        if idx >= 0:
-            self.platform.setCurrentIndex(idx)
+        platform_value = self.context.get('platform') or settings.value(
+            'dynamic_ride_workflow_platform', 'both')
+        self._set_platform_selection(str(platform_value))
+        self.populate_sessions()
         output = self.context.get('output') or settings.value('dynamic_ride_workflow_output', '')
         if output:
-            self.set_result_dir(Path(str(output)))
+            if self.set_result_dir(Path(str(output))):
+                self._force_source_page = False
         self.update_workflow_state()
 
     def append_log(self, line):
@@ -361,13 +472,14 @@ class DynamicRideWorkspace(QDialog):
         )
 
     def _toggle_generation_details(self, visible):
-        self.log.setVisible(bool(visible))
-        if visible and not self._generation_running():
+        # v0.2.28 has a dedicated Generate page; progress/details stay visible.
+        self.log.setVisible(True)
+        if not self._generation_running():
             self._refresh_generation_details()
-        self._update_details_toggle_text()
 
     def _set_details_visible(self, visible):
-        self.details_toggle.setChecked(bool(visible))
+        # Compatibility no-op: generation output is always visible on page 2.
+        self.log.setVisible(True)
 
     def _generation_running(self):
         return self.process is not None and self.process.state() != QProcess.ProcessState.NotRunning
@@ -376,18 +488,13 @@ class DynamicRideWorkspace(QDialog):
         return self._result_dir / 'analyzer_generation_output.txt' if self._result_dir else None
 
     def _update_details_toggle_text(self):
-        if self._generation_running():
-            noun = 'generation details'
-        elif self._result_dir:
-            noun = 'generation summary'
-        else:
-            noun = 'generation details'
-        self.details_toggle.setText(('Hide ' if self.details_toggle.isChecked() else 'Show ') + noun)
+        # Retained for callers from the pre-wizard implementation.
+        return
 
     def _generation_summary_text(self):
         if not self._result_dir:
             return 'No completed generation result is currently selected.'
-        lines = ['Generated profile study: ' + str(self._result_dir)]
+        lines = ['Generated profile set: ' + str(self._result_dir)]
         report = self._result_dir / 'report.html'
         if report.is_file():
             lines.append('Generation report: ' + str(report))
@@ -422,7 +529,7 @@ class DynamicRideWorkspace(QDialog):
         else:
             lines.extend([
                 '',
-                'Detailed optimiser output was not retained for this older generated study.',
+                'Detailed optimiser output was not retained for this older generated profile set.',
                 'Use View generation report for the full qualification results.',
             ])
         return '\n'.join(lines)
@@ -432,79 +539,335 @@ class DynamicRideWorkspace(QDialog):
             return
         self.log.setPlainText(self._generation_summary_text())
 
-    def populate_studies(self, directory=None):
-        root = Path(directory or self.settings.value(
-            'dynamic_ride_workflow_studies_root', str(ROOT / 'captures' / 'dynamic_source')
-        ))
-        self.studies = find_studies(root)
-        desired = str(self.context.get('session') or self.settings.value('dynamic_ride_workflow_session', ''))
-        self.study.blockSignals(True)
-        self.study.clear()
-        for row in self.studies:
-            self.study.addItem(row.description, str(row.path))
-        self.study.blockSignals(False)
-        index = self.study.findData(desired)
+    def _selected_platforms(self):
+        selected = []
+        if self.platform_chair.isChecked():
+            selected.append('chair_v3')
+        if self.platform_ground.isChecked():
+            selected.append('platform_v2')
+        return tuple(selected)
+
+    def _platform_selection_key(self):
+        selected = self._selected_platforms()
+        if len(selected) == 2:
+            return 'both'
+        return selected[0] if selected else ''
+
+    def _platform_selection_text(self):
+        selected = self._selected_platforms()
+        if len(selected) == 2:
+            return 'Chair V3 and Ground-Loading Platform'
+        if len(selected) == 1:
+            return PLATFORM_LABELS[selected[0]]
+        return 'no platform'
+
+    def _set_platform_selection(self, value):
+        value = str(value or 'both')
+        self.platform_chair.blockSignals(True)
+        self.platform_ground.blockSignals(True)
+        self.platform_chair.setChecked(value in ('both', 'chair_v3'))
+        self.platform_ground.setChecked(value in ('both', 'platform_v2'))
+        self.platform_chair.blockSignals(False)
+        self.platform_ground.blockSignals(False)
+
+    def _selected_platforms_have_profiles(self):
+        selected = set(self._selected_platforms())
+        if not selected:
+            return False
+        available = {choice.platform for choice in self._candidate_choices.values()}
+        return selected.issubset(available)
+
+    def _source_next(self):
+        if self._selected_platforms_have_profiles():
+            self._force_source_page = False
+            self._go_review()
+            return
+        self.generate_profiles()
+
+    def _go_source(self):
+        if self._generation_running():
+            return
+        self._force_source_page = True
+        self.pages.setCurrentIndex(0)
+        self._set_progress('source')
+        self.update_workflow_state()
+
+    def _go_review(self):
+        if not self._candidate_choices:
+            return
+        self._force_source_page = False
+        self.pages.setCurrentIndex(2)
+        self._set_progress('review')
+        self._refresh_review_panels()
+
+    def populate_sessions(self, directory=None, preferred_session=None):
+        """Populate sessions from exactly one parent folder.
+
+        A fresh workspace always starts at captures/dynamic_source. Choosing a
+        different folder changes only this open workspace; it is not persisted
+        as the next startup root.
+        """
+        root = Path(directory or self._source_root).expanduser().resolve()
+        self._source_root = root
+        self.source_folder_label.setText(str(root))
+        self.source_folder_label.setToolTip(str(root))
+        self.sessions = find_sessions(root)
+
+        desired = str(preferred_session or self.context.get('session') or
+                      self.settings.value('dynamic_ride_workflow_session', ''))
+        self.session.blockSignals(True)
+        self.session.clear()
+        generated_root = ROOT / 'studies/nl2/dynamic_profiles'
+        for row in self.sessions:
+            description, tooltip = session_status_display(row, generated_root)
+            self.session.addItem(description, str(row.path))
+            index = self.session.count() - 1
+            self.session.setItemData(index, tooltip, Qt.ItemDataRole.ToolTipRole)
+        index = self.session.findData(desired)
+        if index < 0 and self.session.count():
+            index = 0
         if index >= 0:
-            self.study.setCurrentIndex(index)
-        self.populate_recordings()
+            self.session.setCurrentIndex(index)
+        self.session.blockSignals(False)
+        self._session_selection_changed()
 
-    def browse_studies(self):
+    def populate_rides(self, preferred=None):
+        """Populate rides and expose retained profile work without changing it."""
+        session = self.current_session()
+        prior = str(preferred or self.ride.currentData() or self._preferred_ride or '')
+        rides = available_rides(session)
+        generated_root = ROOT / 'studies/nl2/dynamic_profiles'
+        self._session_processing = (
+            session_processing_details(session, generated_root) if session is not None else {})
+        self.ride.blockSignals(True)
+        self.ride.clear()
+        for key in rides:
+            description, tooltip = ride_processing_display(
+                key, self._session_processing.get(key, {}))
+            self.ride.addItem(description, key)
+            row = self.ride.count() - 1
+            self.ride.setItemData(row, tooltip, Qt.ItemDataRole.ToolTipRole)
+        index = self.ride.findData(prior)
+        if index < 0 and self.ride.count():
+            index = 0
+        if index >= 0:
+            self.ride.setCurrentIndex(index)
+            self._preferred_ride = str(self.ride.currentData())
+        self.ride.blockSignals(False)
+        self.ride.setEnabled(bool(rides) and not self._generation_running())
+        return rides
+
+    def browse_sessions_folder(self):
         directory = QFileDialog.getExistingDirectory(
-            self, 'Dynamic-source session or session parent folder',
-            str(ROOT / 'captures' / 'dynamic_source')
+            self, 'Choose folder containing dynamic-source sessions', str(self._source_root)
         )
-        if directory:
-            path = Path(directory)
-            self.settings.setValue('dynamic_ride_workflow_studies_root', str(path))
-            self.populate_studies(path)
+        if not directory:
+            return
+        path = Path(directory).expanduser().resolve()
+        preferred = None
+        # Be forgiving if the user chooses a session folder itself: display its
+        # parent as the source folder and preselect that session.
+        if path.name.startswith('session_'):
+            preferred = str(path)
+            path = path.parent
+        self.context.pop('session', None)
+        self.populate_sessions(path, preferred_session=preferred)
 
-    def capture_study(self):
+    def capture_session(self):
         from .dynamic_source_dialog import DynamicSourceCaptureDialog
-        dialog = DynamicSourceCaptureDialog(str(self.ride.currentData()), self)
+        initial_ride = str(self.ride.currentData() or self._preferred_ride or 'blackbird')
+        dialog = DynamicSourceCaptureDialog(initial_ride, self, output_root=self._source_root)
         dialog.exec()
-        self.populate_studies()
+        preferred_session = str(dialog.session_dir) if dialog.session_dir is not None else None
+        self.populate_sessions(self._source_root, preferred_session=preferred_session)
         if dialog.open_recording_path is not None:
             from .dynamic_source_rating import _find_session_dir
             source = Path(dialog.open_recording_path)
             session = _find_session_dir(source)
             if session is not None:
-                index = self.study.findData(str(session))
+                index = self.session.findData(str(session))
                 if index >= 0:
-                    self.study.setCurrentIndex(index)
+                    self.session.setCurrentIndex(index)
             self.action = 'recording'
             self.selected_path = source
             self.context = self.save_context()
             self.accept()
 
-    def current_study(self):
-        index = self.study.currentIndex()
-        return self.studies[index] if 0 <= index < len(self.studies) else None
+    def current_session(self):
+        index = self.session.currentIndex()
+        return self.sessions[index] if 0 <= index < len(self.sessions) else None
 
-    def _source_selection_changed(self):
+    def _session_selection_changed(self, *_args):
+        self.populate_rides(self._preferred_ride)
+        self._source_context_changed()
+
+    def _ride_selection_changed(self, *_args):
+        if self.ride.currentData():
+            self._preferred_ride = str(self.ride.currentData())
+        self._source_context_changed()
+
+    def _platform_selection_changed(self, *_args):
+        self._force_source_page = True
+        self._generation_failed = False
+        if self._result_dir is not None and not self._result_matches_current_selection(self._result_dir):
+            self._clear_result_selection()
+        self._restore_saved_result_if_matching()
+        self.populate_candidates()
+        self.update_workflow_state()
+
+    def _source_context_changed(self):
+        self._force_source_page = True
+        self._generation_failed = False
+        self._detach_mismatched_result()
+        self._restore_saved_result_if_matching()
         self.populate_recordings()
         self.populate_candidates()
         self.update_workflow_state()
 
+    def _result_platforms(self, directory):
+        platforms = set()
+        run_dir = Path(directory)
+        if not (run_dir / 'report.json').is_file():
+            return platforms
+        for profile_path in run_dir.glob('*/*/*/profile.json'):
+            try:
+                payload = json.loads(profile_path.read_text(encoding='utf-8-sig'))
+                platform = str(payload.get('identity', {}).get('platform', '')).casefold()
+            except (OSError, ValueError, TypeError):
+                continue
+            if platform in PLATFORM_LABELS:
+                platforms.add(platform)
+        return platforms
+
+    def _result_matches_current_selection(self, directory):
+        if not self._result_matches_current_source(directory):
+            return False
+        selected = set(self._selected_platforms())
+        return not selected or selected.issubset(self._result_platforms(directory))
+
+    def _clear_result_selection(self):
+        self._result_dir = None
+        self._dismissed = set()
+        self._reviewed = set()
+        self._prepared = {}
+        self._candidate_choices = {}
+        self._all_candidate_choices = {}
+        self._recommended = {}
+        self._prepared_package = None
+        self.package_group.setVisible(False)
+        self.candidate.blockSignals(True)
+        self.candidate.clear()
+        self.candidate.blockSignals(False)
+        self._refresh_generation_details()
+        self._update_details_toggle_text()
+
+    def _restore_saved_result_if_matching(self):
+        if self._result_dir is not None:
+            return
+        value = self.context.get('output') or self.settings.value('dynamic_ride_workflow_output', '')
+        if value:
+            directory = Path(str(value))
+            if self._result_matches_current_selection(directory) and self.set_result_dir(directory):
+                return
+
+        # The wizard is also a resume surface. If the globally remembered last
+        # result belongs to another session/ride, find the newest completed
+        # result for the current source instead of offering an unnecessary
+        # regeneration. Incomplete runs are intentionally not adopted.
+        root = ROOT / 'studies/nl2/dynamic_profiles'
+        try:
+            reports = sorted(
+                root.rglob('report.json'),
+                key=lambda path: path.stat().st_mtime, reverse=True)
+        except OSError:
+            reports = []
+        for report in reports:
+            directory = report.parent
+            if self._result_matches_current_selection(directory) and self.set_result_dir(directory):
+                return
+
+    def _result_matches_current_source(self, directory):
+        session = self.current_session()
+        ride = self.ride.currentData()
+        if session is None or not ride:
+            return False
+        settings_path = Path(directory) / 'run_settings.json'
+        try:
+            payload = json.loads(settings_path.read_text(encoding='utf-8'))
+        except (OSError, ValueError, TypeError):
+            return False
+        inputs = payload.get('inputs', ())
+        if isinstance(inputs, str):
+            inputs = (inputs,)
+        if not isinstance(inputs, (list, tuple)):
+            return False
+        source_match = False
+        for value in inputs:
+            candidate = Path(str(value)).expanduser()
+            try:
+                source_match = candidate.resolve() == session.path.resolve()
+            except OSError:
+                source_match = False
+            if not source_match and candidate.name == session.path.name:
+                source_match = True
+            if source_match:
+                break
+        rides = payload.get('rides', '')
+        if isinstance(rides, str):
+            rides = {part.strip().casefold() for part in rides.split(',') if part.strip()}
+        elif isinstance(rides, (list, tuple, set)):
+            rides = {str(part).strip().casefold() for part in rides if str(part).strip()}
+        else:
+            rides = set()
+        return source_match and str(ride).casefold() in rides
+
+    def _detach_mismatched_result(self):
+        if self._result_dir is None or self._result_matches_current_source(self._result_dir):
+            return
+        self._clear_result_selection()
+
+    def _generation_source_rows(self):
+        session = self.current_session()
+        ride = self.ride.currentData()
+        if session is None or not ride:
+            return ()
+        return rated_recordings(session, ride)
+
+    def _generation_ready(self):
+        rows = self._generation_source_rows()
+        # Avoid is a hard/basic capture fault. Other ratings remain eligible
+        # for the optimiser to make the final compatibility decision.
+        return sum(hint.rating != 'Avoid' for _, hint in rows) >= 2
+
     def populate_recordings(self):
-        st = self.current_study()
+        st = self.current_session()
+        ride = self.ride.currentData()
         self.recordings.clear()
-        if st:
-            rows = rated_recordings(st, self.ride.currentData())
+        if st and ride:
+            rows = rated_recordings(st, ride)
             for path, hint in rows:
                 item = QListWidgetItem(f'{hint.rating:10s}  {path.name}')
                 item.setData(Qt.ItemDataRole.UserRole, str(path))
                 item.setToolTip(hint.tooltip())
                 self.recordings.addItem(item)
-            self.study_note.setText(
-                f'{len(rows)} compatible recordings for {RIDE_LABELS.get(self.ride.currentData())}. '
-                'Generation uses the complete study and selects reference, fit and held-out runs automatically.'
+            usable = sum(hint.rating != 'Avoid' for _, hint in rows)
+            note = (
+                f'{len(rows)} primary recording(s) for {ride_label(ride)}; {usable} not rated Avoid. '
+                "Generation uses this ride's compatible completed runs and selects reference, fit and held-out runs automatically."
             )
+            if usable < 2:
+                note += ' At least two non-Avoid recordings are required before generation can start.'
+            self.session_note.setText(note)
             self.settings.setValue('dynamic_ride_workflow_session', str(st.path))
-        else:
-            self.study_note.setText(
-                'No complete dynamic-source study found. Capture one or browse to an existing session.'
+        elif st:
+            self.session_note.setText(
+                'This session contains no Analyzer-visible primary ride recordings. Choose another session or capture a new session.'
             )
-        self.open_recording_btn.setEnabled(self.recordings.count() > 0)
+        else:
+            self.session_note.setText(
+                'No dynamic-source session with completed recordings was found in this folder. Capture a new session or choose another folder.'
+            )
+        self.open_recording_btn.setEnabled(self.recordings.count() > 0 and not self._generation_running())
         if self.recordings.count():
             self.recordings.setCurrentRow(0)
         self.source_toggle.setText(
@@ -513,11 +876,11 @@ class DynamicRideWorkspace(QDialog):
         )
 
     def save_context(self):
-        st = self.current_study()
+        st = self.current_session()
         data = {
             'session': str(st.path) if st else '',
-            'ride': str(self.ride.currentData()),
-            'platform': str(self.platform.currentData()),
+            'ride': str(self.ride.currentData() or ''),
+            'platform': str(self._platform_selection_key() or ''),
             'output': str(self._result_dir) if self._result_dir else '',
         }
         pending = self.context.get('pending_review_candidate')
@@ -537,21 +900,32 @@ class DynamicRideWorkspace(QDialog):
         self.accept()
 
     def generate_profiles(self):
-        study = self.current_study()
-        if not study:
-            QMessageBox.warning(self, 'No study', 'Select a complete study first.')
+        session = self.current_session()
+        ride = self.ride.currentData()
+        platform_selection = self._platform_selection_key()
+        if not session or not ride:
+            QMessageBox.warning(self, 'No ride data', 'Select a session containing ride recordings first.')
             return
-        if sum(recording_ride(p) == self.ride.currentData() for p in study.recordings) < 2:
-            QMessageBox.warning(self, 'Insufficient recordings', 'At least two recordings are required.')
+        if not platform_selection:
+            QMessageBox.warning(self, 'No platform selected', 'Select at least one target platform.')
+            return
+        if not self._generation_ready():
+            QMessageBox.warning(
+                self, 'Insufficient recordings',
+                'At least two recordings not rated Avoid are required for this ride.'
+            )
             return
         if self.process is not None and self.process.state() != QProcess.ProcessState.NotRunning:
             return
         self.save_context()
+        self._force_source_page = False
+        self._generation_failed = False
         self.output_directory = None
         self._stdout = ''
         self._generation_output = []
         self.log.clear()
-        self._set_details_visible(True)
+        self.pages.setCurrentIndex(1)
+        self._set_progress('generate')
         self.append_log(
             'Generating with the existing offline dynamic optimiser; source recordings remain unchanged.'
         )
@@ -567,9 +941,9 @@ class DynamicRideWorkspace(QDialog):
         process.start(
             sys.executable,
             [
-                '-m', 'tools.sim_player.dynamic_optimizer', str(study.path),
-                '--rides', str(self.ride.currentData()),
-                '--platforms', str(self.platform.currentData()),
+                '-m', 'tools.sim_player.dynamic_optimizer', str(session.path),
+                '--rides', str(ride),
+                '--platforms', platform_selection,
                 '--output', str(ROOT / 'studies/nl2/dynamic_profiles'),
             ],
         )
@@ -581,8 +955,8 @@ class DynamicRideWorkspace(QDialog):
         if self._result_dir:
             answer = QMessageBox.question(
                 self, 'Regenerate profiles',
-                'Generate a new profile study for the current source/ride/platform selection?\n\n'
-                'The existing generated study and reviews will be preserved.'
+                'Generate a new profile set for the current session/ride/platform selection?\n\n'
+                'The existing generated profile set and reviews will be preserved.'
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return
@@ -612,19 +986,24 @@ class DynamicRideWorkspace(QDialog):
                 )
             except OSError:
                 pass
+            self._generation_failed = False
             self.set_result_dir(self.output_directory)
-            self._set_details_visible(False)
+            self.populate_rides(self.ride.currentData())
+            self._force_source_page = False
+            self.pages.setCurrentIndex(2)
         else:
+            self._generation_failed = True
             self.append_log(
-                f'Generation ended with exit code {code}; do not prepare incomplete candidates.'
+                f'Generation ended with exit code {code}; incomplete results cannot be exported.'
             )
-            self._set_details_visible(True)
+            self.pages.setCurrentIndex(1)
         self.update_workflow_state()
 
     def cancel_generation(self):
         if self.process is not None and self.process.state() != QProcess.ProcessState.NotRunning:
             self.process.kill()
-            self.append_log('Generation cancelled; no incomplete profile may be prepared.')
+            self._generation_failed = True
+            self.append_log('Generation cancelled; incomplete results cannot be exported.')
             self._set_details_visible(True)
 
     def _workflow_state_path(self):
@@ -675,7 +1054,9 @@ class DynamicRideWorkspace(QDialog):
     def set_result_dir(self, directory):
         directory = Path(directory).resolve()
         if not (directory / 'report.json').is_file():
-            return
+            return False
+        if not self._result_matches_current_source(directory):
+            return False
         self._result_dir = directory
         self.settings.setValue('dynamic_ride_workflow_output', str(directory))
         dismissed = directory / 'analyzer_dismissed_profiles.json'
@@ -688,6 +1069,7 @@ class DynamicRideWorkspace(QDialog):
         self.populate_candidates()
         self._refresh_generation_details()
         self._update_details_toggle_text()
+        return True
 
     def _choice_relative(self, path):
         if not self._result_dir or path is None:
@@ -702,11 +1084,12 @@ class DynamicRideWorkspace(QDialog):
         self.candidate.blockSignals(True)
         self.candidate.clear()
         self._candidate_choices = {}
+        self._all_candidate_choices = {}
         choices = []
         if self._result_dir:
             from .dynamic_review import profile_choice
             ride = str(self.ride.currentData())
-            platform_filter = str(self.platform.currentData())
+            platform_filter = str(self._platform_selection_key())
             for path in self._result_dir.glob('*/*/*/profile.json'):
                 try:
                     choice = profile_choice(path)
@@ -714,7 +1097,11 @@ class DynamicRideWorkspace(QDialog):
                     continue
                 if choice.park != ride:
                     continue
-                if platform_filter != 'both' and choice.platform != platform_filter:
+                path_text = str(choice.path)
+                self._all_candidate_choices[path_text] = choice
+                if platform_filter not in ('', 'both') and choice.platform != platform_filter:
+                    continue
+                if platform_filter == '':
                     continue
                 rel = path.relative_to(self._result_dir).as_posix()
                 dismissed = rel in self._dismissed
@@ -775,8 +1162,9 @@ class DynamicRideWorkspace(QDialog):
     def _selected_stage(self):
         process_running = self.process is not None and self.process.state() != QProcess.ProcessState.NotRunning
         candidate = self.current_candidate()
+        source_ready = self.current_session() is not None and self.ride.currentData() is not None
         return workflow_stage(
-            has_study=self.current_study() is not None,
+            has_study=source_ready,
             generating=process_running,
             has_result=bool(self._result_dir and (self._result_dir / 'report.json').is_file()),
             has_candidate=candidate is not None,
@@ -787,159 +1175,329 @@ class DynamicRideWorkspace(QDialog):
     def _set_progress(self, stage, current_text='', next_text=''):
         self.progress_strip.set_stage(stage, current_text=current_text, next_text=next_text)
 
-    def update_workflow_state(self):
-        stage = self._selected_stage()
-        progress_current = 'Source'
-        progress_next = 'Select or capture a source study'
-        choice = self._current_choice()
-        candidate = self.current_candidate()
-        has_result = bool(self._result_dir and (self._result_dir / 'report.json').is_file())
-        process_running = self.process is not None and self.process.state() != QProcess.ProcessState.NotRunning
+    def _select_hidden_candidate(self, path):
+        if path is None:
+            return False
+        index = self.candidate.findData(str(Path(path)))
+        if index < 0:
+            return False
+        self.candidate.blockSignals(True)
+        self.candidate.setCurrentIndex(index)
+        self.candidate.blockSignals(False)
+        return True
 
+    def _platform_panel_candidate(self, platform_key):
+        panel = self.review_platform[platform_key]
+        value = panel['selector'].currentData()
+        return Path(value) if value else None
+
+    def _platform_workflow_status(self, platform_key):
+        ride = self.ride.currentData()
+        entry = self._session_processing.get(str(ride), {}).get(platform_key) if ride else None
+        text, tooltip = platform_processing_display(entry)
+        self.platform_status[platform_key].setToolTip(tooltip)
+        return text
+
+    def _refresh_review_panels(self):
+        selected = set(self._selected_platforms())
+        for platform_key, panel in self.review_platform.items():
+            panel['group'].setVisible(platform_key in selected)
+            prior = panel['selector'].currentData()
+            rows = [choice for choice in self._all_candidate_choices.values()
+                    if choice.platform == platform_key]
+            rows.sort(key=candidate_sort_key)
+            dismissed_paths = {
+                str((self._result_dir / rel).resolve()) for rel in self._dismissed
+            } if self._result_dir else set()
+            recommended = recommended_candidate_paths(rows, dismissed_paths).get(platform_key)
+
+            panel['selector'].blockSignals(True)
+            panel['selector'].clear()
+            for choice in rows:
+                rel = self._choice_relative(choice.path)
+                dismissed = rel in self._dismissed
+                if dismissed and not self.show_dismissed.isChecked():
+                    continue
+                target = TARGET_LABELS.get(choice.target, choice.target)
+                qualification = 'Qualified' if candidate_is_qualified(choice) else str(choice.qualification)
+                suffix = []
+                if str(choice.path) == recommended and not dismissed:
+                    suffix.append('Recommended')
+                if dismissed:
+                    suffix.append('Dismissed')
+                text = f'{target} - {qualification}'
+                if suffix:
+                    text += ' - ' + ', '.join(suffix)
+                panel['selector'].addItem(text, str(choice.path))
+            index = panel['selector'].findData(prior)
+            if index < 0 and recommended:
+                index = panel['selector'].findData(recommended)
+            if index < 0 and panel['selector'].count():
+                index = 0
+            if index >= 0:
+                panel['selector'].setCurrentIndex(index)
+            panel['selector'].blockSignals(False)
+            self._update_review_platform_panel(platform_key)
+
+    def _review_candidate_changed(self, platform_key):
+        self._update_review_platform_panel(platform_key)
+
+    def _export_package_label(self, package):
+        if not package or not Path(package).is_file():
+            return ''
+        try:
+            from zipfile import ZipFile
+            with ZipFile(package) as archive:
+                payload = json.loads(archive.read('dynamic_candidate.json').decode('utf-8-sig'))
+            return str(payload.get('candidate', {}).get('label', ''))
+        except Exception:
+            return ''
+
+    def _existing_export_labels(self, platform_key, park):
+        labels = set()
+        folder = ROOT / 'exports' / 'dynamic_candidates'
+        if not folder.is_dir():
+            return labels
+        from zipfile import ZipFile, BadZipFile
+        for package in folder.glob('*.zip'):
+            try:
+                with ZipFile(package) as archive:
+                    payload = json.loads(archive.read('dynamic_candidate.json').decode('utf-8-sig'))
+                if payload.get('platform') == platform_key and payload.get('park') == park:
+                    label = payload.get('candidate', {}).get('label')
+                    if isinstance(label, str) and label:
+                        labels.add(label)
+            except (OSError, BadZipFile, KeyError, ValueError, UnicodeError):
+                continue
+        return labels
+
+    def _default_export_label(self, choice):
+        from sims.nolimits2.ride_config import PARKS
+        park = str(choice.park)
+        base = PARKS.get(park, {}).get('name', ride_label(park))
+        existing = self._existing_export_labels(choice.platform, park)
+        for suffix in list('ABCDEFGHIJKLMNOPQRSTUVWXYZ') + [str(i) for i in range(2, 100)]:
+            candidate = f'{base} [Dynamic {suffix}]'
+            if candidate not in existing:
+                return candidate
+        return f'{base} [Dynamic]'
+
+    def _validate_export_name(self, choice, label, prepared_path=None):
+        label = str(label).strip()
+        if not label:
+            return False, 'Enter a profile name before export.'
+        from sims.nolimits2 import ride_config
+        try:
+            ride_config.validate_variant_label_format(label, choice.park)
+        except Exception as exc:
+            return False, str(exc)
+        existing = self._existing_export_labels(choice.platform, choice.park)
+        prepared_label = self._export_package_label(prepared_path)
+        if label in existing and label != prepared_label:
+            return False, 'A package with this platform/ride profile name has already been exported.'
+        return True, ''
+
+    def _update_review_platform_panel(self, platform_key):
+        panel = self.review_platform[platform_key]
+        path = self._platform_panel_candidate(platform_key)
+        choice = self._all_candidate_choices.get(str(path)) if path else None
+        if choice is None:
+            panel['status'].setText('No generated profile is available for this platform.')
+            panel['review'].setEnabled(False)
+            panel['dismiss'].setEnabled(False)
+            panel['name'].setEnabled(False)
+            panel['export'].setEnabled(False)
+            panel['open'].setVisible(False)
+            panel['note'].clear()
+            return
+
+        rel = self._choice_relative(path)
+        dismissed = rel in self._dismissed
+        reviewed = self._candidate_reviewed(path)
+        prepared = self._candidate_prepared_path(path)
+        recommended = self._recommended.get(platform_key) == str(path) and not dismissed
+        bits = [TARGET_LABELS.get(choice.target, choice.target)]
+        bits.append('Qualified' if candidate_is_qualified(choice) else f'Not qualified: {choice.qualification}')
+        if recommended:
+            bits.append('Recommended')
+        if reviewed:
+            bits.append('Reviewed')
+        if prepared:
+            bits.append('Exported')
+        if dismissed:
+            bits.append('Dismissed')
+        panel['status'].setText('  |  '.join(bits))
+        panel['review'].setEnabled(not dismissed)
+        panel['dismiss'].setEnabled(True)
+        panel['dismiss'].setText('Restore' if dismissed else 'Dismiss')
+
+        path_key = str(path)
+        if prepared:
+            label = self._export_package_label(prepared)
+            if label:
+                self._export_name_overrides[path_key] = label
+        elif path_key not in self._export_name_overrides:
+            self._export_name_overrides[path_key] = self._default_export_label(choice)
+        desired = self._export_name_overrides.get(path_key, '')
+        if panel['name'].text() != desired:
+            panel['name'].blockSignals(True)
+            panel['name'].setText(desired)
+            panel['name'].blockSignals(False)
+
+        panel['name'].setEnabled(reviewed and not dismissed and prepared is None)
+        valid_name, reason = self._validate_export_name(choice, desired, prepared)
+        can_export = (reviewed and not dismissed and prepared is None and
+                      candidate_is_qualified(choice) and valid_name)
+        panel['export'].setEnabled(can_export)
+        panel['export'].setText('Export for POC' if prepared is None else 'Exported')
+        panel['open'].setVisible(bool(prepared))
+        panel['open'].setEnabled(bool(prepared))
+        if prepared:
+            panel['note'].setText(
+                f'Exported: {prepared.name}\nFolder: {prepared.parent}')
+        elif not reviewed:
+            panel['note'].setText('Review this profile before export.')
+        elif dismissed:
+            panel['note'].setText('Restore this candidate before export.')
+        elif not candidate_is_qualified(choice):
+            panel['note'].setText('This candidate is not qualified and cannot be exported for POC.')
+        elif not valid_name:
+            panel['note'].setText(reason)
+        else:
+            panel['note'].setText(
+                'Ready to export. Export validates the qualification evidence and builds the immutable POC ZIP.')
+
+    def _review_profile_for_platform(self, platform_key):
+        path = self._platform_panel_candidate(platform_key)
+        if path is None or not self._select_hidden_candidate(path):
+            return
+        self.review_profile()
+
+    def _dismiss_profile_for_platform(self, platform_key):
+        path = self._platform_panel_candidate(platform_key)
+        if path is None or not self._select_hidden_candidate(path):
+            return
+        self.dismiss_profile()
+
+    def _export_name_edited(self, platform_key, text):
+        path = self._platform_panel_candidate(platform_key)
+        if path is not None:
+            self._export_name_overrides[str(path)] = str(text)
+        self._update_review_platform_panel(platform_key)
+
+    def _export_profile_for_platform(self, platform_key):
+        path = self._platform_panel_candidate(platform_key)
+        if path is None:
+            return
+        choice = self._all_candidate_choices.get(str(path))
+        if choice is None:
+            return
+        rel = self._choice_relative(path)
+        if rel in self._dismissed:
+            QMessageBox.warning(self, 'Candidate dismissed', 'Restore this candidate before export.')
+            return
+        if not self._candidate_reviewed(path):
+            QMessageBox.warning(self, 'Review required', 'Review this exact profile before exporting it for POC.')
+            return
+        if not candidate_is_qualified(choice):
+            QMessageBox.warning(self, 'Candidate not qualified', 'Only a qualified profile can be exported for POC.')
+            return
+        label = self.review_platform[platform_key]['name'].text().strip()
+        valid, reason = self._validate_export_name(choice, label)
+        if not valid:
+            QMessageBox.warning(self, 'Cannot export candidate', reason)
+            return
+        try:
+            package, _rel, summary = prepare_bundle(
+                path.parent, label, export_dir=ROOT / 'exports' / 'dynamic_candidates')
+        except Exception as exc:
+            QMessageBox.warning(self, 'Cannot export candidate', str(exc))
+            return
+        self._prepared[rel] = str(package)
+        self._save_workflow_state()
+        self._prepared_package = package
+        self._export_name_overrides[str(path)] = label
+        QApplication.clipboard().setText(str(package.parent))
+        self.append_log('Exported for POC: ' + str(package))
+        self.populate_rides(self.ride.currentData())
+        self.update_workflow_state()
+        QMessageBox.information(
+            self, 'Dynamic profile exported for POC',
+            f'Candidate: {label}\nPlatform: {summary["platform"]}\n'
+            f'Recordings: {summary["source_recordings"]} (including held-out validation)\n'
+            f'Package: {package}\n\nFolder path copied to clipboard. '
+            'The candidate remains uncommissioned until it is imported and tested on the target POC.')
+
+    def _open_platform_export_folder(self, platform_key):
+        path = self._platform_panel_candidate(platform_key)
+        package = self._candidate_prepared_path(path) if path else None
+        if package:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(package.parent)))
+
+    def update_workflow_state(self):
+        has_result = bool(self._result_dir and (self._result_dir / 'report.json').is_file())
+        process_running = self._generation_running()
+        selected = self._selected_platforms()
+
+        self.session.setEnabled(not process_running)
+        self.ride.setEnabled(self.ride.count() > 0 and not process_running)
+        self.platform_chair.setEnabled(not process_running)
+        self.platform_ground.setEnabled(not process_running)
+        self.open_recording_btn.setEnabled(self.recordings.count() > 0 and not process_running)
         self.report_btn.setEnabled(has_result and (self._result_dir / 'report.html').is_file())
         self.report_btn.setVisible(has_result)
-        self.regenerate_btn.setEnabled(self.current_study() is not None and not process_running)
+        self.regenerate_btn.setEnabled(bool(selected) and self._generation_ready() and not process_running)
         self.regenerate_btn.setVisible(has_result)
-        self.dismiss_btn.setEnabled(candidate is not None and not process_running)
-        self.dismiss_btn.setVisible(candidate is not None)
-        self.review_again_btn.setEnabled(candidate is not None and not process_running)
-        self.review_again_btn.setVisible(candidate is not None and stage in ('prepare', 'export'))
         self.show_dismissed.setEnabled(has_result and not process_running)
         self.show_dismissed.setVisible(has_result)
-        self.candidate.setEnabled(self.candidate.count() > 0 and not process_running)
-        self.study.setEnabled(not process_running)
-        self.ride.setEnabled(not process_running)
-        self.platform.setEnabled(not process_running)
-        self.open_recording_btn.setEnabled(self.recordings.count() > 0 and not process_running)
 
-        is_recommended = False
-        if choice:
-            rel = self._choice_relative(choice.path)
-            dismissed = rel in self._dismissed
-            recommended = self._recommended.get(choice.platform) == str(choice.path) and not dismissed
-            is_recommended = recommended
-            validation = DynamicProfile.load(choice.path).metadata.get('validation', {})
-            details = [
-                f'{PLATFORM_LABELS.get(choice.platform, choice.platform)} / '
-                f'{TARGET_LABELS.get(choice.target, choice.target)}',
-                'Qualified' if candidate_is_qualified(choice) else f'Qualification: {choice.qualification}',
-            ]
-            if recommended:
-                details.append('Recommended for this platform')
-            if validation.get('heldout_pass') is True:
-                details.append('held-out pass')
-            if validation.get('production_parity') is True:
-                details.append('production parity pass')
-            if choice.target == 'strict':
-                details.append('strict muscle request envelope')
-            elif choice.target == 'relaxed5':
-                details.append('up to 5% requested-length allowance')
-            self.candidate_detail.setText('  |  '.join(details))
-            self.dismiss_btn.setText('Restore candidate' if dismissed else 'Dismiss candidate')
+        for platform_key in PLATFORM_LABELS:
+            self.platform_status[platform_key].setText(self._platform_workflow_status(platform_key))
+
+        source_ready = (
+            self.current_session() is not None and self.ride.currentData() is not None and
+            bool(selected) and self._generation_ready()
+        )
+        existing_ready = self._selected_platforms_have_profiles()
+        self.source_next_btn.setText(
+            'Use existing profile(s) →' if existing_ready else 'Generate profiles →')
+        self.source_next_btn.setEnabled(existing_ready or source_ready)
+        self.source_generate_new_btn.setVisible(existing_ready)
+        self.source_generate_new_btn.setEnabled(existing_ready and source_ready and not process_running)
+
+        ride = self.ride.currentData()
+        session = self.current_session()
+        self.generation_context.setText(
+            (f'{ride_label(ride)}\nSession: {session.path.name if session else "--"}\n'
+             f'Platform(s): {self._platform_selection_text()}') if ride else
+            'Choose a source session, ride and platform first.')
+        self.abort_generation_btn.setVisible(process_running)
+        self.abort_generation_btn.setEnabled(process_running)
+        self.generation_back_btn.setEnabled(not process_running)
+        self.retry_generation_btn.setVisible(self._generation_failed and not process_running)
+        self.retry_generation_btn.setEnabled(self._generation_failed and not process_running and source_ready)
+        self.generation_previous_btn.setVisible(self._generation_failed and has_result and not process_running)
+        self.generation_previous_btn.setEnabled(self._generation_failed and has_result and not process_running)
+        if process_running:
+            self.generation_title.setText('Generating dynamic profiles...')
+        elif self._generation_failed:
+            self.generation_title.setText('Generation did not complete')
+        elif has_result:
+            self.generation_title.setText('Generation complete')
         else:
-            self.candidate_detail.setText(
-                'Generate profiles for the selected study, ride and platform selection to continue.'
-            )
-            self.dismiss_btn.setText('Dismiss candidate')
+            self.generation_title.setText('Generate dynamic profiles')
 
-        prepared_path = self._candidate_prepared_path(candidate) if candidate else None
-        current_rel = self._choice_relative(candidate) if candidate else ''
-        current_dismissed = bool(current_rel and current_rel in self._dismissed)
-        self.package_group.setVisible(bool(prepared_path))
-        if prepared_path:
-            self._prepared_package = prepared_path
-            self.package_note.setText(
-                f'{prepared_path.name}\nFolder: {prepared_path.parent}\n'
-                'Transfer this ZIP to the target POC and import it from the Profile tab.'
-            )
+        self._refresh_review_panels()
 
-        if current_dismissed:
-            self.stage_title.setText('Candidate is dismissed')
-            self.stage_detail.setText(
-                'This research candidate is hidden from the normal workflow. Restore it before reviewing or preparing it for POC.'
-            )
-            self.primary_btn.setText('Restore candidate')
-            self.primary_btn.setEnabled(True)
-            progress_current = 'Prepare' if has_result else 'Review'
-            progress_next = 'Restore the selected candidate'
-        elif stage == 'source':
-            self.stage_title.setText('Select or capture a complete dynamic-source study')
-            self.stage_detail.setText(
-                'Choose the study and ride. Individual recording playback is optional; generation uses the complete study.'
-            )
-            self.primary_btn.setText('Capture new study...')
-            self.primary_btn.setEnabled(True)
-            progress_current = 'Source'
-            progress_next = 'Select a study or capture a new one'
-        elif stage == 'generating':
-            self.stage_title.setText('Profile generation is running')
-            self.stage_detail.setText(
-                'Generation details are shown below. Source recordings are unchanged.'
-            )
-            self.primary_btn.setText('Cancel generation')
-            self.primary_btn.setEnabled(True)
-            progress_current = 'Generate'
-            progress_next = 'Wait for generation to finish or cancel it'
-        elif stage == 'generate':
-            self.stage_title.setText('Ready to generate dynamic profiles')
-            self.stage_detail.setText(
-                f'Generate {RIDE_LABELS.get(self.ride.currentData(), self.ride.currentData())} profiles for '
-                f'{self.platform.currentText()}. Analyzer will choose the reference and held-out runs automatically.'
-            )
-            self.primary_btn.setText('Generate dynamic profiles')
-            self.primary_btn.setEnabled(self.current_study() is not None)
-            progress_current = 'Generate'
-            progress_next = 'Generate profiles for the selected study'
-        elif stage == 'review':
-            label = self.candidate.currentText()
-            self.stage_title.setText(
-                'Review the recommended generated profile' if is_recommended else 'Review the selected generated profile'
-            )
-            self.stage_detail.setText(
-                f'Selected: {label}. Play the complete profile in Analyzer, inspect motion/synchronisation, '
-                'then use Return to dynamic study to continue.'
-            )
-            self.primary_btn.setText('Review selected profile')
-            self.primary_btn.setEnabled(candidate is not None)
-            progress_current = 'Review'
-            progress_next = 'Review the selected profile in Analyzer'
-        elif stage == 'prepare':
-            self.stage_title.setText('Profile reviewed - ready to prepare for POC')
-            self.stage_detail.setText(
-                'Analyzer will validate the recorded qualification evidence and build a POC import ZIP. '
-                'Preparing a package does not make the ride preferred or physically commissioned.'
-            )
-            self.primary_btn.setText('Prepare for POC...')
-            self.primary_btn.setEnabled(candidate is not None)
-            progress_current = 'Prepare'
-            progress_next = 'Prepare the selected candidate for POC'
+        if process_running or self._generation_failed:
+            self.pages.setCurrentIndex(1)
+            self._set_progress('generate')
+        elif has_result and self._candidate_choices and not self._force_source_page:
+            self.pages.setCurrentIndex(2)
+            self._set_progress('review')
         else:
-            self.stage_title.setText('POC package ready')
-            self.stage_detail.setText(
-                'The selected candidate has a prepared import ZIP. Transfer it to the target POC, then use '
-                'Profile > Import dynamic candidate ZIP...'
-            )
-            self.primary_btn.setText('Open package folder')
-            self.primary_btn.setEnabled(bool(prepared_path))
-            progress_current = 'Export'
-            progress_next = 'Transfer the prepared ZIP to POC'
-
-        self._set_progress(stage, current_text=progress_current, next_text=progress_next)
-        self._update_details_toggle_text()
-
-        if not has_result:
-            self.candidate_status.setText('No generated profiles for the current ride/platform selection.')
-        elif self.candidate.count() == 0:
-            self.candidate_status.setText(
-                'Generation results exist, but no candidate matches the current ride/platform selection.'
-            )
-        else:
-            recommended_count = len(self._recommended)
-            self.candidate_status.setText(
-                f'{self.candidate.count()} candidate(s) available. '
-                f'{recommended_count} platform recommendation(s). Strict is preferred when it qualifies; '
-                'Relaxed 5% is suggested only when no qualifying Strict candidate is available.'
-            )
+            self.pages.setCurrentIndex(0)
+            self._set_progress('source')
 
     def advance_workflow(self):
         candidate = self.current_candidate()
@@ -949,7 +1507,7 @@ class DynamicRideWorkspace(QDialog):
             return
         stage = self._selected_stage()
         if stage == 'source':
-            self.capture_study()
+            self.capture_session()
         elif stage == 'generating':
             self.cancel_generation()
         elif stage == 'generate':
@@ -992,42 +1550,11 @@ class DynamicRideWorkspace(QDialog):
         self.populate_candidates()
 
     def prepare_profile(self):
-        path = self.current_candidate()
-        if path is None:
+        """Compatibility entry point: export the currently selected platform profile."""
+        choice = self._current_choice()
+        if choice is None:
             return
-        from sims.nolimits2.ride_config import PARKS
-        profile = DynamicProfile.load(path)
-        park = profile.identity['park']
-        default = PARKS[park]['name'] + ' [Dynamic A]'
-        from PyQt6.QtWidgets import QInputDialog
-        label, ok = QInputDialog.getText(
-            self, 'Prepare candidate for POC',
-            'Unique POC variant name (candidate, not preferred):', text=default
-        )
-        if not ok:
-            return
-        try:
-            package, rel, summary = prepare_bundle(
-                path.parent, label, export_dir=ROOT / 'exports' / 'dynamic_candidates'
-            )
-        except Exception as exc:
-            QMessageBox.warning(self, 'Cannot prepare candidate', str(exc))
-            return
-        candidate_rel = self._choice_relative(path)
-        self._prepared[candidate_rel] = str(package)
-        self._save_workflow_state()
-        self._prepared_package = package
-        QApplication.clipboard().setText(str(package.parent))
-        self.append_log('Prepared: ' + str(package) + '\nFolder copied to clipboard: ' + str(package.parent))
-        self.update_workflow_state()
-        QMessageBox.information(
-            self, 'Candidate prepared for POC',
-            f'Candidate: {label}\nPlatform: {summary["platform"]}\n'
-            f'Recordings: {summary["source_recordings"]} (including held-out validation)\n'
-            f'Package: {package}\n\nFolder path copied to clipboard.\n'
-            'Transfer this ZIP to POC, then use Profile > Import dynamic candidate ZIP. '
-            'No working catalogue was overwritten on the Analyzer PC.'
-        )
+        self._export_profile_for_platform(choice.platform)
 
     def open_export_folder(self):
         path = self._candidate_prepared_path(self.current_candidate())
