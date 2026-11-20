@@ -1,4 +1,4 @@
-<!-- README.md ver 3 -->
+<!-- README.md ver 4 -->
 # Maintenance and diagnostic tools
 
 This directory contains standalone utilities that are useful for commissioning
@@ -83,12 +83,15 @@ extension is determined by OBS's actual output container (e.g. `.mp4` or
 `.mkv`); the original OBS recording path is returned by StopRecord. The
 previous OBS recording directory is restored when the capture session ends.
 
-**Video-to-telemetry synchronisation is not calibrated yet**. The JSON times
-are recorded using Python's monotonic clock and UTC, but an OBS WebSocket
-acknowledgement is not the presentation timestamp (PTS) of the first video
-frame. Accurate frame-level playback requires a measured video offset and
-recorded video PTS; the manifest explicitly marks the offset unknown. Do not
-assume the first video frame equals the first CSV row.
+**Video-to-telemetry synchronisation is initially an estimate**. The JSON times
+are recorded using Python's monotonic clock and UTC and include the approximate
+telemetry-zero time after OBS StartRecord acknowledgement. An OBS WebSocket
+acknowledgement is not the presentation timestamp (PTS) of the first encoded
+video frame, so this is not a claim of frame-accurate calibration. The v230
+canonical capture utility uses that estimate as the initial canonical timing
+anchor because it starts OBS before telemetry zero; Ride Analyzer can still
+apply a measured visual correction later. Do not assume the first video frame
+equals the first CSV row.
 
 If a ride errors or is interrupted, the recorder attempts to stop OBS and
 writes an incomplete manifest. It refuses to take over an existing OBS
@@ -97,3 +100,31 @@ dispatch prevents dispatch entirely. The original `--state-monitor` option
 still works; with `--record-video` it writes a video and state-event CSV but
 no raw telemetry CSV. Recording may affect NL2 graphics performance and should
 be checked on the target Windows machine.
+
+## Canonical NoLimits ride capture (v230)
+
+`create_canonical_rides.py` is an occasional-use Windows utility for the SHS /
+NoLimits PC. It reads the working Chair V3 and Ground-Loading Platform variant
+catalogues, takes the union of their referenced physical parks, skips rides with
+a valid canonical reference, captures each missing ride once with the existing
+NL2/OBS recorder, and registers the matching telemetry/video pair directly into
+`tools/sim_player/canonical_rides/`. It never starts POC or platform output.
+
+Run NoLimits in desktop/non-VR mode, start OBS with WebSocket enabled, and close
+other NL2 API clients. The utility refuses VR-active telemetry by default. After
+station readiness it waits 5 seconds **before OBS starts** so the brief NL2 caption
+is excluded, then uses a short video pre-roll before dispatch. The existing OBS
+monotonic timing manifest supplies an automatic telemetry-zero -> video-time
+anchor, avoiding the usual several-second missing-video lead at the start.
+
+From the repository root:
+
+```bat
+py tools\create_canonical_rides.py --list
+py tools\create_canonical_rides.py
+```
+
+Or double-click `tools\run_canonical_ride_capture.bat`. Original captures are
+retained under `captures/canonical_source/`; valid canonical references are not
+replaced unless `--replace` is supplied. See
+`docs/CANONICAL_RIDE_CAPTURE_V230.md` for the complete workflow and options.

@@ -1,4 +1,28 @@
-# changelog.txt ver 71
+# changelog.txt ver 74
+
+
+POC v232 - NoLimits E-STOP recovery duplicate-load / Hybris RESETTING fix - 2026-11-20
+- Fix an activation/E-STOP recovery race visible with Hybris: after an operator-selected park had already returned LOAD_PARK OK, activation could immediately issue a second LOAD_PARK for the same park while NoLimits was still completing internal work. NL2 could reject that redundant request with `Application is processing another operation`; the adapter then marked the confirmed park load failed, stopped station-mode preparation, and could remain unable to leave RESETTING.
+- `sims/nolimits2/sim.py` now reuses an already-confirmed freshly loaded physical park for E-STOP recovery when no ride/train lifecycle has begun since that load. It clears cached telemetry/station/manual-mode observations and enters the existing RESET_PARK/manual-mode preparation path directly. Genuine recovery after a dispatched/established train lifecycle still performs the existing full park reload.
+- Add a defensive fallback for the narrow case where an E-STOP recovery LOAD_PARK of the already-confirmed same physical park is nevertheless rejected with NL2's transient `processing another operation` response. The previously confirmed park identity is preserved, the handled transient error is cleared, and recovery continues through normal reset preparation. Normal operator park-load errors, different-park failures and other LOAD_PARK errors retain existing failure behaviour.
+- Update the existing NL2 adapter E-STOP tests for the deliberate fresh-load reuse semantics and add focused regressions covering same-park busy fallback, same-park variant selection, normal load failure and genuine post-ride reload. No SHS, Festo, kinematics, motion processing, canonical-media format or Ride Analyzer behaviour changed.
+
+
+POC v231 - Canonical capture OBS / NL2 setup documentation - 2026-11-20
+- Expand `docs/CANONICAL_RIDE_CAPTURE_V230.md` with a practical one-time setup section for canonical video capture: NL2 desktop/non-VR at approximately 1280 x 720, OBS 1280 x 720 output at 30 fps, H.264/quality-based recording, WebSocket/source checks and consistent window/view guidance.
+- Document that OBS WebSocket can change FPS/resolution through `SetVideoSettings`, but the canonical capture utility intentionally does not rewrite the persistent OBS profile. Configure 720p/30 once in OBS; capture automation continues to control recording start/stop only. No runtime code or capture behavior changed.
+
+POC v230 - Local canonical NoLimits ride capture utility - 2026-11-20
+- Add `tools/create_canonical_rides.py` and a simple Windows batch launcher for occasional canonical-reference creation on the SHS / NoLimits PC. The utility reads the working Chair V3 and Ground-Loading Platform ride-variant catalogues, takes the union of referenced physical parks, skips valid existing canonical references by default, captures each required ride once with the existing NL2/OBS stack, and registers the exact telemetry/video pair into `tools/sim_player/canonical_rides`.
+- Canonical capture is intended for desktop/non-VR operation. The utility checks NL2 telemetry state bit `0x08` and refuses VR-active capture unless `--allow-vr` is deliberately supplied; it does not alter VR mode itself. POC and other NL2 API controllers must be closed.
+- Extend the existing standalone NL2 recorder with an optional post-readiness/pre-record delay. Ordinary captures retain the existing zero-second default; canonical capture uses 5 seconds so NoLimits' brief park/help caption can clear before OBS starts, followed by a 0.75-second OBS pre-roll before dispatch.
+- Seed canonical video alignment automatically from the recorder's existing monotonic OBS-start and telemetry-zero timing manifest. OBS is started before telemetry zero, giving video pre-roll rather than missing video at the beginning; the resulting offset remains marked as an automatic estimate and can still be visually calibrated in Ride Analyzer.
+- Retain original canonical-source captures under `captures/canonical_source/`; failed rides remain diagnosable and do not prevent later rides from being attempted. Existing canonical media is never deleted; `--replace` creates a new immutable media revision and updates the reference pointer. No SHS protocol, simulator runtime, Festo, kinematics or physical-output behavior changed.
+- Correct the root changelog omission from the v229 delta by restoring its release note below; file-version tracking already expected changelog version 72.
+
+POC v229 / MDX Ride Analyzer v0.2.34 - Dynamic Source focus-panel layout refinement - 2026-11-19
+- Refine the Dynamic Ride Source page so Session, Ride and platform selection/status are grouped inside a subtle highlighted operator-decision panel while Folder and source-recording support information remain visually secondary.
+- Move Generate profiles and Close / return to Analyzer to the lower centre of the main workflow area, and remove the redundant close action from the exported-candidate side pane. No optimiser, qualification, package-format, POC runtime, kinematics or physical-output behaviour changed.
 
 
 POC v228 / MDX Ride Analyzer v0.2.33 - Fixed dynamic source root and action hierarchy - 2026-11-19

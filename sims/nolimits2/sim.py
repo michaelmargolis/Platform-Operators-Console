@@ -1,4 +1,4 @@
-#sim.py  ver 49
+#sim.py  ver 50
 from __future__ import annotations
 
 import logging
@@ -69,7 +69,8 @@ class Sim(SimInterface):
       * reset enters RESETTING and returns to READY when NL2 is stationary in
         the station;
       * POC owns the E-STOP latch. Normal activation may conditionally reset
-        the park; E-STOP recovery explicitly reloads the selected ride.
+        the park; E-STOP recovery reuses a clean freshly loaded park or
+        reloads after a ride lifecycle.
     """
 
     name = "NoLimits2 Coaster"
@@ -507,10 +508,64 @@ class Sim(SimInterface):
         self._ready_station = ready_station
         self._reset_transform_tracking()
 
+    def _can_reuse_loaded_park_for_estop_recovery(self) -> bool:
+        """True only when the confirmed park has not begun a ride lifecycle.
+
+        A freshly loaded park may still be settling and therefore not yet satisfy
+        ``is_ready_to_start()``.  Reloading that same park during activation can
+        collide with NoLimits' internal park-load work.  Once a ride has been
+        associated with a train/station, however, E-STOP recovery retains the
+        existing full park reload because simulator state may be indeterminate.
+        """
+        return bool(
+            self._selected is not None
+            and self._loaded_index is not None
+            and self._same_park(self._selected, self._loaded_index)
+            and not self._ride_load_pending
+            and not self._park_load_failed
+            and not self._dispatch_pending
+            and self._ride_train is None
+            and self._ride_station is None
+            and self.state in (ExperienceState.READY, ExperienceState.RESETTING)
+        )
+
     def recover_from_estop(self) -> None:
-        """Reload the selected park and remain RESETTING until dispatch-ready."""
+        """Recover the selected park and remain RESETTING until dispatch-ready."""
         if not self._sim_connected():
             raise RuntimeError("NoLimits2 is not connected for E-STOP recovery")
+
+        # A park that has just been confirmed loaded, but has not run a train,
+        # does not need another LOAD_PARK.  Hybris in particular can still be
+        # completing internal park work here; a redundant load can be rejected
+        # with "Application is processing another operation" and would otherwise
+        # poison the adapter's confirmed-load state.  Enter normal reset/manual
+        # preparation instead.  Genuine mid/post-ride recovery still reloads.
+        if self._can_reuse_loaded_park_for_estop_recovery():
+            self._estop_recovery_pending = True
+            # Discard station/manual observations that may have been sampled
+            # while the freshly loaded park was still paused/settling.  The
+            # normal reset path will reacquire current play/station state.
+            self._manual_mode_requested = False
+            self._station_modes.reset()
+            self.client.latest_telemetry = None
+            self.client.station_status = None
+            self.client.station_status_received_at = 0.0
+            invalidate_station = getattr(self.client, "invalidate_current_station", None)
+            if callable(invalidate_station):
+                invalidate_station()
+            self._state_event(
+                "estop_recovery_reuse_loaded_park",
+                selected=self._selected,
+                loaded=self._loaded_index,
+            )
+            if NL2_STATE_DEBUG:
+                log.debug(
+                    "NL2 E-STOP recovery: reusing confirmed freshly loaded park; "
+                    "entering normal park-reset preparation"
+                )
+            self._start_park_reset()
+            return
+
         self._begin_ride_load(self._selected, startup=False)
         self._estop_recovery_pending = True
 
@@ -790,9 +845,50 @@ class Sim(SimInterface):
 
         outcome, detail = result
         completed_index = self._loading_index
+        previous_loaded_index = self._loaded_index
         self._ride_load_pending = False
         self._ride_load_request_id = None
         self._loading_index = None
+
+        # Defensive recovery for a narrow NL2 transient: if an E-STOP recovery
+        # redundantly asked NL2 to load the already-confirmed same physical park
+        # and NL2 reports that another operation is still being processed, keep
+        # the confirmed park identity and continue with reset/manual preparation.
+        # Normal operator loads, different-park loads and all other errors retain
+        # the existing failure semantics.
+        busy_detail = "processing another operation" in str(detail or "").casefold()
+        recover_busy_same_park = bool(
+            outcome == "error"
+            and self._estop_recovery_pending
+            and busy_detail
+            and self._queued_ride_index is None
+            and previous_loaded_index is not None
+            and completed_index is not None
+            and self._same_park(completed_index, previous_loaded_index)
+            and self._same_park(self._selected, previous_loaded_index)
+        )
+        if recover_busy_same_park:
+            # Latest same-park variant choice remains authoritative even though
+            # no second LOAD_PARK was accepted.
+            self._loaded_index = self._selected
+            self._park_load_failed = False
+            self._apply_loaded_variant(self._loaded_index)
+            if hasattr(self.client, "last_error"):
+                self.client.last_error = ""
+            self._state_event(
+                "estop_recovery_busy_fallback",
+                selected=self._selected,
+                loaded=self._loaded_index,
+                detail=str(detail or ""),
+            )
+            if NL2_STATE_DEBUG:
+                log.debug(
+                    "NL2 E-STOP recovery LOAD_PARK busy for already confirmed park; "
+                    "preserving load identity and entering park-reset preparation"
+                )
+            self._start_park_reset()
+            return True
+
         if outcome == "error":
             # An unsuccessful LOAD_PARK does not establish which park is open.
             self._loaded_index = None

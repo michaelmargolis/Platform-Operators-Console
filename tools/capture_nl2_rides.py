@@ -1,4 +1,4 @@
-# capture_nl2_rides.py  ver 9
+# capture_nl2_rides.py  ver 10
 """Capture repeatable NoLimits2 rides without launching POC or platform outputs.
 
 Run ``python tools/capture_nl2_rides.py --list`` to see configured rides.
@@ -193,6 +193,22 @@ def wait_between_load_attempts(sim: Sim, seconds: float, interval_s: float):
         time.sleep(min(interval_s, max(0.0, end - time.monotonic())))
 
 
+def wait_before_recording(sim: Sim, seconds: float, interval_s: float, timeout_s: float):
+    """Optional quiet pause after station readiness, before video recording starts.
+
+    Used by the canonical-video batch utility so NL2's brief park/help caption
+    can disappear before OBS starts.  NL2 continues to be serviced throughout
+    the pause and station readiness is rechecked before recording/dispatch.
+    """
+    seconds = float(seconds or 0.0)
+    if seconds <= 0:
+        return
+    print(f"Waiting {seconds:g}s before recording so the NL2 caption can clear...", flush=True)
+    wait_between_load_attempts(sim, seconds, interval_s)
+    await_condition(sim, lambda s, *_: s.is_ready_to_start(),
+                    timeout_s, "post-delay station readiness", interval_s)
+
+
 def connect_recorder(sim: Sim, timeout_s: float, interval_s: float):
     """Connect once; verify the adapter's normal default-park startup load."""
     sim.connect()
@@ -287,6 +303,9 @@ def capture_one(sim: Sim, ride_index: int, repeat: int, args, rides):
             before_dispatch = None
             if obs is not None:
                 def before_dispatch():
+                    wait_before_recording(
+                        sim, getattr(args, "pre_record_delay", 0.0), period_s,
+                        args.prepare_timeout)
                     obs.begin(ride_name, stem, has_telemetry=not monitor_only)
                     obs.mark("state_event_elapsed_zero", sim._capture_state_monitor.start)
                     # A short known pre-roll gives OBS time to encode frames;
@@ -434,6 +453,11 @@ def main(argv=None):
                         help="Video tail after return to READY (seconds; default 0.5)")
     parser.add_argument("--obs-lead", type=float, default=0.35,
                         help="Video lead-in before dispatch (seconds; default 0.35)")
+    parser.add_argument(
+        "--pre-record-delay", type=float, default=0.0,
+        help=("Pause after station readiness but before OBS starts; NL2 stays serviced "
+              "during the delay (default: 0 seconds)"),
+    )
     args = parser.parse_args(argv)
     rides = tuple(config.RIDES)
     if args.list:
@@ -446,8 +470,10 @@ def main(argv=None):
     repeats = args.repeats if args.repeats is not None else int(input("Repeats per ride [3]: ") or "3")
     if (args.record_video and
             (sys.platform != "win32" or args.obs_tail < 0 or args.obs_lead < 0
-             or args.obs_window_timeout <= 0)):
-        parser.error("--record-video requires Windows, nonnegative lead/tail and positive window timeout")
+             or args.pre_record_delay < 0 or args.obs_window_timeout <= 0)):
+        parser.error(
+            "--record-video requires Windows, nonnegative pre-record/lead/tail "
+            "and positive window timeout")
     if repeats < 1 or args.hz <= 0 or args.prepare_timeout <= 0 or args.max_duration <= 0:
         parser.error("repeats, hz and timeout values must be positive")
     try:

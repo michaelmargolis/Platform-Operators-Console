@@ -1,5 +1,5 @@
-#file_versions.txt  ver 226
-# Application baseline: v226 Dynamic source focus-panel layout refinement + Ride Analyzer v0.2.34
+#file_versions.txt  ver 229
+# Application baseline: POC v232 NL2 E-STOP recovery fix + Ride Analyzer v0.2.34
 # Relative path | expected version
 .gitattributes|1
 config/platforms.py|7
@@ -42,7 +42,7 @@ sim_host_service/windows/install_shs_startup.ps1|4
 sim_host_service/windows/start_shs.cmd|3
 sims/nolimits2/config.py|18
 sims/nolimits2/nl2_protocol.py|23
-sims/nolimits2/sim.py|49
+sims/nolimits2/sim.py|50
 sims/spacecoaster/config.py|13
 sims/spacecoaster/control.py|4
 sims/spacecoaster/sim.py|19
@@ -65,7 +65,8 @@ tests/test_xplane_adapter.py|7
 tests/test_fan_control.py|4
 tests/test_fan_serial.py|1
 tests/smoke_sim_interface.py|1
-tests/test_nolimits2_adapter.py|32
+tests/test_nolimits2_adapter.py|33
+tests/test_nl2_estop_recovery_v232.py|1
 tests/test_nl2_service_timestamp_v213.py|1
 tests/test_platform_controller.py|12
 tests/test_d_to_p.py|1
@@ -101,11 +102,12 @@ raspi/test-poc-network-helper.sh|1
 raspi/README.md|16
 raspi/assets/README.md|3
 docs/ARCHITECTURE.md|5
+docs/CANONICAL_RIDE_CAPTURE_V230.md|2
 docs/digital_twin/POC_DIGITAL_TWIN_UDP_HANDOVER_v1.md|3
 docs/digital_twin/UNITY_DIGITAL_TWIN_DEVELOPMENT_HANDOFF.md|7
 docs/raspberry_pi/POC_Raspberry_Pi_Technician_Guide.md|13
 reference_data/README.md|1
-tools/README.md|3
+tools/README.md|4
 tools/diagnostics/monitor_activation_switch.py|1
 tools/diagnostics/raspi/dsi_reboot_test.sh|1
 tools/diagnostics/spacecoaster/dummySHS.py|1
@@ -113,18 +115,21 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|72
+changelog.txt|74
 README.md|22
-file_versions.txt|226
+file_versions.txt|229
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
 docs/PARKING_OPERATION_V149.md|1
 docs/Project Ideas.md|3
-tools/capture_nl2_rides.py|9
+tools/capture_nl2_rides.py|10
+tools/create_canonical_rides.py|1
+tools/run_canonical_ride_capture.bat|1
 tools/nl2_obs_recorder.py|3
 tests/test_nl2_obs_capture_v173.py|3
-tests/test_capture_nl2_rides_v153.py|5
+tests/test_capture_nl2_rides_v153.py|6
+tests/test_create_canonical_rides_v230.py|1
 tests/test_nl2_request_ids_v156.py|1
 tests/test_nl2_normalized_height_v157.py|3
 tests/test_poc_performance_v158.py|1

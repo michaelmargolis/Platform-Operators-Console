@@ -2,6 +2,7 @@
   "_file_version": "poc_config.json ver 6",
   "selected_sim": "nolimits2",
   "selected_platform": "chair_v3",
+  "ground_loading_min_clearance_mm": 15.0,
   "sim_host_service": {
     "enabled": true,
     "address": "192.168.0.4",

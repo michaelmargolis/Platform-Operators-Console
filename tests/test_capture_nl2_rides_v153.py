@@ -1,4 +1,4 @@
-# test_capture_nl2_rides_v153.py  ver 5
+# test_capture_nl2_rides_v153.py  ver 6
 """Offline checks for the separate NL2 ride study utility."""
 import importlib.util
 from pathlib import Path
@@ -199,3 +199,26 @@ def test_main_chooses_blackbird_as_initial_park_without_changing_normal_default(
     monkeypatch.setattr(module, "capture_one", lambda *args: None)
     assert module.main(["--rides", "2,3", "--repeats", "1", "--output-dir", str(tmp_path)]) == 0
     assert created == [1]
+
+
+def test_wait_before_recording_services_nl2_then_rechecks_ready(monkeypatch):
+    calls = []
+    sim = object()
+    monkeypatch.setattr(module, "wait_between_load_attempts",
+                        lambda s, seconds, interval: calls.append(("wait", s, seconds, interval)))
+    def fake_await(s, predicate, timeout, label, interval):
+        calls.append(("ready", s, timeout, label, interval))
+    monkeypatch.setattr(module, "await_condition", fake_await)
+
+    module.wait_before_recording(sim, 5.0, 0.05, 90.0)
+
+    assert calls == [
+        ("wait", sim, 5.0, 0.05),
+        ("ready", sim, 90.0, "post-delay station readiness", 0.05),
+    ]
+
+
+def test_wait_before_recording_zero_is_noop(monkeypatch):
+    monkeypatch.setattr(module, "wait_between_load_attempts",
+                        lambda *a: (_ for _ in ()).throw(AssertionError("unexpected wait")))
+    module.wait_before_recording(object(), 0.0, 0.05, 90.0)

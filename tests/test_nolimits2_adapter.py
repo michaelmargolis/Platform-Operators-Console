@@ -1,4 +1,4 @@
-#test_nolimits2_adapter.py  ver 32
+#test_nolimits2_adapter.py  ver 33
 from __future__ import annotations
 
 import logging
@@ -1001,20 +1001,17 @@ def test_estop_recovery_stays_resetting_until_fresh_dispatch_ready_state():
     sim = Sim(client=client)
     connect_and_service(sim)
 
-    # Establish a connected sim and start explicit E-STOP recovery.
+    # A freshly loaded, confirmed park with no established ride lifecycle is
+    # reused for E-STOP recovery.  Do not issue a redundant LOAD_PARK while
+    # NoLimits may still be completing internal work for that same park.
     sim.state = ExperienceState.READY
+    load_count = len([cmd for cmd in client.commands if cmd[0] == "load_park"])
     sim.recover_from_estop()
     assert sim.state is ExperienceState.RESETTING
     assert sim._estop_recovery_pending is True
-
-    # Recovery LOAD_PARK is intentionally paused.  Its acknowledgement must
-    # enter the same RESET_PARK(False) preparation path as normal activation,
-    # rather than waiting for a train-in-station bit from the paused park.
-    client.complete_request(sim._ride_load_request_id, ok=True)
-    sim.read()
-    assert sim.state is ExperienceState.RESETTING
+    assert sim._ride_load_pending is False
+    assert len([cmd for cmd in client.commands if cmd[0] == "load_park"]) == load_count
     assert sim._park_reset_pending is True
-    assert not any(cmd[0] == "reset" for cmd in client.commands)
 
     # Fresh play-mode telemetry plus manual-mode station state is sufficient
     # to send RESET_PARK(False); a train-in-station bit is not required before
@@ -1035,27 +1032,21 @@ def test_estop_recovery_stays_resetting_until_fresh_dispatch_ready_state():
     assert sim.get_status().ready_to_start is True
     assert sim._estop_recovery_pending is False
 
-
 def test_estop_recovery_clears_stale_manual_request_and_can_reissue_manual_mode():
     client = FakeNL2Client()
     sim = Sim(client=client)
     connect_and_service(sim)
 
-    # Simulate a request flag left over from the pre-recovery park.
+    # Simulate a request flag left over from park settling before recovery.
     sim._manual_mode_requested = True
     client.commands.clear()
 
     sim.recover_from_estop()
     assert sim._manual_mode_requested is False
-    request_id = sim._ride_load_request_id
-    client.complete_request(request_id, ok=True)
+    assert sim._ride_load_pending is False
 
-    # New park initially reports station without manual-mode bit.  Recovery
-    # must send a NEW manual-mode command rather than being blocked by stale
-    # bookkeeping from the old park.
-    # First read consumes LOAD_PARK completion and deliberately clears cached
-    # pre-load observations.
-    sim.read()
+    # Fresh station state without the manual-mode bit must cause a NEW manual
+    # command rather than being blocked by stale bookkeeping.
     set_station(client, TRAIN_IN_STATION_BITS)
     fresh(client, speed=0.0, state=3)
     sim.read()
@@ -1078,20 +1069,14 @@ def test_estop_recovery_clears_stale_manual_request_and_can_reissue_manual_mode(
     assert sim.is_ready_to_start() is True
     assert sim._estop_recovery_pending is False
 
-
 def test_estop_recovery_requires_view_train_even_if_other_train_in_station():
     client = FakeNL2Client()
     sim = Sim(client=client)
     connect_and_service(sim)
 
-    # Begin a genuine E-stop recovery park reload.
+    # Freshly loaded park reuse enters RESETTING directly without another load.
     sim.recover_from_estop()
-    request_id = sim._ride_load_request_id
-    client.complete_request(request_id, ok=True)
-
-    # Consume LOAD_PARK acknowledgement; the adapter must remain RESETTING
-    # until fresh post-load station/telemetry proves dispatch readiness.
-    sim.read()
+    assert sim._ride_load_pending is False
     assert sim.state is ExperienceState.RESETTING
 
     # Any train in station is sufficient to initiate reset, but NOT to confirm
