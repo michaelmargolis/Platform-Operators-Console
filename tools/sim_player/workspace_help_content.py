@@ -1,4 +1,4 @@
-# workspace_help_content.py ver 11
+# workspace_help_content.py ver 13
 """Built-in help for the task workspace; no Qt or processing dependencies.
 
 Topics follow the recovered Qt prototype's six-tab help. Descriptions refer
@@ -77,11 +77,11 @@ destination and settings.</p>
 <p>Use the Platform, Ride and Candidate selectors for the current review.
 An A/B review stays within its selected platform. Open another review to change
 that pairing; an archived candidate is not silently reinterpreted for another platform.</p>
-<h3>Dynamic ride preparation (v0.2.28)</h3>
+<h3>Dynamic ride preparation (v0.2.33)</h3>
 <p><b>Study &gt; Dynamic rides - prepare for POC...</b> is a three-stage wizard:
 <b>Source / Generate / Review &amp; Export</b>.</p>
-<p><b>Source</b> starts in <code>captures/dynamic_source</code>. Session lists only
-direct <code>session_*</code> folders and its tooltip shows the rides plus retained
+<p><b>Source</b> is fixed to <code>captures/dynamic_source</code>. Session lists only
+direct <code>session_*</code> folders there and its tooltip shows the rides plus retained
 Partial/Generated/Reviewed/Exported state. Ride is rebuilt from recordings
 actually present in that session. Select Chair V3, Ground-Loading Platform, or
 both with checkboxes. Existing completed work is resumed when available; source
@@ -94,11 +94,15 @@ Strict is recommended first; Relaxed 5% is recommended only when no qualifying
 Strict profile is available. <b>Review profile</b> opens normal Analyzer playback.
 After <b>Return to dynamic preparation</b>, the exact profile is marked reviewed,
 its POC profile name becomes editable and <b>Export for POC</b> builds the
-immutable qualified ZIP in <code>exports/dynamic_candidates</code>. Export does
-not physically commission or prefer the candidate.</p>
+immutable qualified ZIP in <code>exports/dynamic_candidates</code>. A persistent
+<b>Exported POC candidates</b> pane groups recognised candidate packages by physical platform;
+hover shows Strict/Relaxed 5% qualification and package details. Selecting an
+export is informational and never changes the Source session or Ride; double-click
+opens its folder. Export does not physically commission or prefer the candidate.</p>
 <h3>Dynamic-source sessions</h3>
 <p><b>Study &gt; Capture dynamic source...</b> launches the existing local NoLimits
-capture workflow in a modal dialog. A dynamic-source session contains repeated
+capture workflow in a modal dialog and always writes the new session below
+<code>captures/dynamic_source</code>. A dynamic-source session contains repeated
 <b>dynamic source recordings</b> plus timing and provenance companions used later
 for dynamic-profile generation and validation. The selected Ride Analyzer
 candidate is deliberately not applied to capture; the simulator trajectory is
@@ -263,8 +267,9 @@ information. A source-compatibility or output-parity check does not transfer an
 old profile's qualification to different processing code or geometry.</p>
 <p>These are offline diagnostics, not measured pneumatic response, comfort or
 force/tension feasibility. Strict/relaxed optimisation targets do not enlarge
-physical actuator limits. Dynamic profiles remain research review items, not
-live POC exports in this build.</p>
+physical actuator limits. Qualified dynamic profiles can be exported as POC
+import ZIPs after the exact profile is reviewed; that offline qualification is
+still not physical commissioning or approval.</p>
 <h3>Output and saved data</h3>
 <p>Normal analysis/replay does not connect to live NL2, SHS or Festo. The deliberate
 exception is <b>Study &gt; Capture dynamic source...</b>, which launches the existing

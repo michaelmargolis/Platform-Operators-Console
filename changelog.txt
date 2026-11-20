@@ -1,5 +1,31 @@
-# changelog.txt ver 66
+# changelog.txt ver 71
 
+
+POC v228 / MDX Ride Analyzer v0.2.33 - Fixed dynamic source root and action hierarchy - 2026-11-19
+- Fix the normal Dynamic Ride preparation source root to `captures/dynamic_source` and remove the Source-page Choose folder action.
+- Fix the Capture dynamic source dialog output to the same `captures/dynamic_source` root and remove its Browse action, so capture cannot accidentally be redirected to export or unrelated folders. Alternate source/output roots are deferred to a future explicit Advanced mode if required.
+- Make secondary Dynamic Ride Workspace buttons visually quieter while retaining a bright primary workflow action, improving the visual hierarchy without changing workflow behavior.
+- Update built-in help and engineering documentation to match the fixed-root workflow. No optimiser mathematics, qualification thresholds, package format, POC runtime, kinematics, Festo or physical-output behavior changed.
+
+POC v227 / MDX Ride Analyzer v0.2.32 - Dynamic export inventory A/B visibility - 2026-11-19
+- Fix the Dynamic Ride Workspace export inventory so all recognised candidate packages are listed, including multiple Dynamic A/B labels for the same ride/platform. Qualification-target metadata is descriptive for inventory purposes rather than a reason to hide an exported package; full package validation remains unchanged in the export/import paths.
+- Add automatic export-folder watching so packages copied or created while the dialog is open appear without reopening it; manual Refresh remains available.
+- No optimiser mathematics, qualification thresholds, package format, POC runtime, kinematics, Festo or physical-output behaviour changed.
+
+POC v226 / MDX Ride Analyzer v0.2.31 - Dynamic export inventory row readability - 2026-11-19
+- Remove alternating row colours from the Dynamic Ride Workspace Exported POC candidates tree. The alternate Qt palette row was rendering nearly white under the Analyzer dark theme, making text unreadable. All candidate rows now use the normal consistent dark tree background; platform grouping, current-ride emphasis and selection highlighting are unchanged.
+- No change to export discovery, package contents, workflow state, optimiser, qualification, POC runtime, kinematics, Festo or physical output.
+
+POC v225 / MDX Ride Analyzer v0.2.30 - Dynamic export inventory Qt API fix - 2026-11-19
+- Fix the Dynamic Ride preparation dialog crashing while building platform group rows in Exported POC candidates. The group item now calls the valid Qt `QTreeWidgetItem.setFirstColumnSpanned(True)` API rather than the non-existent `QTreeWidget.setFirstItemColumnSpanned(...)`.
+- Add a regression source-contract check for this exact call. No change to export discovery/grouping, optimiser mathematics, qualification thresholds, package schema, POC runtime, kinematics, Festo or physical output.
+
+
+POC v224 / MDX Ride Analyzer v0.2.29 - Dynamic export inventory pane - 2026-11-19
+- Add a persistent **Exported POC candidates** pane to the Dynamic Ride preparation wizard. Analyzer reads recognised candidate packages from `exports/dynamic_candidates`, groups them by Chair V3 / Ground-Loading Platform, sorts by ride/candidate, and keeps the inventory visible across Source / Generate / Review & Export.
+- Hover shows the package qualification target (Strict / Relaxed 5%), full candidate label, package timestamp, source-recording count/status and path. The currently selected source ride is emphasised; selecting an exported package is informational only and never changes source/session context.
+- Add manual Refresh plus Open selected folder/double-click navigation, and automatically refresh the inventory after a successful export. Invalid/non-candidate ZIPs are counted but not shown as candidates.
+- Correct Analyzer built-in Help to reflect the current qualified dynamic POC export capability. No optimiser mathematics, qualification thresholds, profile/package schema, POC runtime, kinematics, Festo or physical-output behaviour changed.
 
 POC v223 - Test Poc installer prerequisite robustness - 2026-11-19
 - Fix `install-test-poc-launcher.sh` failing with the generic "complete POC runtime/test launcher not found" message when Unix execute bits were lost during file transfer or when the optional POC icon was absent.

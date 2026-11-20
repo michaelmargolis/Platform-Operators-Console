@@ -1,8 +1,8 @@
-<!-- POC_DYNAMIC_PREPARATION_V202.md ver 4 -->
+<!-- POC_DYNAMIC_PREPARATION_V202.md ver 6 -->
 # Dynamic ride preparation and POC import - current workflow
 
 This document describes the current Analyzer-to-POC workflow, introduced in
-v202 and updated through POC v216 / MDX Ride Analyzer v0.2.28.
+v202 and updated through POC v224 / MDX Ride Analyzer v0.2.29.
 
 ## Terminology
 
@@ -23,11 +23,11 @@ older optimiser/timing internals, but a saved dynamic-source folder is called a
 
 ## Analyzer workflow - three-stage wizard
 
-1. Open **Study > Dynamic rides - prepare for POC...**. The Source page always
-   starts at `captures/dynamic_source/`. Session lists direct `session_*`
-   children only. Hover a row to see captured rides and their retained
-   per-platform state: Partial, Generated, Reviewed or Exported. **Choose
-   folder...** changes only this open wizard.
+1. Open **Study > Dynamic rides - prepare for POC...**. The Source page is fixed
+   to `captures/dynamic_source/`. Session lists direct `session_*` children
+   only. Hover a row to see captured rides and their retained per-platform
+   state: Partial, Generated, Reviewed or Exported. The normal workflow does
+   not expose an alternate source-folder browser.
 2. Select Session and Ride. Ride contains only rides with primary recordings in
    that session. Each Ride row also shows retained work, for example **Chair:
    Exported; Ground: Generated**, so already-processed rides can be skipped
@@ -57,7 +57,12 @@ older optimiser/timing internals, but a saved dynamic-source folder is called a
    and builds the immutable ZIP in `exports/dynamic_candidates/`. The default
    name advances from `Ride [Dynamic A]` to the next unused export label. A
    duplicate label for the same ride/platform already in the export folder is
-   rejected.
+   rejected. The persistent **Exported POC candidates** pane scans that folder,
+   groups recognised candidate packages by physical platform and sorts rides/candidates
+   alphabetically. Hover shows Strict/Relaxed 5% qualification and package
+   details. Selecting a package is informational only and never changes Source;
+   **Refresh** rescans manually, double-click/**Open selected folder** opens its
+   directory, and successful export refreshes the pane automatically.
 8. **Open export folder** is shown for an exported profile. The wizard can remain
    open while the other selected platform is reviewed/exported, or **Process
    another ride** returns to Source. Review/export state is persisted with the
@@ -72,8 +77,9 @@ capture code rather than duplicating its loading/dispatch logic.
 The **Capture scope** choices are Current ride, Custom rides, Quick, Standard
 and Extended. Quick uses the short Blackbird/Fenrir/Tilt Coaster set; Standard
 uses the current operator-visible rides with three measured recordings each;
-Extended uses the same set with five. The selected output folder becomes the
-parent of the new `session_*` directory.
+Extended uses the same set with five. New sessions are always created below
+`captures/dynamic_source/`; the normal capture dialog does not expose an
+alternate output-folder browser.
 
 For qualification, acquire source sessions on the intended deployment-class PC
 with VR active. The selected Ride Analyzer motion candidate is not applied to

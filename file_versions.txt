@@ -1,5 +1,5 @@
-#file_versions.txt  ver 220
-# Application baseline: v223 Test Poc installer prerequisite robustness + Ride Analyzer v0.2.28
+#file_versions.txt  ver 226
+# Application baseline: v226 Dynamic source focus-panel layout refinement + Ride Analyzer v0.2.34
 # Relative path | expected version
 .gitattributes|1
 config/platforms.py|7
@@ -113,9 +113,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|66
+changelog.txt|72
 README.md|22
-file_versions.txt|220
+file_versions.txt|226
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -160,7 +160,7 @@ tests/test_variant_migration_v178.py|1
 tests/test_variant_selection_v178.py|3
 tests/test_variant_store_v178.py|2
 tools/migrate_nl2_variants.py|1
-tools/sim_player/__init__.py|19
+tools/sim_player/__init__.py|25
 tools/sim_player/__main__.py|1
 tools/sim_player/angular_cues.py|1
 tools/sim_player/anomaly_detection.py|2
@@ -257,23 +257,23 @@ tools/sim_player/study_bundle.py|2
 tools/sim_player/tests/test_optimizer_v192.py|1
 
 # MDX Ride Analyzer v0.2.11 additions / newly version-tracked current files
-tools/sim_player/README.md|17
+tools/sim_player/README.md|19
 tools/sim_player/canonical_dialog.py|2
 tools/sim_player/canonical_media.py|1
 tools/sim_player/canonical_rides/README.md|1
-tools/sim_player/changelog.txt|18
+tools/sim_player/changelog.txt|24
 tools/sim_player/dynamic_optimizer.py|1
 tools/sim_player/dynamic_optimization.py|1
 tools/sim_player/tests/test_dynamic_optimizer_packaging_v204.py|1
 tools/sim_player/dynamic_review.py|1
 tools/sim_player/dynamic_source.py|5
-tools/sim_player/dynamic_source_dialog.py|5
+tools/sim_player/dynamic_source_dialog.py|6
 tools/sim_player/dynamic_browser.py|1
 tools/sim_player/dynamic_workflow.py|1
 tools/sim_player/tests/test_dynamic_source_capture_v0211.py|6
 tools/sim_player/tests/test_workspace_menu_contract_v022.py|4
 tools/sim_player/workspace_help.py|1
-tools/sim_player/workspace_help_content.py|11
+tools/sim_player/workspace_help_content.py|13
 core/dynamic_profiles.py|2
 tools/nl2_dynamic_profiles/__init__.py|1
 tools/nl2_dynamic_profiles/__main__.py|2
@@ -291,14 +291,17 @@ core/dynamic_import.py|3
 tests/test_dynamic_import_filter_v215.py|1
 tools/nl2_dynamic_profiles/package.py|2
 tools/sim_player/dynamic_ride_studies.py|5
-tools/sim_player/dynamic_ride_workspace.py|8
+tools/sim_player/dynamic_ride_workspace.py|14
+tools/sim_player/dynamic_export_inventory.py|2
 tests/test_dynamic_candidate_import_v202.py|2
 tests/test_dynamic_import_refresh_v214.py|1
 tests/test_dynamic_clearance_v202.py|1
 tools/sim_player/tests/test_dynamic_study_workspace_v202.py|1
 tools/sim_player/tests/test_dynamic_session_rides_v211.py|2
-tools/sim_player/tests/test_dynamic_session_selector_v212.py|4
-docs/POC_DYNAMIC_PREPARATION_V202.md|4
+tools/sim_player/tests/test_dynamic_session_selector_v212.py|5
+tools/sim_player/tests/test_dynamic_export_inventory_v224.py|4
+docs/POC_DYNAMIC_PREPARATION_V202.md|6
+docs/POC_V224_DYNAMIC_EXPORT_INVENTORY_VERIFICATION.txt|1
 docs/POC_V216_DYNAMIC_EXISTING_PROFILE_VISIBILITY_VERIFICATION.txt|1
 docs/POC_V215_DYNAMIC_WIZARD_IMPORT_VERIFICATION.txt|1
 tools/sim_player/tests/test_plot_compatibility_v203.py|1

@@ -1,4 +1,4 @@
-# dynamic_source_dialog.py ver 5
+# dynamic_source_dialog.py ver 6
 """Modal Ride Analyzer workflow for creating dynamic-source recordings."""
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from PyQt6.QtCore import QProcess, QTimer, QUrl, pyqtSignal, Qt
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-    QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QFormLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox,
     QVBoxLayout, QWidget, QInputDialog,
 )
@@ -94,7 +94,7 @@ class DynamicSourceCaptureDialog(QDialog):
 
     capture_started = pyqtSignal()
 
-    def __init__(self, current_ride_key=None, parent=None, *, output_root=None):
+    def __init__(self, current_ride_key=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Capture Dynamic Source Recordings")
         self.setModal(True)
@@ -180,13 +180,11 @@ class DynamicSourceCaptureDialog(QDialog):
         self.extend_uncertain.toggled.connect(self._update_estimate)
         self.form.addRow("Extend uncertain capture", self.extend_uncertain)
 
-        self.output = QLineEdit(str(Path(output_root or DEFAULT_OUTPUT_ROOT))); self.output.setReadOnly(True)
-        self.output_browse = QPushButton("Browse...")
-        self.output_browse.clicked.connect(self._browse_output)
-        output_row = QWidget(); output_layout = QHBoxLayout(output_row)
-        output_layout.setContentsMargins(0, 0, 0, 0)
-        output_layout.addWidget(self.output, 1); output_layout.addWidget(self.output_browse)
-        self.form.addRow("Output", output_row)
+        self.output = QLineEdit(str(DEFAULT_OUTPUT_ROOT)); self.output.setReadOnly(True)
+        self.output.setToolTip(
+            "Dynamic-source capture always writes sessions below captures/dynamic_source."
+        )
+        self.form.addRow("Output", self.output)
         layout.addWidget(form_host)
 
         note = QLabel(
@@ -306,10 +304,6 @@ class DynamicSourceCaptureDialog(QDialog):
             self.selected_rides = dialog.selected_keys()
             self._scope_changed()
 
-    def _browse_output(self):
-        selected = QFileDialog.getExistingDirectory(self, "Dynamic source output folder", self.output.text())
-        if selected:
-            self.output.setText(selected)
 
     def _plan(self):
         scope = str(self.scope.currentData())
@@ -328,7 +322,7 @@ class DynamicSourceCaptureDialog(QDialog):
     def _set_form_enabled(self, enabled):
         for widget in (self.scope, self.select_rides_button, self.repeats, self.warmups,
                        self.conditions, self.extend_uncertain,
-                       self.output_browse, self.api_refresh):
+                       self.api_refresh):
             widget.setEnabled(enabled)
         self.buttons.button(QDialogButtonBox.StandardButton.Close).setEnabled(enabled)
 

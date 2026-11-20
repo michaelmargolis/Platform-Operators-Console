@@ -1,4 +1,30 @@
-# changelog.txt ver 18
+# changelog.txt ver 24
+
+MDX Ride Analyzer v0.2.34 - 2026-11-19
+- Refine the Dynamic Ride Source page layout so the operator’s decision area is visually clearer: Session, Ride and selected platform controls now sit inside a subtle highlighted focus panel, while Folder and source-recording playback remain visually secondary.
+- Move Source-page actions to the lower centre of the main workflow area as requested, with Generate profiles above Close / return to Analyzer. The exported-candidate side panel no longer owns the close action.
+
+MDX Ride Analyzer v0.2.33 - 2026-11-19
+- Simplify the normal dynamic-source workflow: Dynamic Ride preparation is fixed to `captures/dynamic_source` and no longer shows Choose folder; Capture dynamic source always writes new `session_*` directories below the same fixed root and no longer shows an output Browse control. Alternate roots are intentionally deferred to a future explicit Advanced mode if needed.
+- Rebalance Dynamic Ride Workspace action styling: ordinary/secondary actions use a subdued slate treatment while the primary workflow action retains the brighter blue treatment, making the current next step visually dominant.
+
+MDX Ride Analyzer v0.2.32 - 2026-11-19
+- Fix Exported POC candidates inventory so multiple packages for the same platform/ride (for example Dynamic A and Dynamic B) are all retained and displayed. Inventory discovery treats qualification-target fields as descriptive metadata rather than a listing gate; Export for POC and POC import remain the authoritative qualification/integrity checks.
+- Watch `exports/dynamic_candidates` for directory changes and rescan automatically after externally-created/copied packages settle, while retaining the manual Refresh action.
+
+MDX Ride Analyzer v0.2.31 - 2026-11-19
+- Remove alternating row colours from Exported POC candidates. Under the Analyzer dark palette the alternate base rendered as a pale row with very low-contrast text. Candidate rows now use the normal consistent tree background; only selection, current-ride emphasis and platform group headings remain visually distinct.
+
+MDX Ride Analyzer v0.2.30 - 2026-11-19
+- Fix Dynamic Ride Workspace startup crash in the exported-candidate inventory: use QTreeWidgetItem.setFirstColumnSpanned(True), the Qt API available on the platform-group item, instead of the non-existent QTreeWidget.setFirstItemColumnSpanned method.
+- Add a source-contract regression check for the exact Qt call. No export inventory semantics, optimiser, qualification, package format, POC runtime or physical-output behavior changed.
+
+
+MDX Ride Analyzer v0.2.29 - 2026-11-19
+- Add a persistent **Exported POC candidates** pane to Dynamic rides - prepare for POC. It scans `exports/dynamic_candidates`, groups recognised candidate packages by physical platform, sorts rides/candidates alphabetically and keeps the inventory visible while Source / Generate / Review & Export changes.
+- Hover an exported candidate to see its qualification target (Strict / Relaxed 5%), POC profile label, package timestamp, recording count/status and package path. The currently selected Source ride is highlighted subtly, but selecting an export never changes the Source session or Ride.
+- Add Refresh, Open selected folder and double-click folder opening; the inventory refreshes automatically after a successful export and reports invalid/non-candidate ZIPs without listing them.
+- Correct built-in Help to describe the current qualified dynamic POC export path rather than the obsolete research-only limitation. No optimiser mathematics, qualification thresholds, profile schema, POC runtime, kinematics or physical-output behaviour changed.
 
 MDX Ride Analyzer v0.2.28 - 2026-11-17
 - Show retained dynamic-profile work directly in the Ride selector and beside Chair V3 / Ground-Loading Platform, including workflow state and generated-profile-set timestamp/name. This lets operators skip rides/platforms already processed without opening them.

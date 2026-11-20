@@ -1,9 +1,9 @@
-<!-- README.md ver 17 -->
+<!-- README.md ver 19 -->
 # MDX Ride Analyzer
 
-Current workspace version: **v0.2.28**. Dynamic ride preparation is a three-stage wizard: Source / Generate / Review & Export. Source sessions and Ride rows show retained generation/review/export state, selected platforms show the prior profile-set date/name, and a compatible existing result is an explicit **Use existing profile(s)** choice alongside **Generate new profiles**. Generation owns its live progress/abort controls, and reviewed platform profiles can be named and exported directly for POC.
+Current workspace version: **v0.2.29**. Dynamic ride preparation is a three-stage wizard: Source / Generate / Review & Export. Source sessions and Ride rows show retained generation/review/export state, selected platforms show the prior profile-set date/name, and a compatible existing result is an explicit **Use existing profile(s)** choice alongside **Generate new profiles**. Generation owns its live progress/abort controls, reviewed platform profiles can be named and exported directly for POC, and a persistent platform-grouped export inventory shows the POC-ready packages already present in `exports/dynamic_candidates`.
 
-**Current workspace:** v0.2.28
+**Current workspace:** v0.2.29
 
 **MDX Ride Analyzer** is the offline ride-development and commissioning application for recorded NoLimits motion data.
 
@@ -35,11 +35,13 @@ A **dynamic-source recording** is one measured ride run. A **dynamic-source sess
 
 The Ride Analyzer launches the existing `tools.nl2_timing_study` capture implementation in a child process; it does not duplicate or bypass the established NL2 loading, dispatch or recording logic. The human-facing workflow uses **session** for one `session_*` capture directory and **recording** for one completed ride repeat. The word **study** is reserved for optimiser/research artifacts and the Study menu category.
 
-By default Ride Analyzer dynamic-source sessions are stored below:
+Ride Analyzer dynamic-source sessions are stored below:
 
 ```text
 captures/dynamic_source/
 ```
+
+The normal capture dialog always writes new `session_*` directories there and does not expose an alternate output-folder browser. The Dynamic Ride preparation Source page reads from the same fixed root. Alternate roots are intentionally deferred to a future explicit Advanced mode if needed.
 
 The normal player-compatible telemetry CSV from a completed trial can be opened directly in Ride Analyzer. Keep the complete dynamic-source session directory for profile generation; `_timing.csv`, `_trial.json` and the other companion files contain required synchronisation/provenance evidence and are not standalone playback recordings.
 
@@ -53,13 +55,15 @@ The capture dialog provides **Test conditions (optional)** for descriptive prove
 
 Normal analysis/replay does not connect to live NoLimits, SHS or Festo. **Study > Capture dynamic source...** is the deliberate exception: it connects to the local NoLimits API for the duration of capture. The capture workflow does not record video.
 
-## Prepare dynamic rides for POC (v0.2.28)
+## Prepare dynamic rides for POC (v0.2.33)
 
 Use **Study > Dynamic rides - prepare for POC...**. The normal workflow is a
 three-page wizard rather than one all-at-once control surface:
 
-1. **Source** starts at `captures/dynamic_source`. The Session dropdown lists
-   direct `session_*` folders only. Its row/tooltip shows captured rides plus
+1. **Source** is fixed to `captures/dynamic_source`. The Session dropdown lists
+   direct `session_*` folders only. The normal workflow does not expose an
+   alternate source-folder browser; that can be reintroduced later as an
+   explicit advanced function if required. Its row/tooltip shows captured rides plus
    retained Partial / Generated / Reviewed / Exported state derived from
    `studies/nl2/dynamic_profiles`. Selecting a session rebuilds Ride from data
    actually present in that session. Choose **Chair V3**, **Ground-Loading
@@ -82,6 +86,16 @@ three-page wizard rather than one all-at-once control surface:
    under `exports/dynamic_candidates/`. Existing generation report, regeneration,
    alternative-candidate and dismiss/restore controls remain secondary
    engineering actions.
+
+A persistent **Exported POC candidates** pane on the right scans that export
+folder independently of the selected source session. Recognised candidate packages are grouped
+by physical platform and then sorted by ride/candidate. Hover shows the package's
+Strict/Relaxed 5% qualification target, full POC profile label, package timestamp,
+recording count/status and file path. The current Source ride is emphasised, but
+selecting an exported package does not change Source; double-click or **Open
+selected folder** opens its containing folder. **Refresh** rescans manually and a
+successful export refreshes the pane automatically. Invalid/non-candidate ZIPs
+are counted but not shown as candidates.
 
 Export naming defaults to the first unused `Ride [Dynamic X]` label found in
 the Analyzer export folder. A duplicate platform/ride label already present in

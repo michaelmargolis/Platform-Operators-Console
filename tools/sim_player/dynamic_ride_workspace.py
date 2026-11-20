@@ -1,4 +1,4 @@
-# dynamic_ride_workspace.py ver 8
+# dynamic_ride_workspace.py ver 14
 """Three-stage dynamic-ride workflow: Source -> Generate -> Review & Export.
 
 All expensive profile generation runs in a managed QProcess; no simulator,
@@ -8,19 +8,21 @@ window remains the review surface and can return to this workspace afterwards.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 import sys
 
-from PyQt6.QtCore import QProcess, QUrl, Qt
+from PyQt6.QtCore import QFileSystemWatcher, QProcess, QTimer, QUrl, Qt
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame,
+    QApplication, QCheckBox, QComboBox, QDialog, QFrame,
     QGroupBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
     QMessageBox, QPlainTextEdit, QPushButton, QSizePolicy, QStackedWidget,
-    QLineEdit, QVBoxLayout, QWidget,
+    QHeaderView, QLineEdit, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from .dynamic_review import ROOT
+from .dynamic_export_inventory import discover_exported_candidates, short_candidate_label
 from .dynamic_ride_studies import (
     available_rides, find_sessions, platform_processing_display, rated_recordings,
     ride_label, ride_processing_display, session_processing_details,
@@ -110,7 +112,7 @@ class DynamicRideWorkspace(QDialog):
     def __init__(self, settings, parent=None, *, context=None):
         super().__init__(parent)
         self.setWindowTitle('Dynamic rides - prepare for POC')
-        self.resize(1050, 790)
+        self.resize(1360, 790)
         self.settings = settings
         self.context = dict(context or {})
         self.action = None
@@ -151,12 +153,12 @@ class DynamicRideWorkspace(QDialog):
             '  background:#132231; border-left:1px solid #687d90;'
             '}'
             'QPushButton {'
-            '  background:#2f6f9d; color:#ffffff; padding:6px 14px; font-weight:600;'
-            '  border:1px solid #9ac8e6; border-radius:4px; min-height:18px;'
+            '  background:#263746; color:#dbe6ee; padding:6px 14px; font-weight:500;'
+            '  border:1px solid #5d7487; border-radius:4px; min-height:18px;'
             '}'
-            'QPushButton:hover {background:#3d82b1; border-color:#c0e0f3;}'
-            'QPushButton:pressed {background:#24597f; border-color:#78aeca;}'
-            'QPushButton:checked {background:#376f91; border-color:#9bc8e5;}'
+            'QPushButton:hover {background:#31495c; border-color:#7892a6;}'
+            'QPushButton:pressed {background:#20313f; border-color:#526a7d;}'
+            'QPushButton:checked {background:#36556b; border-color:#7892a6;}'
             'QPushButton:disabled {'
             '  background:#1a2733; color:#72808c; border-color:#354553;'
             '}'
@@ -169,6 +171,10 @@ class DynamicRideWorkspace(QDialog):
             'QPushButton#primaryActionButton:disabled {'
             '  background:#1b3345; color:#71899a; border-color:#38556a;'
             '}'
+            'QFrame#decisionFocusFrame {'
+            '  background:#102234; border:1px solid #2d8fd0; border-radius:6px;'
+            '}'
+            'QFrame#decisionFocusFrame QLabel {background:transparent;}'
         )
 
         intro = QLabel(
@@ -181,8 +187,11 @@ class DynamicRideWorkspace(QDialog):
 
         self.progress_strip = WorkflowProgressStrip(self)
         layout.addWidget(self.progress_strip)
+        self.content_row = QHBoxLayout()
+        self.content_row.setSpacing(10)
         self.pages = QStackedWidget(self)
-        layout.addWidget(self.pages, 1)
+        self.content_row.addWidget(self.pages, 1)
+        layout.addLayout(self.content_row, 1)
 
         # ------------------------------------------------------------------
         # 1. SOURCE
@@ -201,11 +210,13 @@ class DynamicRideWorkspace(QDialog):
             'border-radius:4px; padding:6px 8px;'
         )
         folder_row.addWidget(self.source_folder_label, 1)
-        browse = QPushButton('Choose folder...')
-        browse.setMaximumWidth(150)
-        browse.clicked.connect(self.browse_sessions_folder)
-        folder_row.addWidget(browse)
         source_layout.addLayout(folder_row)
+
+        decision_frame = QFrame()
+        decision_frame.setObjectName('decisionFocusFrame')
+        decision_layout = QVBoxLayout(decision_frame)
+        decision_layout.setContentsMargins(12, 10, 12, 10)
+        decision_layout.setSpacing(10)
 
         session_row = QHBoxLayout()
         session_row.addWidget(QLabel('Session'))
@@ -219,14 +230,14 @@ class DynamicRideWorkspace(QDialog):
         capture_btn.setMaximumWidth(180)
         capture_btn.clicked.connect(self.capture_session)
         session_row.addWidget(capture_btn)
-        source_layout.addLayout(session_row)
+        decision_layout.addLayout(session_row)
 
         ride_row = QHBoxLayout()
         ride_row.addWidget(QLabel('Ride'))
         self.ride = QComboBox()
         self.ride.setToolTip('Only rides with primary recordings in the selected session are listed.')
         ride_row.addWidget(self.ride, 1)
-        source_layout.addLayout(ride_row)
+        decision_layout.addLayout(ride_row)
 
         platform_group = QGroupBox('Generate for platform(s)')
         platform_layout = QVBoxLayout(platform_group)
@@ -245,7 +256,8 @@ class DynamicRideWorkspace(QDialog):
             status.setStyleSheet('color:#aebdca;')
             row.addWidget(status)
             platform_layout.addLayout(row)
-        source_layout.addWidget(platform_group)
+        decision_layout.addWidget(platform_group)
+        source_layout.addWidget(decision_frame)
 
         self.session_note = QLabel()
         self.session_note.setWordWrap(True)
@@ -289,13 +301,26 @@ class DynamicRideWorkspace(QDialog):
         self.source_generate_new_btn.setVisible(False)
         source_action.addStretch(1)
         source_action.addWidget(self.source_generate_new_btn)
+        source_action.addSpacing(12)
         self.source_next_btn = QPushButton('Generate profiles →')
         self.source_next_btn.setObjectName('primaryActionButton')
         self.source_next_btn.setMinimumHeight(42)
         self.source_next_btn.setMinimumWidth(250)
         self.source_next_btn.clicked.connect(self._source_next)
         source_action.addWidget(self.source_next_btn)
+        source_action.addStretch(1)
         source_page_layout.addLayout(source_action)
+
+        close_row = QHBoxLayout()
+        close_row.addStretch(1)
+        self.source_close_btn = QPushButton('Close / return to Analyzer')
+        self.source_close_btn.setMinimumHeight(36)
+        self.source_close_btn.setMinimumWidth(280)
+        self.source_close_btn.clicked.connect(self.reject)
+        close_row.addWidget(self.source_close_btn)
+        close_row.addStretch(1)
+        source_page_layout.addSpacing(8)
+        source_page_layout.addLayout(close_row)
         self.pages.addWidget(source_page)
 
         # ------------------------------------------------------------------
@@ -436,13 +461,58 @@ class DynamicRideWorkspace(QDialog):
         self.open_export_btn = QPushButton()
         self.copy_export_btn = QPushButton()
 
-        close_row = QHBoxLayout()
-        close_row.addStretch(1)
-        close_btn = QPushButton('Close / return to Analyzer')
-        close_btn.setMaximumWidth(210)
-        close_btn.clicked.connect(self.reject)
-        close_row.addWidget(close_btn)
-        layout.addLayout(close_row)
+        # ------------------------------------------------------------------
+        # Persistent exported-candidate inventory
+        # ------------------------------------------------------------------
+        export_group = QGroupBox('Exported POC candidates')
+        export_group.setMinimumWidth(360)
+        export_group.setMaximumWidth(440)
+        export_layout = QVBoxLayout(export_group)
+        export_path_row = QHBoxLayout()
+        self.export_folder_label = QLabel('exports/dynamic_candidates')
+        self.export_folder_label.setStyleSheet('color:#aebdca;')
+        self.export_folder_label.setToolTip(str(ROOT / 'exports' / 'dynamic_candidates'))
+        export_path_row.addWidget(self.export_folder_label, 1)
+        self.export_refresh_btn = QPushButton('Refresh')
+        self.export_refresh_btn.setMaximumWidth(90)
+        self.export_refresh_btn.clicked.connect(self.refresh_exported_candidates)
+        export_path_row.addWidget(self.export_refresh_btn)
+        export_layout.addLayout(export_path_row)
+
+        self.export_watcher = QFileSystemWatcher(self)
+        self.export_watcher.directoryChanged.connect(self._export_folder_changed)
+
+        self.export_tree = QTreeWidget()
+        self.export_tree.setColumnCount(2)
+        self.export_tree.setHeaderLabels(['Ride', 'Candidate'])
+        self.export_tree.setRootIsDecorated(True)
+        self.export_tree.setUniformRowHeights(True)
+        self.export_tree.setMouseTracking(True)
+        self.export_tree.setToolTip(
+            'POC-ready ZIPs currently in the Analyzer export folder. '
+            'Selecting an item does not change the Source session or ride. '
+            'Double-click a candidate to open its folder.')
+        header = self.export_tree.header()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.export_tree.itemSelectionChanged.connect(self._export_selection_changed)
+        self.export_tree.itemDoubleClicked.connect(self._export_item_double_clicked)
+        export_layout.addWidget(self.export_tree, 1)
+
+        self.export_summary = QLabel()
+        self.export_summary.setWordWrap(True)
+        self.export_summary.setStyleSheet('color:#aebdca;')
+        export_layout.addWidget(self.export_summary)
+
+        export_actions = QHBoxLayout()
+        self.export_open_btn = QPushButton('Open selected folder')
+        self.export_open_btn.setEnabled(False)
+        self.export_open_btn.clicked.connect(self._open_selected_export_folder)
+        export_actions.addWidget(self.export_open_btn)
+        export_actions.addStretch(1)
+        export_layout.addLayout(export_actions)
+
+        self.content_row.addWidget(export_group)
 
         self.session.currentIndexChanged.connect(self._session_selection_changed)
         self.ride.currentIndexChanged.connect(self._ride_selection_changed)
@@ -458,6 +528,7 @@ class DynamicRideWorkspace(QDialog):
         if output:
             if self.set_result_dir(Path(str(output))):
                 self._force_source_page = False
+        self.refresh_exported_candidates()
         self.update_workflow_state()
 
     def append_log(self, line):
@@ -472,7 +543,7 @@ class DynamicRideWorkspace(QDialog):
         )
 
     def _toggle_generation_details(self, visible):
-        # v0.2.28 has a dedicated Generate page; progress/details stay visible.
+        # The three-stage wizard has a dedicated Generate page; progress/details stay visible.
         self.log.setVisible(True)
         if not self._generation_running():
             self._refresh_generation_details()
@@ -657,26 +728,11 @@ class DynamicRideWorkspace(QDialog):
         self.ride.setEnabled(bool(rides) and not self._generation_running())
         return rides
 
-    def browse_sessions_folder(self):
-        directory = QFileDialog.getExistingDirectory(
-            self, 'Choose folder containing dynamic-source sessions', str(self._source_root)
-        )
-        if not directory:
-            return
-        path = Path(directory).expanduser().resolve()
-        preferred = None
-        # Be forgiving if the user chooses a session folder itself: display its
-        # parent as the source folder and preselect that session.
-        if path.name.startswith('session_'):
-            preferred = str(path)
-            path = path.parent
-        self.context.pop('session', None)
-        self.populate_sessions(path, preferred_session=preferred)
 
     def capture_session(self):
         from .dynamic_source_dialog import DynamicSourceCaptureDialog
         initial_ride = str(self.ride.currentData() or self._preferred_ride or 'blackbird')
-        dialog = DynamicSourceCaptureDialog(initial_ride, self, output_root=self._source_root)
+        dialog = DynamicSourceCaptureDialog(initial_ride, self)
         dialog.exec()
         preferred_session = str(dialog.session_dir) if dialog.session_dir is not None else None
         self.populate_sessions(self._source_root, preferred_session=preferred_session)
@@ -705,6 +761,7 @@ class DynamicRideWorkspace(QDialog):
         if self.ride.currentData():
             self._preferred_ride = str(self.ride.currentData())
         self._source_context_changed()
+        self._update_exported_ride_highlight()
 
     def _platform_selection_changed(self, *_args):
         self._force_source_page = True
@@ -1253,6 +1310,119 @@ class DynamicRideWorkspace(QDialog):
         except Exception:
             return ''
 
+    def _export_candidate_tooltip(self, row):
+        ride_name = ride_label(row.park)
+        short_label = short_candidate_label(row.label, ride_name)
+        target = TARGET_LABELS.get(row.target, row.target or 'Qualification target not recorded')
+        title = f'{target} ({short_label})' if short_label else target
+        timestamp = datetime.fromtimestamp(row.modified_time).strftime('%d %b %Y %H:%M')
+        lines = [
+            title, '',
+            f'Ride: {ride_name}',
+            f'Platform: {PLATFORM_LABELS.get(row.platform, row.platform)}',
+            f'POC profile: {row.label}',
+            f'Package timestamp: {timestamp}',
+        ]
+        if row.source_recordings is not None:
+            lines.append(f'Qualification recordings: {row.source_recordings}')
+        if row.operational_status:
+            lines.append('Package status: ' + row.operational_status.replace('_', ' '))
+        lines.extend([f'Package: {row.package.name}', str(row.package)])
+        return '\n'.join(lines)
+
+    def refresh_exported_candidates(self):
+        folder = ROOT / 'exports' / 'dynamic_candidates'
+        if folder.is_dir() and hasattr(self, 'export_watcher'):
+            if str(folder) not in self.export_watcher.directories():
+                self.export_watcher.addPath(str(folder))
+        rows, invalid = discover_exported_candidates(folder)
+        self.export_tree.clear()
+        markers = {'chair_v3': '●', 'platform_v2': '◆'}
+        platform_order = ('chair_v3', 'platform_v2')
+        other_platforms = sorted(
+            {row.platform for row in rows if row.platform not in platform_order}, key=str.casefold)
+        for platform_key in platform_order + tuple(other_platforms):
+            platform_rows = [row for row in rows if row.platform == platform_key]
+            if not platform_rows and platform_key not in platform_order:
+                continue
+            marker = markers.get(platform_key, '•')
+            group = QTreeWidgetItem([
+                f'{marker} {PLATFORM_LABELS.get(platform_key, platform_key)}', ''
+            ])
+            group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            font = group.font(0)
+            font.setBold(True)
+            group.setFont(0, font)
+            self.export_tree.addTopLevelItem(group)
+            group.setFirstColumnSpanned(True)
+            group.setExpanded(True)
+
+            platform_rows.sort(
+                key=lambda row: (ride_label(row.park).casefold(), row.label.casefold(), row.package.name.casefold()))
+            for row in platform_rows:
+                ride_name = ride_label(row.park)
+                candidate_name = short_candidate_label(row.label, ride_name)
+                item = QTreeWidgetItem([ride_name, candidate_name])
+                item.setData(0, Qt.ItemDataRole.UserRole, str(row.package))
+                item.setData(1, Qt.ItemDataRole.UserRole, row.park)
+                tooltip = self._export_candidate_tooltip(row)
+                item.setToolTip(0, tooltip)
+                item.setToolTip(1, tooltip)
+                group.addChild(item)
+
+        count = len(rows)
+        if count:
+            text = f'{count} exported candidate package' + ('' if count == 1 else 's')
+        else:
+            text = 'No exported candidate packages found.'
+        if invalid:
+            text += f'  {invalid} invalid/non-candidate ZIP' + ('' if invalid == 1 else 's') + ' ignored.'
+        self.export_summary.setText(text)
+        self._update_exported_ride_highlight()
+        self._export_selection_changed()
+
+    def _export_folder_changed(self, _path):
+        # Windows can signal before a copied/generated ZIP has closed.  Delay
+        # the rescan slightly and coalesce filesystem notifications.
+        QTimer.singleShot(200, self.refresh_exported_candidates)
+
+    def _update_exported_ride_highlight(self):
+        if not hasattr(self, 'export_tree'):
+            return
+        current_ride = str(self.ride.currentData() or '')
+        for top_index in range(self.export_tree.topLevelItemCount()):
+            group = self.export_tree.topLevelItem(top_index)
+            for child_index in range(group.childCount()):
+                item = group.child(child_index)
+                match = bool(current_ride and item.data(1, Qt.ItemDataRole.UserRole) == current_ride)
+                for column in range(2):
+                    font = item.font(column)
+                    font.setBold(match)
+                    item.setFont(column, font)
+
+    def _selected_export_package(self):
+        item = self.export_tree.currentItem() if hasattr(self, 'export_tree') else None
+        if item is None:
+            return None
+        value = item.data(0, Qt.ItemDataRole.UserRole)
+        return Path(str(value)) if value else None
+
+    def _export_selection_changed(self):
+        package = self._selected_export_package()
+        self.export_open_btn.setEnabled(bool(package and package.is_file()))
+
+    def _export_item_double_clicked(self, item, _column):
+        value = item.data(0, Qt.ItemDataRole.UserRole) if item is not None else None
+        if value:
+            package = Path(str(value))
+            if package.is_file():
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(package.parent)))
+
+    def _open_selected_export_folder(self):
+        package = self._selected_export_package()
+        if package and package.is_file():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(package.parent)))
+
     def _existing_export_labels(self, platform_key, park):
         labels = set()
         folder = ROOT / 'exports' / 'dynamic_candidates'
@@ -1420,6 +1590,7 @@ class DynamicRideWorkspace(QDialog):
         QApplication.clipboard().setText(str(package.parent))
         self.append_log('Exported for POC: ' + str(package))
         self.populate_rides(self.ride.currentData())
+        self.refresh_exported_candidates()
         self.update_workflow_state()
         QMessageBox.information(
             self, 'Dynamic profile exported for POC',
