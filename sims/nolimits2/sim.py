@@ -1,4 +1,4 @@
-#sim.py  ver 50
+#sim.py  ver 52
 from __future__ import annotations
 
 import logging
@@ -119,6 +119,9 @@ class Sim(SimInterface):
             raise IndexError(startup_ride_index)
         self._startup_ride_index = startup_ride_index
         self._experiences = tuple(name for name, _path in self._rides)
+        # Populated by PocCore from the already-audited dynamic deployments.
+        # Keys are exact variant labels; values are operator-facing Strict/Relaxed text.
+        self._dynamic_qualification_labels = {}
         self._refresh_visible_experiences()
         default_label = self.variant_store.default_label()
         self._selected = (self._experiences.index(default_label) if default_label else None)
@@ -605,10 +608,36 @@ class Sim(SimInterface):
     def park_name_for_experience(self, index):
         return self._park_name_for_index(self._internal_experience_index(index))
 
+    def set_dynamic_qualification_targets(self, targets):
+        """Set validated qualification targets used only for operator display.
+
+        PocCore supplies this from the audited dynamic deployments, so the ride
+        selector never re-reads profile files and never trusts catalogue text.
+        Unknown/future targets are deliberately omitted rather than guessed.
+        """
+        labels = {}
+        for label, target in dict(targets or {}).items():
+            key = str(target or "").strip().casefold()
+            if key == "strict":
+                labels[str(label)] = "Strict"
+            elif key == "relaxed5":
+                labels[str(label)] = "Relaxed"
+        self._dynamic_qualification_labels = labels
+
     def display_name_for_experience(self, index):
         i = self._internal_experience_index(index)
-        return (self._experiences[i] if ride_config.SHOW_VARIANT_MODIFIERS
+        label = self._experiences[i]
+        qualification = self._dynamic_qualification_labels.get(label)
+        # A dynamic candidate must remain identifiable even if ordinary static
+        # variant modifiers are hidden; qualification alone is not a unique name.
+        base = (label if (ride_config.SHOW_VARIANT_MODIFIERS or qualification)
                 else self._park_name_for_index(i))
+        return f"{base} {qualification}" if qualification else base
+
+    def get_experience_display_names(self):
+        """Return operator-facing names aligned exactly with get_experiences()."""
+        return tuple(self.display_name_for_experience(i)
+                     for i in range(len(self._visible_indices)))
 
     def get_selected_experience_index(self):
         return (self._visible_indices.index(self._selected)

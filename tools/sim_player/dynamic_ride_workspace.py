@@ -1,4 +1,4 @@
-# dynamic_ride_workspace.py ver 14
+# dynamic_ride_workspace.py ver 18
 """Three-stage dynamic-ride workflow: Source -> Generate -> Review & Export.
 
 All expensive profile generation runs in a managed QProcess; no simulator,
@@ -22,7 +22,10 @@ from PyQt6.QtWidgets import (
 )
 
 from .dynamic_review import ROOT
-from .dynamic_export_inventory import discover_exported_candidates, short_candidate_label
+from .dynamic_export_inventory import (
+    candidate_identity, compare_same_name_exports, discover_exported_candidates,
+    short_candidate_label,
+)
 from .dynamic_ride_studies import (
     available_rides, find_sessions, platform_processing_display, rated_recordings,
     ride_label, ride_processing_display, session_processing_details,
@@ -38,6 +41,7 @@ from tools.nl2_sync.profile import DynamicProfile
 
 PLATFORM_LABELS = {'chair_v3': 'Chair V3', 'platform_v2': 'Ground-Loading Platform'}
 TARGET_LABELS = {'strict': 'Strict', 'relaxed5': 'Relaxed 5%'}
+TARGET_ROW_LABELS = {'strict': 'Strict', 'relaxed5': 'Relaxed'}
 
 
 class WorkflowProgressStrip(QWidget):
@@ -465,8 +469,8 @@ class DynamicRideWorkspace(QDialog):
         # Persistent exported-candidate inventory
         # ------------------------------------------------------------------
         export_group = QGroupBox('Exported POC candidates')
-        export_group.setMinimumWidth(360)
-        export_group.setMaximumWidth(440)
+        export_group.setMinimumWidth(440)
+        export_group.setMaximumWidth(540)
         export_layout = QVBoxLayout(export_group)
         export_path_row = QHBoxLayout()
         self.export_folder_label = QLabel('exports/dynamic_candidates')
@@ -1336,6 +1340,13 @@ class DynamicRideWorkspace(QDialog):
             if str(folder) not in self.export_watcher.directories():
                 self.export_watcher.addPath(str(folder))
         rows, invalid = discover_exported_candidates(folder)
+        duplicate_groups = {}
+        for row in rows:
+            duplicate_groups.setdefault(candidate_identity(row), []).append(row)
+        self._export_duplicate_comparisons = {
+            key: compare_same_name_exports(group)
+            for key, group in duplicate_groups.items() if len(group) > 1
+        }
         self.export_tree.clear()
         markers = {'chair_v3': '●', 'platform_v2': '◆'}
         platform_order = ('chair_v3', 'platform_v2')
@@ -1362,10 +1373,28 @@ class DynamicRideWorkspace(QDialog):
             for row in platform_rows:
                 ride_name = ride_label(row.park)
                 candidate_name = short_candidate_label(row.label, ride_name)
+                target_text = TARGET_ROW_LABELS.get(row.target)
+                if target_text:
+                    candidate_name = f'{candidate_name}  {target_text}'
+                comparison = self._export_duplicate_comparisons.get(candidate_identity(row))
+                if comparison:
+                    state, _summary, details = comparison
+                    marker_text = {
+                        'identical': 'identical',
+                        'different': 'DIFFERENT',
+                        'unavailable': 'compare?',
+                    }.get(state, 'compare?')
+                    candidate_name = f'{candidate_name}  [{marker_text}]'
                 item = QTreeWidgetItem([ride_name, candidate_name])
                 item.setData(0, Qt.ItemDataRole.UserRole, str(row.package))
                 item.setData(1, Qt.ItemDataRole.UserRole, row.park)
                 tooltip = self._export_candidate_tooltip(row)
+                if comparison:
+                    tooltip += '\n\nSame-name export comparison:\n' + details
+                else:
+                    target = TARGET_LABELS.get(
+                        row.target, row.target or 'Qualification target not recorded')
+                    tooltip += f'\nQualification target: {target}'
                 item.setToolTip(0, tooltip)
                 item.setToolTip(1, tooltip)
                 group.addChild(item)

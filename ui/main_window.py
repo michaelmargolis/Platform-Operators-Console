@@ -1,4 +1,4 @@
-#main_window.py  ver 79
+#main_window.py  ver 81
 from __future__ import annotations
 
 import csv
@@ -218,6 +218,7 @@ class MainWindow(QtWidgets.QMainWindow):
         uic.loadUi(str(ui_path), self)
         self.core = core
         self.config_store = config_store
+        self._configure_experience_selector()
         self._last_profile_update_at = 0.0
         self._setup_profile_tab()
         self.sim_tabs = SimTabManager(self.tabWidget, self.tab_debug)
@@ -264,6 +265,28 @@ class MainWindow(QtWidgets.QMainWindow):
         self.lbl_ride_image.installEventFilter(self)
         if self._compact_ui:
             self._enforce_compact_tabs()
+
+    def _configure_experience_selector(self):
+        """Give long ride/variant names enough room in the operator header."""
+        # The Designer label is currently ``Ride / Flight:``.  Match its
+        # normalized text rather than a stale spelling so the operator-facing
+        # caption is corrected even if whitespace differs between .ui files.
+        for label in self.findChildren(QtWidgets.QLabel):
+            normalized = label.text().replace(" ", "").rstrip(":").casefold()
+            if normalized in ("ride/flight", "rides/flight"):
+                label.setText("Rides:")
+                break
+        if self._compact_ui:
+            return
+        sample = "Forest Mountain Park [Dynamic A] Relaxed"
+        metrics = self.combo_experience.fontMetrics()
+        required = metrics.horizontalAdvance(sample) + 64
+        required = max(420, min(540, required))
+        self.combo_experience.setMinimumWidth(
+            max(self.combo_experience.minimumWidth(), required))
+        self.combo_experience.setMaximumWidth(
+            max(self.combo_experience.maximumWidth(), required))
+        self.combo_experience.view().setMinimumWidth(required)
 
     @staticmethod
     def _use_compact_ui():
@@ -516,8 +539,11 @@ class MainWindow(QtWidgets.QMainWindow):
         enabled = bool(self.chk_review_mode.isChecked() and self.core.sim_key == "nolimits2")
         self.btn_review_variant.setVisible(enabled)
         low, high = self._experience_width_limits
-        self.combo_experience.setMinimumWidth(max(180, low - 84) if enabled else low)
-        self.combo_experience.setMaximumWidth(max(200, high - 84) if enabled else high)
+        shrink_for_review = enabled and self._compact_ui
+        self.combo_experience.setMinimumWidth(
+            max(180, low - 84) if shrink_for_review else low)
+        self.combo_experience.setMaximumWidth(
+            max(200, high - 84) if shrink_for_review else high)
         allowed = enabled and self.core.can_review_variant()
         self.btn_review_variant.setEnabled(allowed)
         if self._review_dialog is not None and not allowed:
@@ -1373,11 +1399,21 @@ class MainWindow(QtWidgets.QMainWindow):
             self._csv_last_source_frame = None
         self._updating_experience_combo = True
         self.combo_experience.clear()
-        display_name = getattr(self.core.sim, "display_name_for_experience", None)
-        self.combo_experience.addItems(
-            [display_name(i) for i in range(len(experiences))]
-            if callable(display_name) else experiences
-        )
+        display_names = getattr(self.core.sim, "get_experience_display_names", None)
+        if callable(display_names):
+            names = list(display_names())
+            # The simulator contract requires one display name per visible
+            # experience.  Fall back to the raw labels rather than risk an
+            # incorrectly indexed operator selection if that contract breaks.
+            if len(names) != len(experiences):
+                log.warning("Experience display-name count mismatch: %d names for %d rides",
+                            len(names), len(experiences))
+                names = list(experiences)
+        else:
+            display_name = getattr(self.core.sim, "display_name_for_experience", None)
+            names = ([display_name(i) for i in range(len(experiences))]
+                     if callable(display_name) else list(experiences))
+        self.combo_experience.addItems(names)
         if experiences and selected_index >= 0:
             selected_index = min(selected_index, len(experiences) - 1)
             self.combo_experience.setCurrentIndex(selected_index)

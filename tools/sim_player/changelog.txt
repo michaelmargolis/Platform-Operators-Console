@@ -1,4 +1,24 @@
-# changelog.txt ver 24
+# changelog.txt ver 28
+
+
+MDX Ride Analyzer v0.2.38 - 2026-11-20
+- Show `Strict` or `Relaxed` directly after every recognised exported candidate name in the Exported POC candidates tree, including same-name duplicate rows. Duplicate comparison markers remain after the target label.
+- Widen the exported-candidate side pane to 440-540 px so the candidate name, target label and duplicate marker fit more comfortably. Existing detailed tooltips are unchanged.
+- No duplicate identity/comparison semantics, candidate package format, qualification rules, optimiser, playback, POC runtime, kinematics, Festo or physical-output behaviour changed.
+
+MDX Ride Analyzer v0.2.37 - 2026-11-20
+- Make qualification type explicit in the Exported POC candidates tooltip for non-duplicate candidates: `Qualification target: Strict` or `Qualification target: Relaxed 5%`.
+- Duplicate-name rows retain the v0.2.36 comparison tooltip unchanged, including their existing Strict/Relaxed target information and hash/metadata comparison details.
+- No candidate package format, qualification rules, duplicate-comparison semantics, optimiser, playback, POC runtime, kinematics, Festo or physical-output behaviour changed.
+
+MDX Ride Analyzer v0.2.36 - 2026-11-20
+- Keep the Exported POC candidates row action focused on opening the recordings/export directory; remove the separate Compare duplicates... button/dialog added in v0.2.35.
+- Same-name duplicate rows retain their `identical`, `DIFFERENT` or `compare?` annotation. Hovering either column now shows the existing full hash/metadata comparison details directly in the row tooltip, including package timestamps/metadata, shortened bound hashes and the fields that differ.
+- No duplicate-comparison rules, candidate package format, optimiser, dynamic-profile playback, POC runtime, kinematics, Festo or physical-output behaviour changed.
+
+MDX Ride Analyzer v0.2.35 - 2026-11-20
+- Add a deliberately small duplicate-export check to the existing Exported POC candidates pane. Same platform/ride/candidate-name exports are annotated as `identical` or `DIFFERENT` by comparing the package-bound profile, reference and qualification SHA-256 values plus profile identity and the small qualification metadata set.
+- Selecting a duplicate-name export enables Compare duplicates..., which shows package filenames/timestamps, target, source-recording count/status and shortened bound hashes, then identifies which content/metadata fields differ. ZIP packaging timestamps and bundle-token/path differences are intentionally ignored; no playback/import workflow is added.
 
 MDX Ride Analyzer v0.2.34 - 2026-11-19
 - Refine the Dynamic Ride Source page layout so the operator’s decision area is visually clearer: Session, Ride and selected platform controls now sit inside a subtle highlighted focus panel, while Folder and source-recording playback remain visually secondary.

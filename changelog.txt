@@ -1,5 +1,41 @@
-# changelog.txt ver 74
+# changelog.txt ver 80
 
+
+POC v238 - NL2 ride selector display correction and VR launcher - 2026-11-20
+- Correct the full-layout operator header from the actual Designer text `Ride / Flight:` to `Rides:`. v237 matched the wrong literal, so the visible caption did not change even though the selector-width code ran.
+- Populate the NoLimits2 ride combo from one aligned operator-display-name list. Visible dynamic candidates therefore render as `Ride name [Dynamic A] Strict` or `Ride name [Dynamic B] Relaxed` using the already-audited qualification target; static entries remain unchanged. No candidate visibility/status policy is changed.
+- Increase the full-layout ride selector width allowance slightly (420-540 px, based on `Forest Mountain Park [Dynamic A] Relaxed`) so the qualification suffix fits comfortably; compact 800x480 behaviour is unchanged.
+- Update `sim_host_service/sims/nolimits2.bat` to launch NoLimits2 with `--telemetry --vr --openpark ...MdxLogoCoaster.nl2park`.
+- No qualification rules, candidate package/catalogue format, review status semantics, motion processing, kinematics, Festo or physical-output behaviour changed.
+
+
+POC v237 - NL2 ride selector qualification visibility - 2026-11-20
+- Show the Analyzer qualification target directly in the POC NoLimits ride selector for validated dynamic candidates: `Strict` or `Relaxed`, for example `Forest Mountain Park [Dynamic A] Relaxed`. Static ride/variant names are unchanged. The suffix is sourced from the already-audited dynamic deployment profile metadata; the UI does not re-read package files or trust free-form catalogue text.
+- Apply the same qualification display metadata after live dynamic-candidate import/catalogue refresh, so newly imported candidates gain the suffix immediately without requiring a POC restart.
+- Rename the operator header label `Rides/Flight` to `Rides`. On the normal/full POC layout, widen the ride selector using the rendered width of `Forest Mountain Park [Dynamic A] Relaxed` as the sizing reference (minimum 380 px, bounded at 520 px) and keep that width when Review mode is enabled. The compact 800x480 layout retains its existing constrained selector width to avoid disrupting that layout.
+- No qualification rules, dynamic package/catalogue format, variant identity/status semantics, NoLimits control, motion processing, kinematics, Festo or physical-output behaviour changed.
+
+
+POC v236 / MDX Ride Analyzer v0.2.38 - Visible candidate qualification labels - 2026-11-20
+- Show each exported candidate's qualification target directly after its candidate name in the Exported POC candidates tree: `Strict` or `Relaxed`. This applies to ordinary and same-name duplicate rows, making otherwise identical-looking candidate names distinguishable without hovering.
+- Preserve duplicate annotations after the qualification label, for example `Dynamic A  Strict  [DIFFERENT]`, and retain the detailed duplicate-comparison tooltip from v234/v235.
+- Widen the Exported POC candidates pane from 360-440 px to 440-540 px so the added qualification text fits more comfortably. No duplicate identity/comparison semantics, candidate package format, qualification rules, optimiser, playback, POC runtime, kinematics, Festo or physical-output behaviour changed.
+
+
+POC v235 / MDX Ride Analyzer v0.2.37 - Candidate qualification tooltip - 2026-11-20
+- Make qualification type explicit in the Exported POC candidates tooltip for non-duplicate candidates: `Qualification target: Strict` or `Qualification target: Relaxed 5%`.
+- Duplicate-name rows retain the v234 comparison tooltip behaviour and continue to show their existing Strict/Relaxed target information plus duplicate hash/metadata comparison details.
+- No candidate package format, qualification rules, duplicate-comparison semantics, optimiser, dynamic-profile playback, POC runtime, kinematics, Festo or physical-output behaviour changed.
+
+POC v234 / MDX Ride Analyzer v0.2.36 - Duplicate comparison tooltip refinement - 2026-11-20
+- Refine the v233 duplicate-export diagnostic so the normal exported-candidate action continues to open the export/recordings directory rather than presenting a competing comparison action. Remove the separate Compare duplicates... button/dialog.
+- Keep the existing `identical`, `DIFFERENT` and `compare?` duplicate annotations. The row tooltip now contains the full comparison details already calculated by the v233 comparison helper: package names/times, qualification target, source-recording count/status, shortened bound hashes and the specific content/metadata fields that differ.
+- No duplicate-comparison semantics, candidate package format, exporter/importer validation, optimiser, dynamic-profile playback, POC runtime, kinematics, Festo or physical-output behaviour changed.
+
+POC v233 / MDX Ride Analyzer v0.2.35 - Duplicate exported-candidate hash comparison - 2026-11-20
+- Add a minimal comparison aid to the Dynamic Ride Workspace exported-candidate inventory for the uncommon case where multiple ZIPs have the same platform, ride and candidate label. Rows are marked `identical` when their bound profile/reference/qualification hashes, profile identity and comparison metadata agree, or `DIFFERENT` when they do not.
+- Add Compare duplicates... for a selected same-name export. The details show package name/time, qualification target, source-recording count/status and shortened bound hashes, then list which content/metadata fields differ. ZIP byte differences caused only by bundle token/path or archive timestamps are intentionally ignored.
+- No candidate package format, exporter/importer validation, optimiser, dynamic-profile playback, POC runtime, kinematics, Festo or physical-output behaviour changed.
 
 POC v232 - NoLimits E-STOP recovery duplicate-load / Hybris RESETTING fix - 2026-11-20
 - Fix an activation/E-STOP recovery race visible with Hybris: after an operator-selected park had already returned LOAD_PARK OK, activation could immediately issue a second LOAD_PARK for the same park while NoLimits was still completing internal work. NL2 could reject that redundant request with `Application is processing another operation`; the adapter then marked the confirmed park load failed, stopped station-mode preparation, and could remain unable to leave RESETTING.

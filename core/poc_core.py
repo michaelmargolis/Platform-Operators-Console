@@ -1,4 +1,4 @@
-#poc_core.py ver 59
+#poc_core.py ver 60
 from __future__ import annotations
 
 import logging
@@ -257,6 +257,13 @@ class PocCore(QtCore.QObject):
             variant_store.validate_display()
         candidate = create_sim(key, self.host_service.address, platform_key=self.platform_key,
                                variant_store=variant_store)
+        if key == "nolimits2":
+            set_targets = getattr(candidate, "set_dynamic_qualification_targets", None)
+            if callable(set_targets):
+                set_targets({
+                    label: deployment.profile.metadata.get("target")
+                    for label, deployment in self._dynamic_deployments.items()
+                })
         self._startup_variant_store = None
         if not initial and self.host_service_enabled:
             if not self.host_service.select_sim(key):
@@ -342,6 +349,12 @@ class PocCore(QtCore.QObject):
         store.validate_display()
         self.sim.reload_variant_store(store)
         self._dynamic_deployments = deployments
+        set_targets = getattr(self.sim, "set_dynamic_qualification_targets", None)
+        if callable(set_targets):
+            set_targets({
+                label: deployment.profile.metadata.get("target")
+                for label, deployment in deployments.items()
+            })
         self.experiencesChanged.emit(
             list(self.sim.get_experiences()), self.sim.get_selected_experience_index())
         self.simStatusChanged.emit(self.get_sim_status())

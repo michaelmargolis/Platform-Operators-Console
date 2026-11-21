@@ -1,5 +1,5 @@
-#file_versions.txt  ver 229
-# Application baseline: POC v232 NL2 E-STOP recovery fix + Ride Analyzer v0.2.34
+#file_versions.txt  ver 235
+# Application baseline: POC v238 NL2 selector display fix + VR launcher + Ride Analyzer v0.2.38
 # Relative path | expected version
 .gitattributes|1
 config/platforms.py|7
@@ -10,7 +10,7 @@ controls/rotary_encoder.py|1
 controls/physical_controls.py|7
 core/config_store.py|9
 core/digital_twin.py|2
-core/poc_core.py|59
+core/poc_core.py|60
 core/platform_controller.py|20
 kinematics/cfg_SuspendedPlatformMdx.py|5
 kinematics/cfg_SuspendedChairFalcon.py|1
@@ -34,7 +34,7 @@ sim_host_service/client.py|6
 sim_host_service/fan_serial.py|1
 sim_host_service/server.py|18
 sim_host_service/sim_host_service.ini|7
-sim_host_service/sims/nolimits2.bat|1
+sim_host_service/sims/nolimits2.bat|2
 sim_host_service/sims/spacecoaster.bat|1
 sim_host_service/windows/README.md|6
 sim_host_service/windows/configure_shs_firewall.ps1|1
@@ -42,7 +42,7 @@ sim_host_service/windows/install_shs_startup.ps1|4
 sim_host_service/windows/start_shs.cmd|3
 sims/nolimits2/config.py|18
 sims/nolimits2/nl2_protocol.py|23
-sims/nolimits2/sim.py|50
+sims/nolimits2/sim.py|52
 sims/spacecoaster/config.py|13
 sims/spacecoaster/control.py|4
 sims/spacecoaster/sim.py|19
@@ -78,7 +78,7 @@ tests/test_telemetry_config.py|4
 tests/test_operator_status.py|4
 tests/test_ui_layout.py|11
 tests/test_sim_registry.py|1
-ui/main_window.py|79
+ui/main_window.py|81
 ui/poc_main.ui|15
 ui/poc_main_800x480.ui|18
 ui/ui_widgets.py|7
@@ -115,9 +115,9 @@ tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|74
+changelog.txt|80
 README.md|22
-file_versions.txt|229
+file_versions.txt|235
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -165,7 +165,7 @@ tests/test_variant_migration_v178.py|1
 tests/test_variant_selection_v178.py|3
 tests/test_variant_store_v178.py|2
 tools/migrate_nl2_variants.py|1
-tools/sim_player/__init__.py|25
+tools/sim_player/__init__.py|29
 tools/sim_player/__main__.py|1
 tools/sim_player/angular_cues.py|1
 tools/sim_player/anomaly_detection.py|2
@@ -266,7 +266,7 @@ tools/sim_player/README.md|19
 tools/sim_player/canonical_dialog.py|2
 tools/sim_player/canonical_media.py|1
 tools/sim_player/canonical_rides/README.md|1
-tools/sim_player/changelog.txt|24
+tools/sim_player/changelog.txt|28
 tools/sim_player/dynamic_optimizer.py|1
 tools/sim_player/dynamic_optimization.py|1
 tools/sim_player/tests/test_dynamic_optimizer_packaging_v204.py|1
@@ -296,15 +296,16 @@ core/dynamic_import.py|3
 tests/test_dynamic_import_filter_v215.py|1
 tools/nl2_dynamic_profiles/package.py|2
 tools/sim_player/dynamic_ride_studies.py|5
-tools/sim_player/dynamic_ride_workspace.py|14
-tools/sim_player/dynamic_export_inventory.py|2
+tools/sim_player/dynamic_ride_workspace.py|18
+tools/sim_player/dynamic_export_inventory.py|3
 tests/test_dynamic_candidate_import_v202.py|2
 tests/test_dynamic_import_refresh_v214.py|1
+tests/test_poc_ride_selector_v237.py|2
 tests/test_dynamic_clearance_v202.py|1
 tools/sim_player/tests/test_dynamic_study_workspace_v202.py|1
 tools/sim_player/tests/test_dynamic_session_rides_v211.py|2
 tools/sim_player/tests/test_dynamic_session_selector_v212.py|5
-tools/sim_player/tests/test_dynamic_export_inventory_v224.py|4
+tools/sim_player/tests/test_dynamic_export_inventory_v224.py|8
 docs/POC_DYNAMIC_PREPARATION_V202.md|6
 docs/POC_V224_DYNAMIC_EXPORT_INVENTORY_VERIFICATION.txt|1
 docs/POC_V216_DYNAMIC_EXISTING_PROFILE_VISIBILITY_VERIFICATION.txt|1
