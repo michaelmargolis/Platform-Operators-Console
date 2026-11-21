@@ -1,3 +1,4 @@
+#canonical_workflow.py ver 1
 """Asynchronous reference-media loading and mapped video playback only.
 
 No change to recording.frames, motion filters, current_s or Twin frame timing.

@@ -1,3 +1,4 @@
+#media_trajectory.py ver 1
 """Read ride media trajectories without invoking filters, kinematics or hardware.
 
 All positions are NL2 metres and quaternions x,y,z,w. The source CSV clock is

@@ -1,3 +1,4 @@
+#panel_state.py ver 1
 """Shared, presentation-only snapshots for Inspector and Advanced panels.
 
 Only ReplayWindow owns extrema history. Neither panel independently accumulates

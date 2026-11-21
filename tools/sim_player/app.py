@@ -1,4 +1,4 @@
-# app.py ver 14
+# app.py ver 15
 """MDX Ride Analyzer: offline ride-analysis controller (PyQt6 only).
 
 UI layout is in player_ui.py; presentation panels in panels.py. This module
@@ -13,7 +13,7 @@ import sys
 import time
 from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal, QTimer
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox, QMainWindow, QDialog, QDockWidget, QWidget, QInputDialog
-from . import PRODUCT_NAME, PRODUCT_SHORT_NAME, WORKSPACE_VERSION
+from . import APP_VERSION, PRODUCT_NAME, PRODUCT_SHORT_NAME
 from .panels import RideCsvDialogFilter, DynamicSourceCsvDialogFilter, clock_label
 from .player_ui import PlayerUiMixin, apply_style
 from .recording import RideRecording, load_recording, write_saved_calibration
@@ -121,7 +121,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.task_mode = "review"
         self.current_workflow = "inspect_motion"
         self.twin_output = ReplayTwinOutput(self.visualizer_settings)
-        self.setWindowTitle(f"{PRODUCT_NAME} — No recording loaded")
+        self.setWindowTitle(f"{PRODUCT_NAME} {APP_VERSION} — No recording loaded")
         # Compact default; the video grows/shrinks with the outer window.
         self.resize(1320, 720)
         self.setDockOptions(QMainWindow.DockOption.AllowNestedDocks | QMainWindow.DockOption.AllowTabbedDocks |
@@ -498,7 +498,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
 
     def about(self):
         QMessageBox.information(self, f"About {PRODUCT_NAME}",
-            f"{PRODUCT_NAME} - Task Workspace v{WORKSPACE_VERSION} - Qt6/FFmpeg ride analysis.\n\n"
+            f"{PRODUCT_NAME} {APP_VERSION} - Qt6/FFmpeg ride analysis.\n\n"
             "Review, tune and validate recorded NoLimits ride motion.\n"
             "A/B playback markers, Full/Range/Loop modes and adjustable loop hold.\n"
             "One selectable ride/kinematic marker lane and grouped anomaly replay.\n"
@@ -1182,7 +1182,7 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self._sync_platform_selector()
         self.settings.setValue("last_directory", str(recording.csv_path.parent))
         self.ride_label.setText(recording.ride.upper() + "  /  REPLAY")
-        self.setWindowTitle(f"{PRODUCT_NAME} — {recording.ride} — {recording.csv_path.name}")
+        self.setWindowTitle(f"{PRODUCT_NAME} {APP_VERSION} — {recording.ride} — {recording.csv_path.name}")
         self.info_badge.setText(f"{len(recording.frames):,} SAMPLES")
         self._refresh_anomalies()
         self.loop_range.reset(recording.duration)

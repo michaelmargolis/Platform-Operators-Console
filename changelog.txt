@@ -1,4 +1,14 @@
-# changelog.txt ver 80
+# changelog.txt ver 81
+
+
+Global release v239 - POC runtime v239 / MDX Ride Analyzer runtime v239 - derived application runtime versioning - 2026-11-21
+- Establish one monotonic repository/global release sequence while adding separate derived runtime versions for POC and MDX Ride Analyzer. An app version is the most recent global release in which one of that app's runtime dependencies had a runtime-semantic change; it is monotonic but may skip global release numbers. v239 establishes the baseline, so both applications report runtime v239.
+- Add `runtime_dependencies.txt`, an auditable POC/Analyzer/shared runtime dependency manifest. Each dependency records its last runtime-semantic global release. Value-only configuration, calibration or data changes do not advance that marker; format, interpretation, API or executable-behaviour changes do. New runtime dependencies must be added to both the normal file manifest and the runtime dependency manifest.
+- Add `app_versions.py` as the shared parser used by both applications. POC now shows its derived runtime version after the existing application title; MDX Ride Analyzer does the same in both empty and loaded-recording title-bar states. The Analyzer's historical `WORKSPACE_VERSION` constant is retained only for compatibility and is no longer the published application version.
+- Extend `version_check.py` to report repository update level, POC runtime version and Ride Analyzer runtime version, and to validate that every runtime dependency is version-tracked, present, assigned only to known apps and not newer than the global release. Existing per-file version checking remains unchanged.
+- Close an existing Analyzer manifest gap while establishing the baseline: add version headers and `file_versions.txt` entries for seven currently imported Analyzer modules (`canonical_sync.py`, `canonical_workflow.py`, `dynamic_panel.py`, `dynamic_replay.py`, `media_trajectory.py`, `panel_state.py`, `task_workspace.py`) that were present in the application but not version-tracked. Also classify the already-tracked shared `core/digital_twin.py`, `core/dynamic_import.py` and `core/telemetry_config.py` as Analyzer dependencies. These are manifest/header corrections only.
+- Manual follow-up (manual files are deliberately NOT changed in this release): when the document editor next publishes the POC User Manual, update its **Applies to** entry to `MDX Platform Operators Console v239`; when the Ride Analyzer User Guide is next published, update **Applies to** to `MDX Ride Analyzer v239`. The document editor owns the trailing letter revision (`v239a`, `v239b`, ...). Documentation-only edits do not change either app runtime version.
+- No motion processing, candidate/profile format, qualification rules, kinematics, Festo control or physical-output behaviour changed.
 
 
 POC v238 - NL2 ride selector display correction and VR launcher - 2026-11-20

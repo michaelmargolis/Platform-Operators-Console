@@ -1,3 +1,4 @@
+#dynamic_panel.py ver 1
 """Qt6 read-only gain and progress displays; all calculations are cached."""
 from __future__ import annotations
 import math

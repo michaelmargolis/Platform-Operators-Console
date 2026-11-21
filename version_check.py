@@ -1,4 +1,4 @@
-#version_check.py  ver 5
+#version_check.py  ver 6
 """Check protoPOC source-file versions against file_versions.txt.
 
 Run from anywhere with:
@@ -78,6 +78,34 @@ def read_version(path: Path) -> tuple[str, int] | None:
     return None
 
 
+
+def load_runtime_version_summary(root: Path, tracked_paths: set[str]):
+    """Load and validate the derived POC/Analyzer runtime-version metadata."""
+    from app_versions import get_app_versions, load_runtime_dependencies, read_global_release
+
+    global_release = read_global_release(root)
+    dependencies = load_runtime_dependencies(root)
+    app_versions = get_app_versions(root)
+    errors: list[str] = []
+
+    for dependency in dependencies:
+        if dependency.path not in tracked_paths:
+            errors.append(
+                f"RUNTIME  {dependency.path}  is not tracked by {MANIFEST_NAME}"
+            )
+        if not (root / dependency.path).is_file():
+            errors.append(f"RUNTIME  {dependency.path}  dependency file is missing")
+        if dependency.last_runtime_release > global_release:
+            errors.append(
+                f"RUNTIME  {dependency.path}  v{dependency.last_runtime_release} "
+                f"is newer than global release v{global_release}"
+            )
+
+    poc_count = sum("poc" in item.apps for item in dependencies)
+    analyzer_count = sum("analyzer" in item.apps for item in dependencies)
+    shared_count = sum(item.apps == frozenset({"poc", "analyzer"}) for item in dependencies)
+    return global_release, app_versions, poc_count, analyzer_count, shared_count, errors
+
 def main() -> int:
     root = Path(__file__).resolve().parent
     manifest = root / MANIFEST_NAME
@@ -92,8 +120,31 @@ def main() -> int:
         print(f"ERROR: cannot read version manifest: {exc}")
         return 2
 
-    errors: list[str] = []
+    tracked_paths = {relative_path for relative_path, _version in entries}
+    try:
+        (
+            global_release,
+            app_versions,
+            poc_runtime_files,
+            analyzer_runtime_files,
+            shared_runtime_files,
+            runtime_errors,
+        ) = load_runtime_version_summary(root, tracked_paths)
+    except (ImportError, OSError, ValueError) as exc:
+        print(f"ERROR: cannot read runtime version metadata: {exc}")
+        return 2
 
+    errors: list[str] = list(runtime_errors)
+
+    print(f"Repository update level : v{global_release}")
+    print(f"POC runtime version      : v{app_versions['poc']}")
+    print(f"Ride Analyzer runtime    : v{app_versions['analyzer']}")
+    print(
+        "Runtime dependencies     : "
+        f"POC {poc_runtime_files}, Analyzer {analyzer_runtime_files}, "
+        f"shared {shared_runtime_files}"
+    )
+    print()
     print(f"Checking {len(entries)} versioned files in {root}")
 
     for relative_path, expected_version in entries:

@@ -1,4 +1,4 @@
-#main_window.py  ver 81
+#main_window.py  ver 82
 from __future__ import annotations
 
 import csv
@@ -39,6 +39,15 @@ SHOW_TRANSFORM_BAR_VALUES = True
 # Default False avoids this GUI workload during processing/jitter measurements.
 UPDATE_TRANSFORM_BARS_ON_DEBUG_TAB = False
 log = logging.getLogger(__name__)
+
+
+def _poc_runtime_version_label():
+    """Return version metadata without making the operator UI depend on it."""
+    try:
+        from app_versions import app_version_label
+    except ImportError:
+        return "v?"
+    return app_version_label("poc")
 
 
 def transform_bar_values(values):
@@ -216,6 +225,8 @@ class MainWindow(QtWidgets.QMainWindow):
         ui_path = Path(__file__).with_name(ui_name)
         log.info("Loading %s", ui_name)
         uic.loadUi(str(ui_path), self)
+        base_title = self.windowTitle().strip() or "MDX Platform Operators Console"
+        self.setWindowTitle(f"{base_title} {_poc_runtime_version_label()}")
         self.core = core
         self.config_store = config_store
         self._configure_experience_selector()

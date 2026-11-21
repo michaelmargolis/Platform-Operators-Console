@@ -1,4 +1,12 @@
-# changelog.txt ver 28
+# changelog.txt ver 29
+
+
+MDX Ride Analyzer runtime v239 - 2026-11-21
+- Adopt the repository-derived runtime version scheme. The operator/researcher-facing Analyzer version is now the most recent global release that changed an Analyzer runtime dependency; v239 establishes the baseline. The prior 0.2.x Task Workspace number remains an internal compatibility constant and is no longer the published Analyzer application version.
+- Show `MDX Ride Analyzer v239` in the main window title for both no-recording and loaded-recording states, and use the same derived version in About text.
+- Share the version source with POC through `app_versions.py` / `runtime_dependencies.txt`; `version_check.py` reports and validates the derived Analyzer runtime version.
+- Correct the existing Analyzer file-version manifest gap by adding version headers/tracking for seven modules that the current Analyzer imports at runtime: `canonical_sync.py`, `canonical_workflow.py`, `dynamic_panel.py`, `dynamic_replay.py`, `media_trajectory.py`, `panel_state.py` and `task_workspace.py`. No executable behaviour in those modules is changed.
+- Manual follow-up only: on the next document-editor publication, change the Ride Analyzer User Guide **Applies to** entry to `MDX Ride Analyzer v239` and assign the document letter revision appropriate to that publication. No manual file is changed by this software release.
 
 
 MDX Ride Analyzer v0.2.38 - 2026-11-20

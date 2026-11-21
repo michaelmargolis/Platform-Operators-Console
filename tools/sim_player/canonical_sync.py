@@ -1,3 +1,4 @@
+#canonical_sync.py ver 1
 """Offline B+C mapping to a ride's canonical video. No motion arrays are changed.
 
 The player clock remains the selected recording's clock. Video PTS is a mapped

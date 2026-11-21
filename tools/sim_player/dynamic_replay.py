@@ -1,3 +1,4 @@
+#dynamic_replay.py ver 1
 """Raw timing-session replay for dynamic-profile review.
 
 Uses the installed benchmark's actual production parser/service/filter/kinematics
