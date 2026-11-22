@@ -1,5 +1,5 @@
-#file_versions.txt  ver 240
-# Global release: v243
+#file_versions.txt  ver 241
+# Global release: v244
 # Runtime versions are derived from runtime_dependencies.txt (POC v243; Analyzer v239)
 # Relative path | expected version
 .gitattributes|1
@@ -59,7 +59,7 @@ tests/test_config_store.py|7
 tests/test_digital_twin.py|3
 tests/test_serial_remote.py|1
 tests/test_physical_controls.py|6
-tests/test_sim_host_service.py|21
+tests/test_sim_host_service.py|22
 tests/test_spacecoaster_adapter.py|18
 tests/test_activation_control.py|2
 tests/test_xplane_adapter.py|7
@@ -90,7 +90,7 @@ poc.py|5
 poc_config.json|6
 app_versions.py|1
 runtime_dependencies.txt|4
-version_check.py|6
+version_check.py|7
 raspi/setup-console.sh|13
 raspi/start_console.sh|5
 raspi/switch-to-runtime.sh|1
@@ -120,9 +120,9 @@ tools/shs_local_sim_cycle.py|6
 tools/poc_sim_swap_test.py|1
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|85
+changelog.txt|86
 README.md|22
-file_versions.txt|240
+file_versions.txt|241
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -314,7 +314,7 @@ tools/sim_player/dynamic_export_inventory.py|3
 tests/test_dynamic_candidate_import_v202.py|2
 tests/test_dynamic_import_refresh_v214.py|1
 tests/test_poc_ride_selector_v237.py|2
-tests/test_app_versions_v239.py|5
+tests/test_app_versions_v239.py|6
 tests/test_shs_local_sim_cycle_v241.py|3
 tests/test_poc_sim_swap_test_v243.py|1
 tests/test_dynamic_clearance_v202.py|1
