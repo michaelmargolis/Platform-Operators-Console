@@ -1,6 +1,6 @@
-#file_versions.txt  ver 242
-# Global release: v245
-# Runtime versions are derived from runtime_dependencies.txt (POC v245; Analyzer v239)
+#file_versions.txt  ver 243
+# Global release: v246
+# Runtime versions are derived from runtime_dependencies.txt (POC v246; Analyzer v239)
 # Relative path | expected version
 .gitattributes|1
 config/platforms.py|7
@@ -43,7 +43,7 @@ sim_host_service/windows/install_shs_startup.ps1|5
 sim_host_service/windows/start_shs.cmd|3
 sims/nolimits2/config.py|18
 sims/nolimits2/nl2_protocol.py|23
-sims/nolimits2/sim.py|53
+sims/nolimits2/sim.py|54
 sims/spacecoaster/config.py|14
 sims/spacecoaster/control.py|4
 sims/spacecoaster/sim.py|20
@@ -66,7 +66,7 @@ tests/test_xplane_adapter.py|7
 tests/test_fan_control.py|4
 tests/test_fan_serial.py|1
 tests/smoke_sim_interface.py|1
-tests/test_nolimits2_adapter.py|34
+tests/test_nolimits2_adapter.py|35
 tests/test_nl2_estop_recovery_v232.py|1
 tests/test_nl2_service_timestamp_v213.py|1
 tests/test_platform_controller.py|12
@@ -89,7 +89,7 @@ requirements.txt|3
 poc.py|5
 poc_config.json|6
 app_versions.py|1
-runtime_dependencies.txt|5
+runtime_dependencies.txt|6
 version_check.py|7
 raspi/setup-console.sh|13
 raspi/start_console.sh|5
@@ -120,9 +120,9 @@ tools/shs_local_sim_cycle.py|6
 tools/poc_sim_swap_test.py|1
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|87
+changelog.txt|88
 README.md|22
-file_versions.txt|242
+file_versions.txt|243
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|2
 tests/test_twin_extension_v150.py|1
@@ -314,7 +314,7 @@ tools/sim_player/dynamic_export_inventory.py|3
 tests/test_dynamic_candidate_import_v202.py|2
 tests/test_dynamic_import_refresh_v214.py|1
 tests/test_poc_ride_selector_v237.py|2
-tests/test_app_versions_v239.py|7
+tests/test_app_versions_v239.py|8
 tests/test_shs_local_sim_cycle_v241.py|3
 tests/test_poc_sim_swap_test_v243.py|1
 tests/test_dynamic_clearance_v202.py|1
