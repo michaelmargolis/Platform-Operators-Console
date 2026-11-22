@@ -241,7 +241,7 @@ tools/sim_player/media_trajectory.py|1
 tools/sim_player/tests/test_marker_intervals_v180.py|1
 tools/sim_player/tests/test_marker_lane_v180.py|1
 kinematics/cfg_SuspendedChairV3.py|3
-tests/test_chair_v3_neutral_v181.py|2
+tests/test_chair_v3_neutral_v181.py|3
 core/ride_neutral.py|1
 tests/test_ride_neutral_v182.py|1
 tools/sim_player/tests/test_neutral_v182.py|1
