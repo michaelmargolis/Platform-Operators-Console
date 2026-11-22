@@ -1,4 +1,11 @@
-# changelog.txt ver 85
+# changelog.txt ver 86
+
+
+Global release v244 - POC runtime v243 / MDX Ride Analyzer runtime v239 - SHS version check reporting - 2026-11-22
+- Extend `version_check.py` to report the SHS dashboard/server version in the same `manifest-revision : server-file-revision` form shown by Sim Host Service.
+- Add regression coverage tying the version-check value to `project_manifest_version()`, `SERVER_FILE_VERSION`, and the SHS dashboard title construction.
+- No deployed POC, SHS, simulator-control, motion, or Ride Analyzer runtime behaviour changes. POC remains v243; MDX Ride Analyzer remains v239.
+- Because `file_versions.txt` advances for this repository release, the SHS composite display changes from `240 : 19` on v243 to `241 : 19` on v244; `server.py` remains file version 19.
 
 
 Global release v243 - POC runtime v243 / MDX Ride Analyzer runtime v239 - SpaceCoaster Oculus startup reliability - 2026-11-21
