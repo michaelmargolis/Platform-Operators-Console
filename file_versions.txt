@@ -66,7 +66,7 @@ tests/test_xplane_adapter.py|7
 tests/test_fan_control.py|4
 tests/test_fan_serial.py|1
 tests/smoke_sim_interface.py|1
-tests/test_nolimits2_adapter.py|35
+tests/test_nolimits2_adapter.py|36
 tests/test_nl2_estop_recovery_v232.py|1
 tests/test_nl2_service_timestamp_v213.py|1
 tests/test_platform_controller.py|12
