@@ -1,4 +1,4 @@
-#sim.py  ver 52
+#sim.py  ver 53
 from __future__ import annotations
 
 import logging
@@ -176,6 +176,10 @@ class Sim(SimInterface):
         self._loading_index = None
         self._queued_ride_index = None
         self._estop_recovery_pending = False
+        # Physical activation can arrive before a freshly switched NL2 process
+        # has connected or before its startup LOAD_PARK has completed. Remember
+        # that preparation request so it is not lost to simulator startup timing.
+        self._activation_prepare_pending = False
         self._reset_flyer_dispatch_tracking()
 
     def connect(self) -> None:
@@ -244,6 +248,7 @@ class Sim(SimInterface):
         self._queued_ride_index = None
         self._park_load_failed = False
         self._estop_recovery_pending = False
+        self._activation_prepare_pending = False
         self._reset_transform_tracking()
 
     def service(self) -> None:
@@ -466,16 +471,31 @@ class Sim(SimInterface):
         operated independently of POC.  A train confirmed stopped in station
         stays READY; anything else
         causes RESET_PARK(False) and RESETTING.
+
+        A simulator hot-switch can deliver the physical activation request
+        before the new NL2 API connection or startup LOAD_PARK is ready.  Defer
+        rather than drop that request; successful LOAD_PARK completion retries
+        preparation automatically.
         """
         if self._selected is None:
+            self._activation_prepare_pending = False
             return  # Nothing configured: never reset an unrelated open NL2 park.
         if not self._sim_connected():
+            self._activation_prepare_pending = True
             if NL2_STATE_DEBUG:
                 log.debug(
-                    "NL2 activation preparation: sim API not connected -> no park reset yet"
+                    "NL2 activation preparation deferred: sim API not connected"
+                )
+            return
+        if self._ride_load_pending:
+            self._activation_prepare_pending = True
+            if NL2_STATE_DEBUG:
+                log.debug(
+                    "NL2 activation preparation deferred: startup/ride LOAD_PARK pending"
                 )
             return
 
+        self._activation_prepare_pending = False
         stopped_in_station = self._stopped_in_station()
         if NL2_STATE_DEBUG:
             self._log_reset_decision("activation", stopped_in_station)
@@ -510,6 +530,13 @@ class Sim(SimInterface):
         self._clear_ride_tracking()
         self._ready_station = ready_station
         self._reset_transform_tracking()
+
+    def cancel_activation_preparation(self) -> None:
+        """Cancel a deferred activation request that has not started reset work."""
+        if self._activation_prepare_pending:
+            if NL2_STATE_DEBUG:
+                log.debug("NL2 deferred activation preparation cancelled")
+            self._activation_prepare_pending = False
 
     def _can_reuse_loaded_park_for_estop_recovery(self) -> bool:
         """True only when the confirmed park has not begun a ride lifecycle.
@@ -979,6 +1006,12 @@ class Sim(SimInterface):
                     "NL2 E-STOP recovery load acknowledged; entering normal park-reset preparation"
                 )
             self._start_park_reset()
+        elif self._activation_prepare_pending:
+            if NL2_STATE_DEBUG:
+                log.debug(
+                    "NL2 LOAD_PARK acknowledged; running deferred activation preparation"
+                )
+            self.prepare_for_activation()
         else:
             self.state = ExperienceState.READY
             if NL2_STATE_DEBUG:
