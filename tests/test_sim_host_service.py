@@ -1,8 +1,9 @@
-#test_sim_host_service.py  ver 21
+#test_sim_host_service.py  ver 22
 from __future__ import annotations
 
 import socket
 
+from version_check import load_manifest, shs_server_version
 from sim_host_service.client import SimHostClient
 from sim_host_service.protocol import (
     PROTOCOL_VERSION,
@@ -189,7 +190,10 @@ def test_client_sim_selection_becomes_reconnect_startup_target():
 def test_shs_display_versions_match_versioned_sources():
     # Manifest revision advances independently of Sim Host Service code.
     from pathlib import Path
-    manifest = (Path(__file__).resolve().parents[1] / "file_versions.txt").read_text()
+
+    root = Path(__file__).resolve().parents[1]
+    manifest_path = root / "file_versions.txt"
+    manifest = manifest_path.read_text()
     expected = next(
         line.split("|", 1)[1].strip()
         for line in manifest.splitlines()
@@ -197,6 +201,12 @@ def test_shs_display_versions_match_versioned_sources():
     )
     assert project_manifest_version() == expected
     assert SERVER_FILE_VERSION == 19
+    assert shs_server_version(
+        manifest_path, load_manifest(manifest_path)
+    ) == f"{expected} : {SERVER_FILE_VERSION}"
+
+    server_source = (root / "sim_host_service" / "server.py").read_text(encoding="utf-8")
+    assert 'f"{project_manifest_version()} : {SERVER_FILE_VERSION}"' in server_source
 
 
 def test_dashboard_status_uses_public_facing_console_wording():
