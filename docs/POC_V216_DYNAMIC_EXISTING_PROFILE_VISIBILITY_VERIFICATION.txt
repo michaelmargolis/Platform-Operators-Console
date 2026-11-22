@@ -1,0 +1,22 @@
+# POC_V216_DYNAMIC_EXISTING_PROFILE_VISIBILITY_VERIFICATION.txt ver 1
+POC v216 / MDX Ride Analyzer v0.2.28
+Existing dynamic-profile visibility and explicit reuse
+=======================================================
+
+Scope
+-----
+- Surface previous Partial/Generated/Reviewed/Exported work in Source.
+- Show retained state in Ride rows and per selected platform, with profile-set timestamp/name.
+- Resume only a completed result matching session + ride + all selected platforms.
+- Offer explicit Use existing profile(s) / Generate new profiles choices.
+- No optimiser mathematics, qualification thresholds, dynamic profile schema, POC importer, matcher, kinematics or physical-output behaviour changed.
+
+Focused verification
+--------------------
+- 10 focused tests passed: dynamic session/status discovery and wizard source contract.
+- New test verifies profile-set detail, ride-row summary and platform status presentation from retained generated output.
+- Python compilation passed for all changed Python files.
+
+Environment limitation
+----------------------
+The available container does not include the full current Windows Qt runtime, so final rendered visual/button geometry still requires a Windows smoke test after installation.

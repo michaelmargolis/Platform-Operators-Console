@@ -1,0 +1,86 @@
+# POC_V215_DYNAMIC_WIZARD_IMPORT_VERIFICATION.txt ver 1
+POC v215 / MDX Ride Analyzer v0.2.27
+Dynamic Ride wizard and platform-aware POC import verification
+Date: 2026-11-17
+
+Scope
+-----
+- Replace the Analyzer Dynamic Ride preparation control surface with the agreed
+  three-stage Source -> Generate -> Review & Export wizard-style workflow.
+- Preserve existing optimiser mathematics, qualification thresholds, dynamic
+  profile/package format, matcher, kinematics and physical-output behaviour.
+- Make POC dynamic candidate discovery platform-aware and hide packages already
+  represented in the selected platform catalogue.
+- Retain v214 same-filesystem atomic import staging and live append-only variant
+  catalogue refresh.
+
+Analyzer workflow checks
+------------------------
+- Source selects Session, Ride and Chair V3 / Ground-Loading Platform using
+  independent checkboxes.
+- Session tooltips report retained per-ride/platform Partial / Generated /
+  Reviewed / Exported state from saved optimiser/workflow artifacts.
+- A matching completed result can be reopened instead of forcing regeneration.
+- Generate owns live optimiser output and Abort generation.
+- Successful generation advances to Review & Export; failed/cancelled output is
+  not exportable.
+- Review & Export provides one candidate selector per selected platform,
+  preserves Strict-first recommendation policy, records review of the exact
+  profile, then enables the editable POC profile name and Export for POC.
+- Export still calls the existing immutable qualified package builder under
+  exports/dynamic_candidates.
+
+POC import checks
+-----------------
+- Import chooser scans ZIP package manifests rather than trusting filenames.
+- Only packages whose manifest platform equals the active POC platform are
+  listed.
+- A package is hidden as already imported if either its candidate label or its
+  dynamic deployment path is already in that platform catalogue.
+- Invalid/non-candidate and other-platform ZIPs are hidden and counted in the
+  chooser summary.
+- Duplicate label/deployment checks are repeated by import_candidate immediately
+  before any publish/catalogue change; chooser filtering is not the safety gate.
+- Actual import still revalidates package qualification/integrity and retains
+  parked/deactivated interlock, atomic publication and v214 live catalogue
+  refresh.
+
+Automated verification performed
+--------------------------------
+- Changed Python files: python -m py_compile PASS.
+- Three-stage workflow-state/source-contract tests + session selection/status
+  tests: 9 passed.
+- Ride Analyzer product/version identity contract: 1 passed.
+- Synthetic real-ZIP manifest discovery: PASS (renamed ZIP, wrong platform,
+  invalid ZIP and already-imported filtering).
+- Commit-time duplicate-protection isolation test: PASS.
+- POC import-dialog source contract: PASS.
+- Changed-file version-header vs file_versions.txt check: PASS.
+- Changed text files LF line-ending check: PASS.
+
+Environment limitation
+----------------------
+PyQt5/PyQt6 is not installed in the build container, so the actual POC/Ride
+Analyzer dialogs could not be rendered or clicked here. A short Windows Analyzer
+visual smoke test and Raspberry Pi import smoke test are still required after
+installation. No live NoLimits, Festo or physical platform test is claimed.
+
+Changed/new repository files in this delta
+------------------------------------------
+README.md
+changelog.txt
+file_versions.txt
+core/dynamic_import.py
+ui/main_window.py
+docs/POC_DYNAMIC_PREPARATION_V202.md
+docs/POC_V215_DYNAMIC_WIZARD_IMPORT_VERIFICATION.txt
+tools/sim_player/__init__.py
+tools/sim_player/README.md
+tools/sim_player/changelog.txt
+tools/sim_player/workspace_help_content.py
+tools/sim_player/dynamic_ride_studies.py
+tools/sim_player/dynamic_ride_workspace.py
+tools/sim_player/tests/test_dynamic_workflow_state_v207.py
+tools/sim_player/tests/test_dynamic_session_selector_v212.py
+tools/sim_player/tests/test_dynamic_source_capture_v0211.py
+tests/test_dynamic_import_filter_v215.py

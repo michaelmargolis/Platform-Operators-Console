@@ -1,0 +1,68 @@
+# POC_V224_DYNAMIC_EXPORT_INVENTORY_VERIFICATION.txt ver 1
+POC v224 / MDX Ride Analyzer v0.2.29
+Dynamic export inventory pane verification
+==========================================
+
+Scope
+-----
+- Add a persistent Exported POC candidates pane beside the three-stage
+  Dynamic Ride preparation wizard.
+- Scan exports/dynamic_candidates read-only and show recognised candidate packages
+  grouped by physical platform and sorted by ride/candidate.
+- Hover details expose Strict / Relaxed 5% target, POC profile label, package
+  timestamp, source-recording count/status and package path.
+- Current Source ride is emphasised in the inventory. Selecting an exported
+  package never changes Source session/ride/platform state.
+- Refresh rescans manually; double-click/Open selected folder opens the package
+  directory; successful export refreshes automatically.
+- Invalid/non-candidate ZIPs are counted but not listed as candidates.
+- Correct the obsolete built-in Help statement that dynamic profiles are
+  research-only and cannot be exported for POC.
+
+Implementation boundaries
+-------------------------
+- Export-folder ZIP discovery is isolated in the Qt-free
+  tools/sim_player/dynamic_export_inventory.py helper.
+- The existing package schema, prepare_bundle(), qualification checks, candidate
+  recommendation rules, generated profile state and POC importer are unchanged.
+- No optimiser mathematics, qualification threshold, profile/package schema,
+  matcher, kinematics, Festo, simulator or physical-output behavior changed.
+
+Verification performed
+----------------------
+1. python -m py_compile passed for:
+   - tools/sim_player/dynamic_ride_workspace.py
+   - tools/sim_player/dynamic_export_inventory.py
+   - tools/sim_player/workspace_help_content.py
+   - tools/sim_player/__init__.py
+2. New export-inventory regression suite:
+   tools/sim_player/tests/test_dynamic_export_inventory_v224.py
+   Result: 6 passed.
+   Coverage includes Strict/Relaxed manifest metadata, platform/ride/label
+   discovery, unsupported-package filtering/counting, missing folders, compact
+   candidate labels, platform markers, auto-refresh and informational-only
+   selection wiring.
+3. Existing workflow-state regression:
+   tools/sim_player/tests/test_dynamic_workflow_state_v207.py
+   Result: 4 passed.
+4. Changed/new source and documentation version headers were checked against
+   file_versions.txt.
+5. Release ZIP paths are repository-relative; ZIP CRC/integrity is checked after
+   packaging.
+
+Environment limitation
+----------------------
+PyQt6/PyQt5/PySide6 are not installed in this build container, so the native
+Windows dialog cannot be visually rendered here. The exact v0.2.28 workspace
+source was used as the baseline, Python syntax/source contracts pass, and the
+Qt-free inventory logic is directly tested. Perform the normal Windows visual
+smoke test after installation, particularly pane width, tree column sizing,
+tooltips and double-click folder opening.
+
+Installation
+------------
+Requires an existing complete checkout with prior updates applied through POC
+v223 / MDX Ride Analyzer v0.2.28. Close Ride Analyzer, extract the v224 delta
+ZIP directly into the existing repository root, preserving paths, then restart
+Ride Analyzer. No generated profile set, export ZIP, capture/session or working
+ride-variant catalogue is included or overwritten by this update.
