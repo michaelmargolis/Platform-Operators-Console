@@ -1,4 +1,13 @@
-# changelog.txt ver 86
+# changelog.txt ver 87
+
+
+Global release v245 - POC runtime v245 / MDX Ride Analyzer runtime v239 - NoLimits first activation after simulator swap - 2026-11-22
+- Fix the SpaceCoaster -> NoLimits2 hot-switch race where an operator could activate before the newly started NoLimits API connection or its startup `LOAD_PARK(start_paused=True)` had completed. The previous activation preparation returned early or was cleared by load completion, so the first activation could leave NL2 paused until the operator toggled activation OFF/ON.
+- `sims/nolimits2/sim.py` now remembers activation preparation while the API is unavailable or a park load is pending. A successful load acknowledgement immediately enters the existing manual-mode / `RESET_PARK(False)` preparation path; no fixed delay and no duplicate park load are added.
+- `core/poc_core.py` cancels a not-yet-executed deferred simulator activation preparation when activation is turned OFF, so a late NL2 startup cannot reset a simulator after the operator has withdrawn the activation request.
+- Add adapter regressions for activation before API connection, activation during startup park load, and cancellation before load completion. Extend the POC parking lifecycle test to verify deactivation revokes deferred activation preparation.
+- This is a POC runtime semantic change, so POC advances to v245. MDX Ride Analyzer remains v239. SHS startup behavior is unchanged from v243.
+- The POC User Manual operating description remains functionally correct: simulator preparation may complete after physical activation. Its current Applies-to label remains v243 until the next document publication; the manual is deliberately not part of `file_versions.txt`.
 
 
 Global release v244 - POC runtime v243 / MDX Ride Analyzer runtime v239 - SHS version check reporting - 2026-11-22
