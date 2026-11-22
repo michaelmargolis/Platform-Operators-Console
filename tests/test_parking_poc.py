@@ -1,4 +1,4 @@
-#test_parking_poc.py  ver 1
+#test_parking_poc.py  ver 2
 """PocCore lifecycle tests, with physical output replaced by a recording backend."""
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -42,6 +42,7 @@ class FakeSim:
         self.events.append("recover")
         self.state = ExperienceState.RESETTING
     def prepare_for_activation(self): self.events.append("prepare")
+    def cancel_activation_preparation(self): self.events.append("cancel_prepare")
     def cancel_pending_dispatch(self): self.events.append("cancel")
 
 
@@ -75,6 +76,7 @@ def test_station_switch_off_has_no_physical_motion(poc):
     poc._begin_activation("test")
     assert poc.ready_for_dispatch
     poc._begin_deactivation()
+    assert "cancel_prepare" in poc.sim.events
     assert poc.platform.state is PlatformState.DEACTIVATED
     assert poc.platform.parked
     assert poc.platform.backend.commands == []
