@@ -1,4 +1,14 @@
-# changelog.txt ver 87
+# changelog.txt ver 88
+
+
+Global release v246 - POC runtime v246 / MDX Ride Analyzer runtime v239 - NoLimits startup LOAD_PARK busy retry - 2026-11-22
+- Fix a second SpaceCoaster -> NoLimits2 startup race exposed after v245. SHS launches NoLimits with the startup park already opening; when the POC adapter connects it also issues its deterministic `LOAD_PARK(start_paused=True)`. During a cold/VR launch NL2 can reject that request with `Application is busy` (or the equivalent `Application is processing another operation`).
+- Treat only those two responses as transient. Keep the adapter in RESETTING with the requested park identity unconfirmed, clear the handled protocol error, continue normal service processing, and reissue the same LOAD_PARK every 2 s for up to 15 retries. This gives a cold simulator launch roughly a 30 s settling window without blocking the Qt/POC service loop.
+- Preserve v245 deferred activation preparation across the busy retries. Once a LOAD_PARK is acknowledged successfully, the already-requested activation proceeds through the existing manual-mode / `RESET_PARK(False)` path without requiring an activation OFF/ON toggle.
+- All other LOAD_PARK errors remain terminal and are not retried. The existing v232 same-park E-STOP busy fallback retains priority and does not gain unnecessary reload retries.
+- Add regressions for `Application is busy`, `Application is processing another operation`, successful retry completion, and a non-busy terminal park-load error.
+- POC runtime advances to v246. MDX Ride Analyzer remains v239. SHS executable/startup behavior is unchanged.
+- No POC User Manual workflow text change is required for this retry fix; the manual remains deliberately outside `file_versions.txt`.
 
 
 Global release v245 - POC runtime v245 / MDX Ride Analyzer runtime v239 - NoLimits first activation after simulator swap - 2026-11-22
