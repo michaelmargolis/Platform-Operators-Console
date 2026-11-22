@@ -1,4 +1,4 @@
-#server.py  ver 18
+#server.py  ver 19
 from __future__ import annotations
 
 import argparse
@@ -51,7 +51,7 @@ SHS_SC_RELAY_DEBUG = False
 SHS_SC_RELAY_DEBUG_DATA = False
 SHS_SC_RELAY_DEBUG_UNKNOWN = True
 SHS_SC_RELAY_FORWARD_UNKNOWN = True
-SERVER_FILE_VERSION = 18
+SERVER_FILE_VERSION = 19
 
 
 def project_manifest_version() -> str:
@@ -466,15 +466,26 @@ class SimHostService:
             log.warning("Unable to disable %s UDP connection resets: %s", label, exc)
 
     @staticmethod
+    def _is_udp_connection_reset(exc: OSError) -> bool:
+        """Return True for the recoverable Windows UDP WSAECONNRESET condition."""
+        return (
+            isinstance(exc, ConnectionResetError)
+            or getattr(exc, "winerror", None) == 10054
+            or getattr(exc, "errno", None) == 10054
+        )
+
+    @classmethod
     def _recv_udp_datagram(
-        sock: socket.socket, max_bytes: int, label: str
+        cls, sock: socket.socket, max_bytes: int, label: str
     ) -> Optional[tuple[bytes, tuple[str, int]]]:
         """Receive one datagram, ignoring the recoverable Windows 10054 reset."""
         try:
             return sock.recvfrom(max_bytes)
-        except ConnectionResetError as exc:
-            log.info("Ignoring recoverable %s UDP reset: %s", label, exc)
-            return None
+        except OSError as exc:
+            if cls._is_udp_connection_reset(exc):
+                log.info("Ignoring recoverable %s UDP reset: %s", label, exc)
+                return None
+            raise
 
     def stop(self) -> None:
         """Request a clean exit from serve_forever()."""
@@ -652,6 +663,15 @@ class SimHostService:
         try:
             relay_sock.sendto(payload, unity_addr)
         except OSError as exc:
+            if self._is_udp_connection_reset(exc):
+                if self._spacecoaster_unity_addr == unity_addr:
+                    self._spacecoaster_unity_addr = None
+                log.info(
+                    "SpaceCoaster UDP control %s hit stale endpoint %s:%d; "
+                    "waiting to relearn Unity endpoint",
+                    command, unity_addr[0], unity_addr[1],
+                )
+                return False, "SpaceCoaster Unity UDP endpoint reset; waiting to relearn"
             return False, f"SpaceCoaster UDP control send failed: {exc}"
         log.info("SpaceCoaster UDP control %s -> %s:%d", command, unity_addr[0], unity_addr[1])
         return True, f"UDP control sent: {command}"

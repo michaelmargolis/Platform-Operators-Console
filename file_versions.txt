@@ -1,6 +1,6 @@
-#file_versions.txt  ver 239
-# Global release: v242
-# Runtime versions are derived from runtime_dependencies.txt (POC v241; Analyzer v239)
+#file_versions.txt  ver 240
+# Global release: v243
+# Runtime versions are derived from runtime_dependencies.txt (POC v243; Analyzer v239)
 # Relative path | expected version
 .gitattributes|1
 config/platforms.py|7
@@ -28,25 +28,25 @@ output/fstlib/festoEmulator.py|1
 output/fstlib/festoSender.py|1
 core/sim_interface.py|6
 core/sim_registry.py|2
-core/types.py|8
+core/types.py|9
 sim_host_service/__init__.py|1
 sim_host_service/protocol.py|3
 sim_host_service/client.py|6
 sim_host_service/fan_serial.py|1
-sim_host_service/server.py|18
+sim_host_service/server.py|19
 sim_host_service/sim_host_service.ini|7
 sim_host_service/sims/nolimits2.bat|3
-sim_host_service/sims/spacecoaster.bat|1
-sim_host_service/windows/README.md|6
+sim_host_service/sims/spacecoaster.bat|2
+sim_host_service/windows/README.md|7
 sim_host_service/windows/configure_shs_firewall.ps1|1
-sim_host_service/windows/install_shs_startup.ps1|4
+sim_host_service/windows/install_shs_startup.ps1|5
 sim_host_service/windows/start_shs.cmd|3
 sims/nolimits2/config.py|18
 sims/nolimits2/nl2_protocol.py|23
 sims/nolimits2/sim.py|52
-sims/spacecoaster/config.py|13
+sims/spacecoaster/config.py|14
 sims/spacecoaster/control.py|4
-sims/spacecoaster/sim.py|19
+sims/spacecoaster/sim.py|20
 sims/spacecoaster/spacecoaster_telemetry.csv|1
 tools/diagnostics/spacecoaster/test_shs.py|2
 sims/xplane/config.py|7
@@ -59,8 +59,8 @@ tests/test_config_store.py|7
 tests/test_digital_twin.py|3
 tests/test_serial_remote.py|1
 tests/test_physical_controls.py|6
-tests/test_sim_host_service.py|20
-tests/test_spacecoaster_adapter.py|17
+tests/test_sim_host_service.py|21
+tests/test_spacecoaster_adapter.py|18
 tests/test_activation_control.py|2
 tests/test_xplane_adapter.py|7
 tests/test_fan_control.py|4
@@ -76,7 +76,7 @@ sims/nolimits2/telemetry_config.ini|2
 sims/spacecoaster/telemetry_config.ini|2
 sims/xplane/telemetry_config.ini|2
 tests/test_telemetry_config.py|4
-tests/test_operator_status.py|4
+tests/test_operator_status.py|5
 tests/test_ui_layout.py|11
 tests/test_sim_registry.py|1
 ui/main_window.py|83
@@ -89,7 +89,7 @@ requirements.txt|3
 poc.py|5
 poc_config.json|6
 app_versions.py|1
-runtime_dependencies.txt|3
+runtime_dependencies.txt|4
 version_check.py|6
 raspi/setup-console.sh|13
 raspi/start_console.sh|5
@@ -116,12 +116,13 @@ tools/diagnostics/raspi/dsi_reboot_test.sh|1
 tools/diagnostics/spacecoaster/dummySHS.py|1
 tools/diagnostics/test_shs_connection.py|3
 tools/diagnostics/windows/test_close_sim.py|4
-tools/shs_local_sim_cycle.py|2
+tools/shs_local_sim_cycle.py|6
+tools/poc_sim_swap_test.py|1
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|84
+changelog.txt|85
 README.md|22
-file_versions.txt|239
+file_versions.txt|240
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|1
 tests/test_twin_extension_v150.py|1
@@ -313,8 +314,9 @@ tools/sim_player/dynamic_export_inventory.py|3
 tests/test_dynamic_candidate_import_v202.py|2
 tests/test_dynamic_import_refresh_v214.py|1
 tests/test_poc_ride_selector_v237.py|2
-tests/test_app_versions_v239.py|4
-tests/test_shs_local_sim_cycle_v241.py|2
+tests/test_app_versions_v239.py|5
+tests/test_shs_local_sim_cycle_v241.py|3
+tests/test_poc_sim_swap_test_v243.py|1
 tests/test_dynamic_clearance_v202.py|1
 tools/sim_player/tests/test_dynamic_study_workspace_v202.py|1
 tools/sim_player/tests/test_dynamic_session_rides_v211.py|2

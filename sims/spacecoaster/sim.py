@@ -1,4 +1,4 @@
-#sim.py  ver 19
+#sim.py  ver 20
 from __future__ import annotations
 
 import csv
@@ -105,8 +105,11 @@ class Sim(SimInterface):
         self.last_error = ""
         self._unknown_udp_counts = {}
         self._ready_due_at = None
+        self._ready_attempts = 0
         self._startup_sync_due_at = None
         self._startup_sync_complete = False
+        self._startup_ready_deadline = None
+        self._startup_failed = False
 
     def set_host_service(self, host_service) -> None:
         """Attach the shared POC Sim Host Service client for Windows-side controls."""
@@ -124,6 +127,7 @@ class Sim(SimInterface):
         self._reset_fan_speed_tracking()
         self.native_state = -1
         self._ready_due_at = None
+        self._ready_attempts = 0
         # Do not force a lobby reset here. connect() is also used for a fresh
         # NL2 -> SpaceCoaster launch, whose normal Unity startup sequence must
         # be allowed to reach READY without an injected recovery command. SHS
@@ -131,6 +135,10 @@ class Sim(SimInterface):
         # running before the POC startup request.
         self._startup_sync_due_at = None
         self._startup_sync_complete = False
+        self._startup_ready_deadline = (
+            time.monotonic() + config.SPACECOASTER_STARTUP_READY_TIMEOUT_S
+        )
+        self._startup_failed = False
         self._normal_completion_event = False
         self._listener_thread = threading.Thread(
             target=self._listener_loop,
@@ -154,8 +162,11 @@ class Sim(SimInterface):
         self._last_motion_data_time = None
         self._reset_fan_speed_tracking()
         self._ready_due_at = None
+        self._ready_attempts = 0
         self._startup_sync_due_at = None
         self._startup_sync_complete = False
+        self._startup_ready_deadline = None
+        self._startup_failed = False
         self.state = ExperienceState.DISCONNECTED
         self._status_text = "Disconnected"
 
@@ -188,6 +199,7 @@ class Sim(SimInterface):
 
             self._service_startup_sync()
             self._service_delayed_ready()
+            self._service_startup_ready_timeout()
 
             if (
                 not self._xyzrpy_q.empty()
@@ -290,15 +302,18 @@ class Sim(SimInterface):
             sim_connected and self._telemetry_loaded and self._motion_data_fresh()
         )
 
+        activity = "error" if self._startup_failed else (
+            "resetting" if self.state is ExperienceState.RESETTING else ""
+        )
         return SimStatus(
             pc_connected=pc_connected,
             sim_connected=sim_connected,
             data_connected=data_connected,
             text=self._status_text,
             entity_name=self._experiences[0],
-            busy=self.state is ExperienceState.RESETTING,
+            busy=(self.state is ExperienceState.RESETTING and not self._startup_failed),
             ready_to_start=self.is_ready_to_start(),
-            activity="resetting" if self.state is ExperienceState.RESETTING else "",
+            activity=activity,
         )
 
     # ------------------------------------------------------------------
@@ -351,12 +366,32 @@ class Sim(SimInterface):
         if new_state != old_state:
             self._reset_fan_speed_tracking()
 
+        if new_state in (NativeState.READY, NativeState.RUNNING):
+            self._startup_ready_deadline = None
+            self._startup_failed = False
+            if new_state == NativeState.READY:
+                self._status_text = "SpaceCoaster ready for dispatch"
+
         # WAITING is the MenuMSU lobby state. Unity can report WAITING before
-        # the lobby is quite ready to accept a control command, so schedule the
-        # ready command rather than sending it from inside the state handler.
+        # the lobby is quite ready to accept a control command. Schedule the
+        # first ready request after the settling delay; if Unity remains in
+        # WAITING, _service_delayed_ready() retries at a low rate until state,2
+        # acknowledges the lobby transition. Repeated WAITING packets do not
+        # postpone an already scheduled retry.
         if new_state == NativeState.WAITING:
             self._status_text = "SpaceCoaster waiting in lobby"
-            self._ready_due_at = time.monotonic() + config.SPACECOASTER_READY_DELAY_S
+            if old_state != NativeState.WAITING:
+                self._ready_attempts = 0
+                self._ready_due_at = (
+                    time.monotonic() + config.SPACECOASTER_READY_DELAY_S
+                )
+            elif (
+                self._ready_due_at is None
+                and self._ready_attempts < config.SPACECOASTER_READY_MAX_ATTEMPTS
+            ):
+                self._ready_due_at = (
+                    time.monotonic() + config.SPACECOASTER_READY_RETRY_S
+                )
 
         elif old_state == -1 and new_state == NativeState.INITIALIZING:
             if config.SPACECOASTER_DEBUG:
@@ -388,6 +423,10 @@ class Sim(SimInterface):
                     _STATE_NAMES[int(new_state)],
                 )
 
+        if new_state != NativeState.WAITING:
+            self._ready_due_at = None
+            self._ready_attempts = 0
+
         # Preserve the established behavior: even an out-of-sequence state
         # event becomes the new native state after its action is ignored.
         self.native_state = new_state
@@ -403,14 +442,53 @@ class Sim(SimInterface):
 
 
     def _service_delayed_ready(self) -> None:
-        """Send ready once, after Unity's WAITING lobby state has settled."""
+        """Retry ready at a low rate until Unity acknowledges with state,2."""
         due = self._ready_due_at
-        if due is None or time.monotonic() < due:
+        now = time.monotonic()
+        if due is None or now < due:
             return
         self._ready_due_at = None
         if self.native_state != NativeState.WAITING:
+            self._ready_attempts = 0
             return
-        self.control.ready()
+        if self._ready_attempts >= config.SPACECOASTER_READY_MAX_ATTEMPTS:
+            return
+
+        self._ready_attempts += 1
+        queued = self.control.ready()
+        if config.SPACECOASTER_DEBUG:
+            log.debug(
+                "SpaceCoaster ready attempt %d/%d queued=%s",
+                self._ready_attempts,
+                config.SPACECOASTER_READY_MAX_ATTEMPTS,
+                queued,
+            )
+
+        if self._ready_attempts < config.SPACECOASTER_READY_MAX_ATTEMPTS:
+            self._ready_due_at = now + config.SPACECOASTER_READY_RETRY_S
+        else:
+            self._status_text = "SpaceCoaster waiting for ready response"
+            log.warning(
+                "SpaceCoaster remained in WAITING after %d ready attempts",
+                self._ready_attempts,
+            )
+
+    def _service_startup_ready_timeout(self) -> None:
+        """Report a clear startup error if Unity never reaches READY."""
+        deadline = self._startup_ready_deadline
+        if deadline is None or time.monotonic() < deadline:
+            return
+        self._startup_ready_deadline = None
+        if self.native_state in (NativeState.READY, NativeState.RUNNING):
+            return
+        self._startup_failed = True
+        self._status_text = "SpaceCoaster startup failed: READY not reached"
+        log.error(
+            "SpaceCoaster did not reach READY within %.0f s (native state %s)",
+            config.SPACECOASTER_STARTUP_READY_TIMEOUT_S,
+            self._native_state_name(self.native_state),
+        )
+
 
     def _service_startup_sync(self) -> None:
         """Return Unity to its lobby once if reconnect receives no state."""

@@ -1,4 +1,4 @@
-#types.py  ver 8
+#types.py  ver 9
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -87,6 +87,8 @@ def compose_operator_status_text(
 
     if not status.pc_connected:
         return "Waiting for connection to simulator PC"
+    if status.activity == "error":
+        return status.text or "Simulator error"
     if not status.sim_connected:
         return "Waiting for Sim"
 

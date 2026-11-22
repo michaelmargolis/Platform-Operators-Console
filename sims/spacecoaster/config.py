@@ -1,4 +1,4 @@
-#config.py  ver 13
+#config.py  ver 14
 """SpaceCoaster adapter configuration.
 
 The Unity SpaceCoaster interface is intentionally treated as a legacy protocol.
@@ -43,8 +43,15 @@ FAN_CONFIG = {
 }
 
 # Unity can report WAITING slightly before MenuMSU is ready to accept ready.
-# Keep this non-blocking settling delay explicit and easy to tune.
+# Keep this non-blocking settling delay explicit and retry the semantic ready
+# command while Unity remains in WAITING. UDP delivery and the legacy lobby
+# transition are not acknowledged independently; state,2 is the acknowledgement.
 SPACECOASTER_READY_DELAY_S = 1.0
+SPACECOASTER_READY_RETRY_S = 1.0
+SPACECOASTER_READY_MAX_ATTEMPTS = 10
+# If Unity never reaches READY, surface a clear operator error rather than
+# leaving the console in Resetting indefinitely.
+SPACECOASTER_STARTUP_READY_TIMEOUT_S = 120.0
 
 # On reconnect, wait briefly for Unity to announce its current state. If it
 # only sends telemetry, return it to the lobby once to re-establish state.

@@ -1,4 +1,4 @@
-#test_spacecoaster_adapter.py  ver 17
+#test_spacecoaster_adapter.py  ver 18
 from __future__ import annotations
 
 import math
@@ -451,6 +451,85 @@ def test_delayed_ready_is_cancelled_if_waiting_state_changes():
 
     assert control.commands == []
 
+
+def test_waiting_retries_ready_until_ready_state_arrives(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr("sims.spacecoaster.sim.time.monotonic", lambda: now[0])
+    sim, control, _sleeper = make_sim()
+
+    sim._process_native_state(NativeState.WAITING)
+    now[0] += config.SPACECOASTER_READY_DELAY_S
+    sim.service()
+    assert control.commands == ["ready"]
+
+    now[0] += config.SPACECOASTER_READY_RETRY_S
+    sim.service()
+    assert control.commands == ["ready", "ready"]
+
+    sim._process_native_state(NativeState.READY)
+    now[0] += config.SPACECOASTER_READY_RETRY_S
+    sim.service()
+
+    assert control.commands == ["ready", "ready"]
+    assert sim._ready_due_at is None
+    assert sim._ready_attempts == 0
+
+
+def test_waiting_ready_retry_is_bounded(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr("sims.spacecoaster.sim.time.monotonic", lambda: now[0])
+    monkeypatch.setattr(config, "SPACECOASTER_READY_MAX_ATTEMPTS", 3)
+    sim, control, _sleeper = make_sim()
+
+    sim._process_native_state(NativeState.WAITING)
+    for delay in (
+        config.SPACECOASTER_READY_DELAY_S,
+        config.SPACECOASTER_READY_RETRY_S,
+        config.SPACECOASTER_READY_RETRY_S,
+        config.SPACECOASTER_READY_RETRY_S,
+    ):
+        now[0] += delay
+        sim.service()
+
+    assert control.commands == ["ready", "ready", "ready"]
+    assert sim._ready_due_at is None
+    assert sim._status_text == "SpaceCoaster waiting for ready response"
+
+
+
+def test_startup_timeout_reports_error_and_ready_clears_it(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr("sims.spacecoaster.sim.time.monotonic", lambda: now[0])
+
+    class FakeThread:
+        def __init__(self, **_kwargs):
+            pass
+
+        def is_alive(self):
+            return False
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr("sims.spacecoaster.sim.threading.Thread", FakeThread)
+    sim, _control, _sleeper = make_sim()
+
+    sim.connect()
+    sim._mark_sim_seen()
+    sim._process_native_state(NativeState.INITIALIZING)
+    now[0] += config.SPACECOASTER_STARTUP_READY_TIMEOUT_S + 0.01
+    sim.service()
+
+    status = sim.get_status()
+    assert status.activity == "error"
+    assert status.busy is False
+    assert status.text == "SpaceCoaster startup failed: READY not reached"
+
+    sim._process_native_state(NativeState.READY)
+    status = sim.get_status()
+    assert status.activity == ""
+    assert status.ready_to_start is True
+    assert status.text == "SpaceCoaster ready for dispatch"
 
 def test_paused_spacecoaster_does_not_advance_recorded_telemetry():
     sim, _control, _sleeper = make_sim()

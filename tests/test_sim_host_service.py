@@ -1,4 +1,4 @@
-#test_sim_host_service.py  ver 20
+#test_sim_host_service.py  ver 21
 from __future__ import annotations
 
 import socket
@@ -196,7 +196,7 @@ def test_shs_display_versions_match_versioned_sources():
         if line.startswith("file_versions.txt|")
     )
     assert project_manifest_version() == expected
-    assert SERVER_FILE_VERSION == 18
+    assert SERVER_FILE_VERSION == 19
 
 
 def test_dashboard_status_uses_public_facing_console_wording():
@@ -589,6 +589,49 @@ def test_spacecoaster_udp_control_requires_learned_endpoint():
     ok, detail = server.send_spacecoaster_control("pause")
     assert ok is False
     assert "has not been learned" in detail
+
+
+def test_spacecoaster_control_udp_reset_clears_stale_unity_endpoint():
+    class ResetRelaySocket:
+        def sendto(self, _data, _address):
+            raise OSError(10054, "remote UDP port closed")
+
+    server = SimHostService(FakeManager())
+    server._relay_sock = ResetRelaySocket()
+    server._spacecoaster_unity_addr = ("127.0.0.1", 54321)
+
+    ok, detail = server.send_spacecoaster_control("ready")
+
+    assert ok is False
+    assert "waiting to relearn" in detail
+    assert server._spacecoaster_unity_addr is None
+
+
+def test_spacecoaster_launcher_restarts_oculus_before_unity_start():
+    from pathlib import Path
+
+    batch = (
+        Path(__file__).resolve().parents[1]
+        / "sim_host_service" / "sims" / "spacecoaster.bat"
+    ).read_text(encoding="utf-8")
+    assert "Restart-Service -Name 'OVRService' -Force" in batch
+    assert "WaitForStatus('Running'" in batch
+    assert "timeout /t 2 /nobreak" in batch
+    assert batch.index("Restart-Service") < batch.index('start "" "C:\\Spacecoaster\\CoasterMSU.exe"')
+
+
+def test_shs_startup_installer_uses_elevated_interactive_logon_task():
+    from pathlib import Path
+
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "sim_host_service" / "windows" / "install_shs_startup.ps1"
+    ).read_text(encoding="utf-8")
+    assert "New-ScheduledTaskTrigger -AtLogOn" in script
+    assert "-LogonType Interactive" in script
+    assert "-RunLevel Highest" in script
+    assert "ExecutionTimeLimit ([TimeSpan]::Zero)" in script
+    assert "Remove-Item -Force $legacyShortcutPath" in script
 
 
 def test_client_request_ids_do_not_restart_at_one(monkeypatch):

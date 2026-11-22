@@ -1,4 +1,4 @@
-<!-- README.md ver 6 -->
+<!-- README.md ver 7 -->
 # POC Sim Host Service — Windows setup
 
 The Windows simulator PC runs SHS in the logged-in simulator-operator session. SHS must not run as a Windows service because it starts and controls interactive simulator applications.
@@ -43,7 +43,9 @@ Confirm these simulator launchers contain the correct local paths:
 - `sim_host_service\sims\nolimits2.bat`
 - `sim_host_service\sims\spacecoaster.bat`
 
-Test SHS before changing Windows startup:
+Test SHS before changing Windows startup. Because SpaceCoaster v243 restarts
+Oculus `OVRService` before launch, open **Command Prompt as Administrator** for
+a manual SpaceCoaster test:
 
 ```bat
 cd /d C:\path\to\PlatformOperatorsConsole
@@ -82,25 +84,48 @@ This stages restricted rules for the private POC interface without changing the 
 .\sim_host_service\windows\configure_shs_firewall.ps1 -EnableFirewall
 ```
 
-## Replace the legacy Startup entry
+## Install SHS at logon with the required privileges
 
-While logged in as the simulator-operator account, run:
+SpaceCoaster startup now restarts Oculus `OVRService` before launching Unity.
+SHS therefore needs an elevated interactive logon task; a normal Startup-folder
+shortcut does not have sufficient service-control rights.
+
+While logged in as the simulator-operator account, open **PowerShell as
+Administrator**, change to the copied project directory, and run:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\sim_host_service\windows\install_shs_startup.ps1
 ```
 
-The script creates `POC Sim Host Service.lnk` in that account's Startup folder and lists all current Startup entries. Open the folder with `Win+R`, then `shell:startup`.
-The shortcut and SHS window use the POC shield icon from
-`sim_host_service\windows\poc_shs.ico`. Rerunning this idempotent installer
-updates the existing shortcut rather than creating a second startup entry.
+The installer confirms the checkout location, registers/updates the scheduled
+task **POC Sim Host Service** for the current user with **Run with highest
+privileges**, and removes the superseded `POC Sim Host Service.lnk` Startup
+shortcut if it exists. The task runs in the logged-in interactive session so
+SHS can still open and control simulator windows. It has no execution time
+limit.
 
-After the manual SHS test succeeds, move the old Python 2.7/heartbeat startup shortcut or script to a backup folder. Do not leave both startup systems enabled. Reboot and confirm:
+After the manual SHS test succeeds, disable the old Python 2.7/heartbeat startup
+entry. Do not leave both startup systems enabled. Reboot and confirm:
 
 1. Windows signs into the simulator-operator account.
-2. `shs.log` records a new SHS start.
-3. POC reports the PC connection.
-4. Selecting NoLimits or SpaceCoaster starts the correct simulator.
+2. Task Scheduler shows **POC Sim Host Service** running.
+3. `shs.log` records a new SHS start.
+4. POC reports the PC connection.
+5. Selecting NoLimits or SpaceCoaster starts the correct simulator. SpaceCoaster
+   will take longer to launch because Oculus is restarted first.
 
-To roll back, move the legacy entry back into `shell:startup` and remove `POC Sim Host Service.lnk`.
+For an immediate test without rebooting, stop any manually started SHS and run
+from an elevated PowerShell window:
+
+```powershell
+Start-ScheduledTask -TaskName 'POC Sim Host Service'
+```
+
+To roll back the new autostart task:
+
+```powershell
+Unregister-ScheduledTask -TaskName 'POC Sim Host Service' -Confirm:$false
+```
+
+Then restore the previous startup mechanism if required.

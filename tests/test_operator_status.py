@@ -1,4 +1,4 @@
-#test_operator_status.py  ver 4
+#test_operator_status.py  ver 5
 from core.types import (
     ExperienceState,
     PlatformState,
@@ -26,6 +26,13 @@ def test_operator_status_priority_table():
     assert text(SimStatus()) == "Waiting for connection to simulator PC"
     assert text(SimStatus(pc_connected=True)) == "Waiting for Sim"
     assert text(SimStatus(pc_connected=True, sim_connected=True)) == "Sim connected, waiting for data"
+    assert text(
+        SimStatus(
+            pc_connected=True,
+            activity="error",
+            text="SpaceCoaster startup failed: READY not reached",
+        )
+    ) == "SpaceCoaster startup failed: READY not reached"
 
     connected = dict(pc_connected=True, sim_connected=True, data_connected=True)
     assert text(SimStatus(**connected, busy=True, activity="loading")) == "Loading…"

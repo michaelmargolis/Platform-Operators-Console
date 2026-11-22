@@ -1,4 +1,17 @@
-# changelog.txt ver 84
+# changelog.txt ver 85
+
+
+Global release v243 - POC runtime v243 / MDX Ride Analyzer runtime v239 - SpaceCoaster Oculus startup reliability - 2026-11-21
+- Make the SpaceCoaster launch path restart Oculus `OVRService` before every SpaceCoaster process start, wait for the service to report Running, then allow a 2 s settle before launching Unity. Repeated-start testing completed 70 SpaceCoaster cycles with this reset; the comparison run without it failed on cycle 40 before reaching the WAITING lobby state. NoLimits2 repeated-start testing remained stable beyond 50 cycles.
+- Keep the slow Oculus service restart in `sim_host_service/sims/spacecoaster.bat`, which SHS launches asynchronously, rather than blocking the SHS UDP request/heartbeat loop. If OVRService cannot be restarted, the launcher reports that SHS must be elevated and does not start SpaceCoaster.
+- Change the Windows SHS startup installer from the legacy Startup-folder shortcut to an elevated interactive Scheduled Task (`POC Sim Host Service`) at operator logon. Existing SHS PCs must rerun `sim_host_service/windows/install_shs_startup.ps1` from an Administrator PowerShell after applying v243 so the service can restart OVRService. The installer removes the superseded Startup shortcut when present.
+- Harden the legacy SpaceCoaster UDP control path: while Unity remains in WAITING (`state,1`), retry `control,ready` once per second up to 10 attempts and stop immediately when READY (`state,2`) is observed. Preserve the existing one-second first-command settling delay.
+- Treat Windows UDP WSAECONNRESET/10054 as a recoverable stale Unity endpoint. SHS continues to ignore receive-side resets and now clears the remembered Unity return endpoint if a control send hits 10054 so it can relearn the next endpoint from incoming SpaceCoaster traffic.
+- Add a 120 s SpaceCoaster startup-to-READY watchdog. If Unity never reaches READY, the POC operator status reports `SpaceCoaster startup failed: READY not reached` instead of remaining on Resetting indefinitely; a later READY/RUNNING state clears the error automatically.
+- Fold the final Windows local simulator-cycle diagnostic harness into the tracked repository (raw NL2 readiness, SpaceCoaster Unity logs, bounded READY retries, UDP-reset tolerance, Oculus restart by default with `--dont_restart_oculus`).
+- Add `tools/poc_sim_swap_test.py`, a lean Raspberry Pi / POC-side simulator-swap exerciser. With the normal POC application stopped and normal SHS running, it alternates NoLimits2 and SpaceCoaster, waits for NL2 play-mode telemetry and SpaceCoaster READY, and does not connect to Festo or command the platform.
+- POC runtime advances to v243 because SHS/SpaceCoaster executable startup and adapter behavior changed. MDX Ride Analyzer runtime remains v239.
+- User manuals are not modified in this release. Manual follow-up: update the POC manual Applies-to version to v243 and, where SHS/SpaceCoaster setup is described, note the elevated SHS logon task, Oculus restart, and longer SpaceCoaster startup. Analyzer manual content is unchanged.
 
 
 Global release v242 - POC runtime v241 / MDX Ride Analyzer runtime v239 - local simulator cycle NL2 readiness fix - 2026-11-21
