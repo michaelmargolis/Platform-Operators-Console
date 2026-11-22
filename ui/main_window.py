@@ -1,4 +1,4 @@
-#main_window.py  ver 82
+#main_window.py  ver 83
 from __future__ import annotations
 
 import csv
@@ -86,7 +86,8 @@ class _DynamicCandidateImportDialog(QtWidgets.QDialog):
         self.platform_key = str(platform_key)
         self.directory = Path(directory).expanduser().resolve()
         self._packages = ()
-        self.setWindowTitle('Import dynamic candidate')
+        self._import_all = False
+        self.setWindowTitle('Import dynamic candidates')
         self.resize(760, 470)
 
         layout = QtWidgets.QVBoxLayout(self)
@@ -130,8 +131,12 @@ class _DynamicCandidateImportDialog(QtWidgets.QDialog):
         self.import_button = buttons.addButton(
             'Import selected', QtWidgets.QDialogButtonBox.AcceptRole)
         self.import_button.setEnabled(False)
+        self.import_all_button = buttons.addButton(
+            'Import all', QtWidgets.QDialogButtonBox.ActionRole)
+        self.import_all_button.setEnabled(False)
         cancel = buttons.addButton(QtWidgets.QDialogButtonBox.Cancel)
         self.import_button.clicked.connect(self._accept_selected)
+        self.import_all_button.clicked.connect(self._accept_all)
         cancel.clicked.connect(self.reject)
         layout.addWidget(buttons)
         self._reload()
@@ -157,6 +162,7 @@ class _DynamicCandidateImportDialog(QtWidgets.QDialog):
             self.summary.setText('Could not scan this folder: ' + str(exc))
             self.detail.clear()
             self.import_button.setEnabled(False)
+            self.import_all_button.setEnabled(False)
             return
         self._packages = packages
         for info in packages:
@@ -178,6 +184,7 @@ class _DynamicCandidateImportDialog(QtWidgets.QDialog):
         elif counts['total'] == 0:
             text += '. No ZIP packages were found in this folder.'
         self.summary.setText(text)
+        self.import_all_button.setEnabled(bool(packages))
         if packages:
             self.package_list.setCurrentRow(0)
         else:
@@ -185,6 +192,7 @@ class _DynamicCandidateImportDialog(QtWidgets.QDialog):
                 'Copy an Analyzer export for this physical platform into this folder, '
                 'or choose another folder.')
             self.import_button.setEnabled(False)
+            self.import_all_button.setEnabled(False)
 
     def _selection_changed(self, row):
         if not (0 <= row < len(self._packages)):
@@ -200,11 +208,23 @@ class _DynamicCandidateImportDialog(QtWidgets.QDialog):
 
     def _accept_selected(self):
         if self.package_list.currentRow() >= 0:
+            self._import_all = False
+            self.accept()
+
+    def _accept_all(self):
+        if self._packages:
+            self._import_all = True
             self.accept()
 
     def selected_package(self):
         row = self.package_list.currentRow()
         return self._packages[row] if 0 <= row < len(self._packages) else None
+
+    def packages_to_import(self):
+        if self._import_all:
+            return tuple(self._packages)
+        selected = self.selected_package()
+        return (selected,) if selected is not None else ()
 
 
 class _ActivateSwitchWarningDialog(QtWidgets.QDialog):
@@ -231,6 +251,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.config_store = config_store
         self._configure_experience_selector()
         self._last_profile_update_at = 0.0
+        self._last_dynamic_import_scan_at = 0.0
+        self._dynamic_import_available_count = 0
         self._setup_profile_tab()
         self.sim_tabs = SimTabManager(self.tabWidget, self.tab_debug)
         self._updating_sim_combo = False
@@ -334,22 +356,71 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setPointSize(10 if self._compact_ui else 11)
         self.txt_profile_state.setFont(font)
         layout.addWidget(self.txt_profile_state)
-        controls = QtWidgets.QHBoxLayout()
-        self.btn_dynamic_import = QtWidgets.QPushButton('Import dynamic candidate ZIP...', tab)
-        self.btn_dynamic_import.setToolTip('Commissioning only. While parked, choose an Analyzer-qualified candidate for this physical platform; already-imported packages are hidden and the NoLimits2 ride list refreshes immediately.')
+        import_controls = QtWidgets.QHBoxLayout()
+        self.lbl_dynamic_import_status = QtWidgets.QLabel('Checking dynamic candidates...', tab)
+        self.lbl_dynamic_import_status.setWordWrap(True)
+        import_controls.addWidget(self.lbl_dynamic_import_status, 1)
+        self.btn_dynamic_import = QtWidgets.QPushButton('Import dynamic candidates...', tab)
+        self.btn_dynamic_import.setToolTip(
+            'Commissioning only. Shows Analyzer-qualified candidates in exports/dynamic_candidates '
+            'for this physical platform that are not present in its ride-variant catalogue. '
+            'Import selected or Import all; the NoLimits2 ride list refreshes after import.')
+        self.btn_dynamic_import.setEnabled(False)
         self.btn_dynamic_import.clicked.connect(self._import_dynamic_candidate)
-        controls.addWidget(self.btn_dynamic_import)
+        import_controls.addWidget(self.btn_dynamic_import)
+        layout.addLayout(import_controls)
+
+        controls = QtWidgets.QHBoxLayout()
         self.btn_ground_clearance = QtWidgets.QPushButton('Adjust floor clearance...', tab)
         self.btn_ground_clearance.setToolTip('Ground-Loading Platform only; change minimum operating clearance when fully deactivated and parked')
         self.btn_ground_clearance.clicked.connect(self._adjust_ground_clearance)
         self.btn_ground_clearance.setVisible(self.core.platform_key == 'platform_v2')
         controls.addWidget(self.btn_ground_clearance)
+        controls.addStretch(1)
         layout.addLayout(controls)
         debug_index = self.tabWidget.indexOf(self.tab_debug)
         if debug_index >= 0:
             self.tabWidget.insertTab(debug_index, tab, "Profile")
         else:
             self.tabWidget.addTab(tab, "Profile")
+        self._update_dynamic_import_state(force=True)
+
+    def _update_dynamic_import_state(self, force=False):
+        """Refresh the default export-folder import count without scanning at 20 Hz."""
+        now = time.monotonic()
+        if not force and now - self._last_dynamic_import_scan_at < 2.0:
+            return
+        self._last_dynamic_import_scan_at = now
+        try:
+            from core.dynamic_import import default_import_directory, discover_candidate_packages
+            packages, counts = discover_candidate_packages(
+                default_import_directory(), platform_key=self.core.platform_key)
+        except Exception as exc:
+            self._dynamic_import_available_count = 0
+            self.lbl_dynamic_import_status.setText('Dynamic candidate scan unavailable')
+            self.lbl_dynamic_import_status.setToolTip(str(exc))
+            self.btn_dynamic_import.setEnabled(False)
+            return
+
+        count = len(packages)
+        self._dynamic_import_available_count = count
+        if count == 0:
+            self.lbl_dynamic_import_status.setText('No dynamic candidates to import')
+            hidden = []
+            if counts.get('already_imported'):
+                hidden.append(f"{counts['already_imported']} already imported")
+            if counts.get('other_platform'):
+                hidden.append(f"{counts['other_platform']} for the other platform")
+            if counts.get('invalid'):
+                hidden.append(f"{counts['invalid']} invalid/non-candidate")
+            self.lbl_dynamic_import_status.setToolTip(
+                'Hidden: ' + ', '.join(hidden) if hidden else str(default_import_directory()))
+            self.btn_dynamic_import.setEnabled(False)
+        else:
+            noun = 'candidate' if count == 1 else 'candidates'
+            self.lbl_dynamic_import_status.setText(f'{count} dynamic {noun} to import')
+            self.lbl_dynamic_import_status.setToolTip(str(default_import_directory()))
+            self.btn_dynamic_import.setEnabled(True)
 
     def _adjust_ground_clearance(self):
         if self.core.platform_key != 'platform_v2':
@@ -384,7 +455,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _import_dynamic_candidate(self):
         if not self._platform_safe_to_close():
             QtWidgets.QMessageBox.warning(self, 'Platform active',
-                'Deactivate and fully park before importing a dynamic candidate.')
+                'Deactivate and fully park before importing dynamic candidates.')
             return
         from core.dynamic_import import default_import_directory
         import_dir = default_import_directory()
@@ -396,42 +467,88 @@ class MainWindow(QtWidgets.QMainWindow):
         dialog = _DynamicCandidateImportDialog(
             self.core.platform_key, import_dir, self)
         if dialog.exec_() != QtWidgets.QDialog.Accepted:
+            self._update_dynamic_import_state(force=True)
             return
-        package = dialog.selected_package()
-        if package is None:
+        packages = dialog.packages_to_import()
+        if not packages:
+            self._update_dynamic_import_state(force=True)
             return
+
         from sims.nolimits2 import ride_config
-        ride_name = ride_config.PARKS.get(package.park, {}).get('name', package.park)
+        if len(packages) == 1:
+            package = packages[0]
+            ride_name = ride_config.PARKS.get(package.park, {}).get('name', package.park)
+            prompt = (
+                f'Ride: {ride_name}\nCandidate: {package.label}\n\n'
+                'This adds one candidate to the currently selected platform catalogue '
+                'without replacing existing variants. If its previously imported runtime '
+                'bundle is still present, POC will restore the missing catalogue entry only '
+                'when that bundle exactly matches this export.\n\n'
+                'The qualified recording does NOT constitute physical commissioning. '
+                'Import candidate now?')
+        else:
+            prompt = (
+                f'Import all {len(packages)} available dynamic candidates for the currently '
+                'selected physical platform?\n\n'
+                'Each candidate is validated and appended independently; existing catalogue '
+                'entries are never replaced. Previously imported runtime bundles are reused '
+                'only when they exactly match their export package.\n\n'
+                'Qualified recordings do NOT constitute physical commissioning.')
         choice = QtWidgets.QMessageBox.question(
-            self, 'Import dynamic candidate',
-            f'Ride: {ride_name}\nCandidate: {package.label}\n\n'
-            'This adds one new candidate to the currently selected platform catalogue '
-            'without replacing existing variants. The qualified recording does NOT '
-            'constitute physical commissioning. Import candidate now?',
+            self, 'Import dynamic candidates', prompt,
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
             QtWidgets.QMessageBox.No)
         if choice != QtWidgets.QMessageBox.Yes:
+            self._update_dynamic_import_state(force=True)
             return
-        try:
-            from core.dynamic_import import import_candidate
-            label, manifest = import_candidate(
-                package.path, platform_key=self.core.platform_key)
-        except Exception as exc:
-            QtWidgets.QMessageBox.warning(self, 'Import rejected', str(exc))
+
+        from core.dynamic_import import import_candidate
+        imported = []
+        failures = []
+        for package in packages:
+            try:
+                label, manifest = import_candidate(
+                    package.path, platform_key=self.core.platform_key)
+                imported.append((label, manifest))
+            except Exception as exc:
+                failures.append((package.label, str(exc)))
+
+        refresh_note = ''
+        if imported:
+            refresh_note = 'It will be loaded automatically next time NoLimits2 is selected.'
+            try:
+                if self.core.reload_nl2_variants():
+                    refresh_note = (
+                        'The NoLimits2 ride list has been refreshed; no POC restart is required.')
+            except Exception as exc:
+                log.exception('Dynamic candidates imported but live catalogue refresh failed')
+                refresh_note = (
+                    'Candidates were imported, but the live ride list could not be refreshed: '
+                    f'{exc}\nReload NoLimits2 or restart POC before selecting them.')
+
+        self._update_dynamic_import_state(force=True)
+        if failures:
+            detail = '\n'.join(f'- {label}: {reason}' for label, reason in failures[:8])
+            if len(failures) > 8:
+                detail += f'\n- ... and {len(failures) - 8} more'
+            if imported:
+                QtWidgets.QMessageBox.warning(
+                    self, 'Dynamic candidate import partially completed',
+                    f'Imported {len(imported)} of {len(packages)} candidate(s).\n\n'
+                    f'{refresh_note}\n\nNot imported:\n{detail}')
+            else:
+                QtWidgets.QMessageBox.warning(
+                    self, 'Dynamic candidate import failed',
+                    f'No candidates were imported.\n\n{detail}')
             return
-        refresh_note = 'It will be loaded automatically next time NoLimits2 is selected.'
-        try:
-            if self.core.reload_nl2_variants():
-                refresh_note = 'The NoLimits2 ride list has been refreshed; no POC restart is required.'
-        except Exception as exc:
-            log.exception('Dynamic candidate imported but live catalogue refresh failed')
-            refresh_note = (
-                'The candidate was imported, but the live ride list could not be refreshed: '
-                f'{exc}\nReload NoLimits2 or restart POC before selecting it.')
-        QtWidgets.QMessageBox.information(self, 'Dynamic candidate imported',
-            f'Added candidate: {label}\n\nBundle: {manifest}\n\n{refresh_note}\n\n'
-            'If this ride already has a preferred variant, the new candidate will be '
-            'hidden until the review status is changed during commissioning.')
+
+        labels = '\n'.join(f'- {label}' for label, _manifest in imported)
+        QtWidgets.QMessageBox.information(
+            self, 'Dynamic candidates imported',
+            f'Imported {len(imported)} candidate(s):\n{labels}\n\n{refresh_note}\n\n'
+            'If a ride already has a preferred variant, newly imported candidates remain '
+            'hidden from normal operator selection until its review status is changed during '
+            'commissioning.')
 
     def _update_profile(self, force=False):
         if not force and self.tabWidget.currentWidget() is not self.tab_profile:
@@ -477,6 +594,7 @@ class MainWindow(QtWidgets.QMainWindow):
         text = "\n".join(lines)
         if self.txt_profile_state.toPlainText() != text:
             self.txt_profile_state.setPlainText(text)
+        self._update_dynamic_import_state(force=force)
         self._last_profile_update_at = now
 
     def _enforce_compact_tabs(self):

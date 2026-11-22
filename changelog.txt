@@ -1,4 +1,24 @@
-# changelog.txt ver 81
+# changelog.txt ver 84
+
+
+Global release v242 - POC runtime v241 / MDX Ride Analyzer runtime v239 - local simulator cycle NL2 readiness fix - 2026-11-21
+- Correct `tools/shs_local_sim_cycle.py`: v241 incorrectly reused the full POC NoLimits2 adapter. On connection that adapter performs its normal startup `LOAD_PARK(start_paused=True)`, racing the park already being opened by the SHS launcher with `--openpark --openpaused`. The stress test now uses `NL2Protocol` directly and issues only `GET_TELEMETRY`; it advances when NL2 telemetry state bit 0 reports play mode, the documented indication that the paused attraction park has finished loading and is ready to run. Expected `Not in play mode` replies while the command-line park is still loading are treated as transient startup status.
+- No deployed POC or simulator-control runtime behaviour changes in this release. `sim_host_service/sims/nolimits2.bat` retains the v241 `--telemetry --vr --openpaused --openpark ...` command. Therefore POC runtime remains v241 and Ride Analyzer runtime remains v239.
+- User manuals are not edited and no manual `Applies to` change is required for this developer/technician diagnostic-only release.
+
+
+Global release v241 - POC runtime v241 / MDX Ride Analyzer runtime v239 - local NL2/SpaceCoaster cycle test and paused NL2 launch - 2026-11-21
+- Add `tools/shs_local_sim_cycle.py`, a Windows-only localhost stress test for the intermittent NL2/SpaceCoaster VR handover issue. Run it on the SHS PC with the normal Sim Host Service stopped. It reuses SHS `WindowsSimManager` directly for simulator close/start selection, waits for the existing NoLimits2 adapter's `ready_to_start` condition, and listens directly for SpaceCoaster native state on localhost UDP 10009. When SpaceCoaster reports WAITING (`state,1`) it sends the normal delayed `control,ready`; it advances only after Unity reports READY (`state,2`). By default the test repeats until Ctrl+C or a readiness timeout, leaving a failed simulator running for Oculus/Windows log capture.
+- Update `sim_host_service/sims/nolimits2.bat` so the deployed NL2 command is `--telemetry --vr --openpaused --openpark ...`. This is a POC runtime launcher change, so POC advances to v241; Ride Analyzer runtime remains v239.
+- User manuals are not edited in this release. For the next POC User Manual publication, the document editor should update the `Applies to` entry to `MDX Platform Operators Console v241`. No Ride Analyzer manual change is required. If the manual documents NL2 startup command-line behaviour, note that SHS now opens the startup park paused. The local stress-test utility is a technician/development diagnostic and does not require an operator-workflow section.
+
+
+Global release v240 - POC runtime v240 / MDX Ride Analyzer runtime v239 - dynamic candidate import visibility and catalogue recovery - 2026-11-21
+- Update the POC Profile tab to scan `exports/dynamic_candidates` for the active physical platform and report the number of validated candidate packages that are not present in that platform's current ride-variant catalogue. When none are available it shows `No dynamic candidates to import` and disables the import button; otherwise it shows the count and enables `Import dynamic candidates...`. The scan is throttled while the Profile tab is visible and forced on tab entry/import completion, so it does not add 20 Hz ZIP-validation workload.
+- Add `Import all` to the existing platform-aware import dialog while retaining `Import selected`. Bulk import validates and appends each package independently, never replaces an existing catalogue entry, refreshes the live NoLimits2 catalogue once after successful imports, and reports any partial failures.
+- Add safe recovery for an accidentally replaced `ride_variants/<platform>.json`: if an export is no longer represented in the catalogue but its previously imported runtime bundle still exists, POC may restore the missing catalogue entry only when all four deployed runtime files are byte-for-byte identical to the validated export ZIP and the qualification still validates. A differing existing bundle is never overwritten.
+- Correct runtime dependency classification for `core/dynamic_import.py` to POC-only. This release changes POC runtime dependencies, so POC advances to v240; Analyzer has no runtime dependency change and remains v239.
+- User manuals are not edited in this release. For the next POC User Manual publication, the document editor should update the `Applies to` section to `MDX Platform Operators Console v240` and revise the Profile / dynamic-candidate import section to describe the available-candidate count and `Import all` action. The MDX Ride Analyzer manual remains applicable to runtime v239.
 
 
 Global release v239 - POC runtime v239 / MDX Ride Analyzer runtime v239 - derived application runtime versioning - 2026-11-21

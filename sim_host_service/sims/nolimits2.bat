@@ -1,4 +1,4 @@
-rem nolimits2.bat ver 2
+rem nolimits2.bat ver 3
 @echo off
 echo NoLimits Platform Ride Controller - Starting NoLimits...
-start "" "c:\Program Files\NoLimits 2\64bit\nolimits2app.exe" --telemetry --vr --openpark "C:\Program Files\NoLimits 2\parks\MDX\MdxLogoCoaster\MdxLogoCoaster.nl2park"
+start "" "c:\Program Files\NoLimits 2\64bit\nolimits2app.exe" --telemetry --vr --openpaused --openpark "C:\Program Files\NoLimits 2\parks\MDX\MdxLogoCoaster\MdxLogoCoaster.nl2park"

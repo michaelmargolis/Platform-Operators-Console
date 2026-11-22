@@ -1,4 +1,4 @@
-#dynamic_import.py ver 3
+#dynamic_import.py ver 4
 """Atomic import of an Analyzer-prepared dynamic candidate onto POC.
 
 No Qt or hardware. Intended to be called from POC Profile tab only while
@@ -178,10 +178,46 @@ def import_candidate(archive, *, platform_key: str, root: Path = ROOT, catalog_d
         raise DynamicProfileError('Candidate already exists/is imported; no catalogue overwrite allowed')
     bundle_rel = Path(folder)
     dest = root.joinpath(*bundle_rel.parts)
-    if dest.exists():
-        raise DynamicProfileError('The dynamic bundle directory already exists')
     if not dest.resolve(strict=False).is_relative_to((root/'sims'/'nolimits2'/'ride_profiles').resolve()):
         raise DynamicProfileError('Unsafe dynamic bundle destination')
+
+    filenames = ('profile.json', 'reference.npz', 'qualification.json', 'deployment.json')
+    expected = payload['qualification_summary']
+
+    if dest.exists():
+        # Recovery case: the catalogue may have been replaced while an earlier
+        # import's immutable runtime bundle is still present. Never overwrite
+        # that bundle. Re-add the catalogue entry only when every runtime file
+        # is byte-for-byte identical to this validated export package.
+        if not dest.is_dir():
+            raise DynamicProfileError('The dynamic bundle destination exists but is not a directory')
+        try:
+            with ZipFile(archive) as z:
+                matches = all(
+                    (dest / filename).is_file() and
+                    sha256_file(dest / filename) == sha256_file_bytes(z.read(folder + filename))
+                    for filename in filenames
+                )
+        except (BadZipFile, OSError, KeyError) as exc:
+            raise DynamicProfileError(f'Could not verify existing dynamic bundle: {exc}') from exc
+        if not matches:
+            raise DynamicProfileError(
+                'A dynamic bundle already exists at this path but differs from the export; '
+                'the existing bundle was not overwritten')
+
+        deployment = DynamicDeployment.load(
+            label=entry['label'], relative=entry['dynamic_profile'],
+            platform=platform_key, park=payload['park'],
+            live_variant=ride_config.resolve_variant(entry),
+            global_settings=TelemetryConfig(root/'sims/nolimits2/telemetry_config.ini').snapshot(),
+            root=root)
+        from core.dynamic_qualification import load_qualification
+        actual = load_qualification(dest/'qualification.json', deployment.profile)
+        if expected != actual:
+            raise DynamicProfileError('Existing bundle qualification differs from validated package')
+        store.add_candidate(entry)  # Restore only the missing catalogue entry.
+        return entry['label'], entry['dynamic_profile']
+
     # Stage on the POC repository filesystem. Raspberry Pi installations may
     # mount /tmp as tmpfs, so staging there and Path.rename() into Runtime can
     # fail with EXDEV / errno 18 (invalid cross-device link). Keeping the
@@ -191,10 +227,9 @@ def import_candidate(archive, *, platform_key: str, root: Path = ROOT, catalog_d
         staged = staged_root / bundle_rel
         staged.mkdir(parents=True)
         with ZipFile(archive) as z:
-            for filename in ('profile.json', 'reference.npz', 'qualification.json', 'deployment.json'):
+            for filename in filenames:
                 with (staged / filename).open('xb') as fp:
                     fp.write(z.read(folder + filename))
-        expected = payload['qualification_summary']
         deployment = DynamicDeployment.load(
             label=entry['label'], relative=entry['dynamic_profile'],
             platform=platform_key, park=payload['park'],
