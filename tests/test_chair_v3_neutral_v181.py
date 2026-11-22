@@ -1,4 +1,4 @@
-# test_chair_v3_neutral_v181.py ver 2
+# test_chair_v3_neutral_v181.py ver 3
 """Chair V3 neutral-height test and offline/live module parity."""
 import math
 from pathlib import Path
@@ -32,33 +32,49 @@ def test_chair_v3_isolated_from_legacy_v2_and_mdx():
 
 
 def test_chair_v3_yaw_only_mask_preserves_other_dofs():
-    v3 = make_backend('chair_v3')
-    legacy = make_backend('chair_v2')
+    current = make_backend('chair_v3')
+    cfg = current.cfg
 
-    assert tuple(v3.k.AXIS_FLIP_MASK.tolist()) == (1.0, 1.0, -1.0, -1.0, 1.0, -1.0)
-    assert tuple(legacy.k.AXIS_FLIP_MASK.tolist()) == (1.0, 1.0, -1.0, -1.0, 1.0, 1.0)
+    # Build an otherwise identical Chair V3 kinematics instance with the
+    # pre-v247 legacy mask. This isolates the commissioning patch from neutral
+    # height, geometry, travel limits and every other platform difference.
+    legacy = Kinematics()
+    legacy.set_axis_flip_mask((1, 1, -1, -1, 1, 1))
+    params = PlatformParams(
+        cfg.MUSCLE_MIN_LENGTH,
+        cfg.MUSCLE_MAX_LENGTH,
+        cfg.FIXED_HARDWARE_LENGTH,
+        cfg.LIMITS_1DOF_TRANFORM,
+    )
+    legacy.set_geometry(
+        cfg.base_coords,
+        cfg.platform_coords,
+        params,
+        cfg.PLATFORM_CLEARANCE_OFFSET,
+        getattr(cfg, 'MUSCLE_EXTENSION_RESERVE', None),
+        neutral_height_offset_mm=cfg.NEUTRAL_HEIGHT_OFFSET_MM,
+    )
 
-    # Chair V3 differs from the legacy chair only by neutral height, limits,
-    # and now the explicit Yaw sign. Compare actuator lengths at the same real
-    # pose after accounting for each backend's own neutral geometry. For each
-    # non-yaw DOF, +command must match the same-sign legacy response relative
-    # to that backend's neutral; +Yaw must match legacy -Yaw.
+    assert tuple(current.k.AXIS_FLIP_MASK.tolist()) == (1.0, 1.0, -1.0, -1.0, 1.0, -1.0)
+    assert tuple(legacy.AXIS_FLIP_MASK.tolist()) == (1.0, 1.0, -1.0, -1.0, 1.0, 1.0)
+
     for axis in range(6):
-        fraction = 0.25
-        v3_neutral = np.asarray(v3.k.inverse_kinematics([0.0] * 6, return_lengths=True)[1])
-        legacy_neutral = np.asarray(legacy.k.inverse_kinematics([0.0] * 6, return_lengths=True)[1])
+        request = [0.0] * 6
+        request[axis] = float(cfg.LIMITS_1DOF_TRANFORM[axis]) * 0.25
 
-        v3_real = [0.0] * 6
-        legacy_real = [0.0] * 6
-        v3_real[axis] = float(v3.cfg.LIMITS_1DOF_TRANFORM[axis]) * fraction
-        legacy_real[axis] = float(legacy.cfg.LIMITS_1DOF_TRANFORM[axis]) * fraction
+        current_lengths = np.asarray(
+            current.k.inverse_kinematics(request, return_lengths=True)[1]
+        )
+        legacy_request = list(request)
         if axis == 5:
-            legacy_real[axis] *= -1.0
+            legacy_request[axis] *= -1.0
+        legacy_lengths = np.asarray(
+            legacy.inverse_kinematics(legacy_request, return_lengths=True)[1]
+        )
 
-        v3_lengths = np.asarray(v3.k.inverse_kinematics(v3_real, return_lengths=True)[1])
-        legacy_lengths = np.asarray(legacy.k.inverse_kinematics(legacy_real, return_lengths=True)[1])
-
-        assert np.allclose(v3_lengths - v3_neutral, legacy_lengths - legacy_neutral, atol=1e-9)
+        # X/Y/Z/Roll/Pitch are bit-for-bit equivalent apart from floating point
+        # arithmetic; positive current Yaw intentionally equals legacy negative Yaw.
+        assert np.allclose(current_lengths, legacy_lengths, atol=1e-9)
 
 
 def test_initial_blackbird_like_heave_near_one_fifth_above_lowest_level():
