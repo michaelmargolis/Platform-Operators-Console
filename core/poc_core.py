@@ -1,4 +1,4 @@
-#poc_core.py ver 60
+#poc_core.py ver 61
 from __future__ import annotations
 
 import logging
@@ -540,6 +540,12 @@ class PocCore(QtCore.QObject):
         cancel = getattr(self.sim, "cancel_pending_dispatch", None)
         if callable(cancel):
             cancel()
+        # A simulator hot-switch may still be waiting to perform activation
+        # preparation after its process/API startup completes. Turning
+        # activation OFF before that point must revoke the deferred request.
+        cancel_prepare = getattr(self.sim, "cancel_activation_preparation", None)
+        if callable(cancel_prepare):
+            cancel_prepare()
         if not idle_at_station and self.platform.state is PlatformState.ACTIVATED:
             self._estop_latched = True
             self._estop_recovery_active = False
