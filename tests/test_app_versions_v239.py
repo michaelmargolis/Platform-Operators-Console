@@ -1,4 +1,4 @@
-#test_app_versions_v239.py ver 5
+#test_app_versions_v239.py ver 6
 from pathlib import Path
 
 import pytest
@@ -74,7 +74,7 @@ def test_runtime_version_cannot_exceed_global_release(tmp_path):
 
 
 def test_current_manifest_versions_and_membership_are_consistent():
-    assert app_versions.read_global_release(ROOT) == 243
+    assert app_versions.read_global_release(ROOT) == 244
     assert app_versions.get_app_versions(ROOT) == {"analyzer": 239, "poc": 243}
 
     tracked = set()
