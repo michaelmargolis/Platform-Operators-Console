@@ -1,4 +1,13 @@
-# changelog.txt ver 88
+# changelog.txt ver 89
+
+
+Global release v247 - POC runtime v247 / MDX Ride Analyzer runtime v247 - Chair V3 yaw commissioning correction - 2026-11-22
+- Add an explicit Chair V3-only kinematic axis mask `(1, 1, -1, -1, 1, -1)` in `kinematics/cfg_SuspendedChairV3.py`. This preserves the established Chair V3 X/Y/Z/Roll/Pitch behavior and reverses only Yaw.
+- The change follows physical Pose Sender verification: Ground-Loading Platform direction was correct on all six DOFs; Chair V3 was correct on X/Y/Z/Roll/Pitch but +Yaw moved opposite to the documented rider-frame convention (+Yaw = counter-clockwise viewed from above).
+- Do not change shared kinematics, NoLimits2 telemetry mapping, SpaceCoaster/X-Plane adapters, geometry coordinates, pressure mapping, limits, neutral height, parking/prop behavior, or Ground-Loading Platform behavior before the scheduled platform test.
+- Add regression coverage proving Chair V3 keeps the legacy chair response for the other five DOFs and that its positive Yaw actuator-length delta equals the legacy chair negative-Yaw response.
+- This is an intentionally narrow commissioning patch ahead of a planned coordinate-convention refactor. The later refactor will make kinematics canonical (+X forward, +Y left, +Z up, +Roll right side down, +Pitch nose down, +Yaw CCW) and move simulator-native sign conversion into the simulator adapters.
+- Because `cfg_SuspendedChairV3.py` is shared by live POC and Analyzer kinematic replay, both derived runtime versions advance to v247. Existing dynamic gain curves are not re-optimised by this patch; their formal qualification evidence should be reconsidered during the later convention refactor/requalification work.
 
 
 Global release v246 - POC runtime v246 / MDX Ride Analyzer runtime v239 - NoLimits startup LOAD_PARK busy retry - 2026-11-22
