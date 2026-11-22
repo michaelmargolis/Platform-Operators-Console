@@ -1,4 +1,4 @@
-#sim.py  ver 53
+#sim.py  ver 54
 from __future__ import annotations
 
 import logging
@@ -32,6 +32,11 @@ ARRIVAL_NEAREST_POLL_S = 0.5
 # station logic. Two independent, fresh observations per candidate are required.
 RESET_VIEW_STATION_CONFIRMATIONS = 2
 RESET_VIEW_STATION_WARNING_S = 8.0
+# NL2 can reject LOAD_PARK while its command-line startup park or a previous
+# park operation is still settling. Retry only the two known transient busy
+# replies; other LOAD_PARK errors remain terminal.
+LOAD_PARK_BUSY_RETRY_DELAY_S = 2.0
+LOAD_PARK_BUSY_RETRIES = 15
 # Flying Beast only. A command ACK means NL2 accepted the API request, NOT
 # that the seats have locked or that the train has departed. State flags and
 # subsequent telemetry remain authoritative; never retry a timed-out control
@@ -171,6 +176,8 @@ class Sim(SimInterface):
         self._ride_load_pending = False
         self._ride_load_requested_at = 0.0
         self._ride_load_request_id = None
+        self._ride_load_retry_at = 0.0
+        self._ride_load_busy_retries = 0
         self._park_load_failed = False
         self._loaded_index = None  # Set only after the corresponding LOAD_PARK OK.
         self._loading_index = None
@@ -243,6 +250,8 @@ class Sim(SimInterface):
         self._last_station_diagnostic = None
         self._ride_load_requested_at = 0.0
         self._ride_load_request_id = None
+        self._ride_load_retry_at = 0.0
+        self._ride_load_busy_retries = 0
         self._loading_index = None
         self._loaded_index = None
         self._queued_ride_index = None
@@ -783,6 +792,8 @@ class Sim(SimInterface):
         self._ride_load_pending = True
         self._park_load_failed = False
         self._loading_index = index
+        self._ride_load_retry_at = 0.0
+        self._ride_load_busy_retries = 0
         self._ride_load_requested_at = time.monotonic()
         self._reset_transform_tracking()
         self._lift_height = float(config.INITIAL_LIFT_HEIGHT_M)
@@ -894,6 +905,33 @@ class Sim(SimInterface):
         if not self._ride_load_pending:
             return False
 
+        if self._ride_load_retry_at > 0.0:
+            now = time.monotonic()
+            if now < self._ride_load_retry_at:
+                return False
+            index = self._loading_index
+            if index is None:
+                self._ride_load_pending = False
+                self._ride_load_retry_at = 0.0
+                self._park_load_failed = True
+                self.state = ExperienceState.READY
+                return True
+            _name, park_path = self._rides[index]
+            self._ride_load_retry_at = 0.0
+            self._ride_load_requested_at = now
+            if NL2_STATE_DEBUG:
+                log.debug(
+                    "NL2 retrying LOAD_PARK for %s after transient busy response "
+                    "(retry %d/%d)",
+                    self._experiences[index],
+                    self._ride_load_busy_retries,
+                    LOAD_PARK_BUSY_RETRIES,
+                )
+            self._ride_load_request_id = self.client.load_park(
+                park_path, start_paused=True
+            )
+            return True
+
         request_result = getattr(self.client, "request_result", None)
         result = request_result(self._ride_load_request_id) if callable(request_result) else None
         if result is None:
@@ -912,7 +950,11 @@ class Sim(SimInterface):
         # the confirmed park identity and continue with reset/manual preparation.
         # Normal operator loads, different-park loads and all other errors retain
         # the existing failure semantics.
-        busy_detail = "processing another operation" in str(detail or "").casefold()
+        busy_text = str(detail or "").casefold()
+        busy_detail = (
+            "processing another operation" in busy_text
+            or "application is busy" in busy_text
+        )
         recover_busy_same_park = bool(
             outcome == "error"
             and self._estop_recovery_pending
@@ -942,8 +984,40 @@ class Sim(SimInterface):
                     "NL2 E-STOP recovery LOAD_PARK busy for already confirmed park; "
                     "preserving load identity and entering park-reset preparation"
                 )
+            self._ride_load_retry_at = 0.0
+            self._ride_load_busy_retries = 0
             self._start_park_reset()
             return True
+
+        if (
+            outcome == "error"
+            and busy_detail
+            and completed_index is not None
+            and self._ride_load_busy_retries < LOAD_PARK_BUSY_RETRIES
+        ):
+            self._ride_load_busy_retries += 1
+            self._ride_load_pending = True
+            self._ride_load_request_id = None
+            self._loading_index = completed_index
+            self._ride_load_retry_at = (
+                time.monotonic() + LOAD_PARK_BUSY_RETRY_DELAY_S
+            )
+            self._park_load_failed = False
+            self.state = ExperienceState.RESETTING
+            if hasattr(self.client, "last_error"):
+                self.client.last_error = ""
+            if NL2_STATE_DEBUG:
+                log.debug(
+                    "NL2 LOAD_PARK busy: %s; retrying in %.1fs (%d/%d)",
+                    detail,
+                    LOAD_PARK_BUSY_RETRY_DELAY_S,
+                    self._ride_load_busy_retries,
+                    LOAD_PARK_BUSY_RETRIES,
+                )
+            return True
+
+        self._ride_load_retry_at = 0.0
+        self._ride_load_busy_retries = 0
 
         if outcome == "error":
             # An unsuccessful LOAD_PARK does not establish which park is open.
