@@ -1,4 +1,4 @@
-#version_check.py  ver 6
+#version_check.py  ver 7
 """Check protoPOC source-file versions against file_versions.txt.
 
 Run from anywhere with:
@@ -78,6 +78,26 @@ def read_version(path: Path) -> tuple[str, int] | None:
     return None
 
 
+def shs_server_version(manifest: Path, entries: list[tuple[str, int]]) -> str:
+    """Return the composite SHS dashboard version shown by server.py."""
+    version_info = read_version(manifest)
+    if version_info is None or version_info[0] != manifest.name:
+        raise ValueError(f"{manifest.name}: cannot determine manifest file version")
+
+    server_file_version = next(
+        (
+            version
+            for relative_path, version in entries
+            if relative_path == "sim_host_service/server.py"
+        ),
+        None,
+    )
+    if server_file_version is None:
+        raise ValueError(
+            f"{manifest.name}: sim_host_service/server.py is not version-tracked"
+        )
+    return f"{version_info[1]} : {server_file_version}"
+
 
 def load_runtime_version_summary(root: Path, tracked_paths: set[str]):
     """Load and validate the derived POC/Analyzer runtime-version metadata."""
@@ -116,6 +136,7 @@ def main() -> int:
 
     try:
         entries = load_manifest(manifest)
+        shs_version = shs_server_version(manifest, entries)
     except (OSError, ValueError) as exc:
         print(f"ERROR: cannot read version manifest: {exc}")
         return 2
@@ -139,6 +160,7 @@ def main() -> int:
     print(f"Repository update level : v{global_release}")
     print(f"POC runtime version      : v{app_versions['poc']}")
     print(f"Ride Analyzer runtime    : v{app_versions['analyzer']}")
+    print(f"SHS server version       : {shs_version}")
     print(
         "Runtime dependencies     : "
         f"POC {poc_runtime_files}, Analyzer {analyzer_runtime_files}, "
