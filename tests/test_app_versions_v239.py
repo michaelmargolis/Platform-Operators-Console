@@ -1,4 +1,4 @@
-#test_app_versions_v239.py ver 6
+#test_app_versions_v239.py ver 7
 from pathlib import Path
 
 import pytest
@@ -74,8 +74,8 @@ def test_runtime_version_cannot_exceed_global_release(tmp_path):
 
 
 def test_current_manifest_versions_and_membership_are_consistent():
-    assert app_versions.read_global_release(ROOT) == 244
-    assert app_versions.get_app_versions(ROOT) == {"analyzer": 239, "poc": 243}
+    assert app_versions.read_global_release(ROOT) == 245
+    assert app_versions.get_app_versions(ROOT) == {"analyzer": 239, "poc": 245}
 
     tracked = set()
     for raw in (ROOT / "file_versions.txt").read_text(encoding="utf-8").splitlines():
@@ -104,6 +104,8 @@ def test_current_manifest_versions_and_membership_are_consistent():
     assert "core/dynamic_import.py" not in analyzer_paths
 
     dependency_releases = {item.path: item.last_runtime_release for item in dependencies}
+    assert dependency_releases["core/poc_core.py"] == 245
+    assert dependency_releases["sims/nolimits2/sim.py"] == 245
     assert dependency_releases["sim_host_service/server.py"] == 243
     assert dependency_releases["sim_host_service/sims/spacecoaster.bat"] == 243
     assert dependency_releases["sims/spacecoaster/config.py"] == 243
