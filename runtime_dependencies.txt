@@ -1,4 +1,4 @@
-#runtime_dependencies.txt ver 6
+#runtime_dependencies.txt ver 7
 # Runtime-version baseline established at global release v239.
 # Format: relative path|apps|last_runtime_release
 # Apps are poc, analyzer, or poc,analyzer.
@@ -31,7 +31,7 @@ core/telemetry_config.py|poc,analyzer|239
 core/types.py|poc|243
 kinematics/cfg_SuspendedChair.py|poc,analyzer|239
 kinematics/cfg_SuspendedChairFalcon.py|poc,analyzer|239
-kinematics/cfg_SuspendedChairV3.py|poc,analyzer|239
+kinematics/cfg_SuspendedChairV3.py|poc,analyzer|247
 kinematics/cfg_SuspendedPlatformMdx.py|poc,analyzer|239
 kinematics/kinematics_V3.py|poc,analyzer|239
 output/__init__.py|poc|239
