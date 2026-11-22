@@ -1,4 +1,4 @@
-#test_nolimits2_adapter.py  ver 35
+#test_nolimits2_adapter.py  ver 36
 from __future__ import annotations
 
 import logging
@@ -406,6 +406,45 @@ def test_startup_load_application_busy_retries_without_poisoning_state():
     assert sim._park_load_failed is False
     assert sim._ride_load_busy_retries == 0
     assert sim.state is ExperienceState.READY
+
+
+def test_deferred_activation_survives_startup_busy_retry():
+    client = FakeNL2Client()
+    sim = Sim(client=client)
+
+    # Exact hot-switch race: activate before NL2 connects, then the first
+    # deterministic LOAD_PARK collides with the command-line startup park.
+    sim.prepare_for_activation()
+    assert sim._activation_prepare_pending is True
+
+    sim.connect()
+    sim.service()
+    first_request = sim._ride_load_request_id
+    client.complete_request(first_request, ok=False, detail="Application is busy")
+    sim.read()
+
+    assert sim._activation_prepare_pending is True
+    assert sim._ride_load_pending is True
+    assert sim._park_load_failed is False
+
+    sim._ride_load_retry_at = time.monotonic() - 0.001
+    sim.service()
+    second_request = sim._ride_load_request_id
+    client.complete_request(second_request, ok=True)
+    sim.read()
+
+    # Successful retry must consume the remembered activation and enter the
+    # ordinary reset/manual-mode preparation path without another switch edge.
+    assert sim._activation_prepare_pending is False
+    assert sim._ride_load_pending is False
+    assert sim._park_load_failed is False
+    assert sim.state is ExperienceState.RESETTING
+    assert sim._park_reset_pending is True
+
+    set_station(client, TRAIN_IN_STATION)
+    fresh(client, speed=0.0, state=3)
+    sim.read()
+    assert ("reset", False) in client.commands
 
 
 def test_startup_load_processing_operation_busy_also_retries():
