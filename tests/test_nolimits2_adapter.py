@@ -1,4 +1,4 @@
-#test_nolimits2_adapter.py  ver 33
+#test_nolimits2_adapter.py  ver 34
 from __future__ import annotations
 
 import logging
@@ -375,6 +375,70 @@ def test_recorder_invalid_initial_ride_index_is_rejected():
     import pytest
     with pytest.raises(IndexError):
         Sim(client=FakeNL2Client(), startup_ride_index=999)
+
+
+def test_activation_before_nl2_connection_runs_after_startup_load():
+    client = FakeNL2Client()
+    sim = Sim(client=client)
+
+    # Reproduces a SpaceCoaster -> NL2 hot switch where the operator activates
+    # before the newly started NL2 process has accepted its API connection.
+    sim.prepare_for_activation()
+    assert sim._activation_prepare_pending is True
+    assert not any(cmd[0] == "reset" for cmd in client.commands)
+
+    sim.connect()
+    sim.service()
+    assert sim._ride_load_pending is True
+
+    client.complete_request(sim._ride_load_request_id, ok=True)
+    sim.read()
+    assert sim._activation_prepare_pending is False
+    assert sim.state is ExperienceState.RESETTING
+    assert sim._park_reset_pending is True
+
+    # Fresh post-load play/station evidence lets the normal reset path send the
+    # command; no second activation edge is required.
+    set_station(client, TRAIN_IN_STATION)
+    fresh(client, speed=0.0, state=3)
+    sim.read()
+    assert ("reset", False) in client.commands
+
+
+def test_activation_during_startup_load_is_deferred_not_lost():
+    client = FakeNL2Client()
+    sim = Sim(client=client)
+    sim.connect()
+    sim.service()
+    assert sim._ride_load_pending is True
+
+    sim.prepare_for_activation()
+    assert sim._activation_prepare_pending is True
+    assert not any(cmd[0] == "reset" for cmd in client.commands)
+
+    client.complete_request(sim._ride_load_request_id, ok=True)
+    sim.read()
+    assert sim._activation_prepare_pending is False
+    assert sim.state is ExperienceState.RESETTING
+    assert sim._park_reset_pending is True
+
+
+def test_cancel_deferred_activation_preparation_before_load_completes():
+    client = FakeNL2Client()
+    sim = Sim(client=client)
+    sim.connect()
+    sim.service()
+    sim.prepare_for_activation()
+    assert sim._activation_prepare_pending is True
+
+    sim.cancel_activation_preparation()
+    client.complete_request(sim._ride_load_request_id, ok=True)
+    sim.read()
+
+    assert sim._activation_prepare_pending is False
+    assert sim.state is ExperienceState.READY
+    assert sim._park_reset_pending is False
+    assert not any(cmd[0] == "reset" for cmd in client.commands)
 
 
 def test_activation_recovery_resets_if_train_not_in_station():
