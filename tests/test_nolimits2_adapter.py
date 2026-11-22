@@ -1,4 +1,4 @@
-#test_nolimits2_adapter.py  ver 34
+#test_nolimits2_adapter.py  ver 35
 from __future__ import annotations
 
 import logging
@@ -375,6 +375,74 @@ def test_recorder_invalid_initial_ride_index_is_rejected():
     import pytest
     with pytest.raises(IndexError):
         Sim(client=FakeNL2Client(), startup_ride_index=999)
+
+
+def test_startup_load_application_busy_retries_without_poisoning_state():
+    client = FakeNL2Client()
+    sim = Sim(client=client)
+    sim.connect()
+    sim.service()
+    first_request = sim._ride_load_request_id
+
+    client.complete_request(first_request, ok=False, detail="Application is busy")
+    sim.read()
+
+    assert sim._ride_load_pending is True
+    assert sim._park_load_failed is False
+    assert sim.state is ExperienceState.RESETTING
+    assert sim._ride_load_busy_retries == 1
+    assert sim._ride_load_retry_at > time.monotonic()
+    assert client.last_error == ""
+
+    # Avoid a real sleep in the regression: make the scheduled retry due now.
+    sim._ride_load_retry_at = time.monotonic() - 0.001
+    sim.service()
+    second_request = sim._ride_load_request_id
+    assert second_request is not None and second_request != first_request
+
+    client.complete_request(second_request, ok=True)
+    sim.read()
+    assert sim._ride_load_pending is False
+    assert sim._park_load_failed is False
+    assert sim._ride_load_busy_retries == 0
+    assert sim.state is ExperienceState.READY
+
+
+def test_startup_load_processing_operation_busy_also_retries():
+    client = FakeNL2Client()
+    sim = Sim(client=client)
+    sim.connect()
+    sim.service()
+
+    client.complete_request(
+        sim._ride_load_request_id,
+        ok=False,
+        detail="Application is processing another operation",
+    )
+    sim.read()
+
+    assert sim._ride_load_pending is True
+    assert sim._park_load_failed is False
+    assert sim._ride_load_busy_retries == 1
+
+
+def test_non_busy_startup_load_error_remains_terminal():
+    client = FakeNL2Client()
+    sim = Sim(client=client)
+    sim.connect()
+    sim.service()
+
+    client.complete_request(
+        sim._ride_load_request_id,
+        ok=False,
+        detail="Park file not found",
+    )
+    sim.read()
+
+    assert sim._ride_load_pending is False
+    assert sim._park_load_failed is True
+    assert sim._ride_load_retry_at == 0.0
+    assert sim.state is ExperienceState.READY
 
 
 def test_activation_before_nl2_connection_runs_after_startup_load():
