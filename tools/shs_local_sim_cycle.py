@@ -22,7 +22,7 @@ same delayed control,ready message used by the deployed POC/SHS path, then
 retries it once per second while SpaceCoaster remains in WAITING. Every
 SpaceCoaster launch gets a unique Unity log. OVRService is restarted before
 each SpaceCoaster launch by default; use --dont_restart_oculus to disable that
-for comparison testing.
+for comparison testing. 
 """
 from __future__ import annotations
 
