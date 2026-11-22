@@ -1,4 +1,4 @@
-#runtime_dependencies.txt ver 5
+#runtime_dependencies.txt ver 6
 # Runtime-version baseline established at global release v239.
 # Format: relative path|apps|last_runtime_release
 # Apps are poc, analyzer, or poc,analyzer.
@@ -60,7 +60,7 @@ sims/nolimits2/angular_cues.py|poc,analyzer|239
 sims/nolimits2/config.py|poc,analyzer|239
 sims/nolimits2/nl2_protocol.py|poc,analyzer|239
 sims/nolimits2/ride_config.py|poc,analyzer|239
-sims/nolimits2/sim.py|poc|245
+sims/nolimits2/sim.py|poc|246
 sims/nolimits2/station_modes.py|poc|239
 sims/nolimits2/telemetry_config.ini|poc|239
 sims/nolimits2/variant_store.py|poc,analyzer|239
