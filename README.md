@@ -1,4 +1,4 @@
-<!-- README.md ver 22 -->
+<!-- README.md ver 23 -->
 # Platform Operators Console
 
 The Platform Operators Console (POC) is the Raspberry Pi operator console for
@@ -116,6 +116,10 @@ Make sure the platform physically safe before development or maintenance runs.
   Raspberry Pi GPIO controls. Activation uses one exclusive source: Linux
   defaults to the physical Switch, while Windows defaults to Touch UI. The
   Debug tab can change the activation source for the session.
+- Raspberry Pi deployments default to the current PCB GPIO mapping. Set
+  `"use_legacy_pi_pins": true` in `poc_config.json` only for the original
+  hand-wired panel. That legacy panel has no physical load selector, so Normal
+  or Full load is selected with the touchscreen buttons.
 - The encoder browses experiences while deactivated; holding Dispatch while
   turning it browses simulators. While activated, the encoder changes intensity
   in 0, 10, ... 100% steps.
