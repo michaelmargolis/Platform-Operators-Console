@@ -1,4 +1,4 @@
-#test_config_store.py  ver 7
+#test_config_store.py  ver 8
 import json
 
 import pytest
@@ -10,6 +10,7 @@ def test_defaults_have_single_shs_address():
     assert "sim_addresses" not in DEFAULTS
     assert DEFAULTS["sim_host_service"]["address"] == "192.168.0.4"
     assert DEFAULTS["selected_platform"] == "platform_v2"
+    assert DEFAULTS["use_legacy_pi_pins"] is False
     assert "virtual_output" not in DEFAULTS
     assert DEFAULTS["digital_twin"] == {"address": "-", "port": 10020}
 
@@ -55,7 +56,7 @@ def test_config_file_version_metadata_is_added(tmp_path):
     ConfigStore(path)
 
     persisted = json.loads(path.read_text(encoding="utf-8"))
-    assert persisted["_file_version"] == "poc_config.json ver 6"
+    assert persisted["_file_version"] == "poc_config.json ver 7"
     assert "sim_addresses" not in persisted
 
 
@@ -91,6 +92,44 @@ def test_digital_twin_defaults_are_added_and_partial_config_is_merged(tmp_path):
         "address": "192.168.0.20",
         "port": 10020,
     }
+
+
+def test_legacy_pi_pin_flag_defaults_false_and_is_persisted_on_migration(tmp_path):
+    path = tmp_path / "poc_config.json"
+    path.write_text(json.dumps({
+        "_file_version": "poc_config.json ver 6",
+        "selected_platform": "platform_v2",
+    }), encoding="utf-8")
+
+    store = ConfigStore(path)
+
+    assert store.get("use_legacy_pi_pins") is False
+    persisted = json.loads(path.read_text(encoding="utf-8"))
+    assert persisted["use_legacy_pi_pins"] is False
+    assert persisted["_file_version"] == "poc_config.json ver 7"
+
+
+def test_legacy_pi_pin_flag_true_is_retained(tmp_path):
+    path = tmp_path / "poc_config.json"
+    path.write_text(json.dumps({
+        "use_legacy_pi_pins": True,
+    }), encoding="utf-8")
+
+    store = ConfigStore(path)
+
+    assert store.get("use_legacy_pi_pins") is True
+    assert json.loads(path.read_text(encoding="utf-8"))["use_legacy_pi_pins"] is True
+
+
+@pytest.mark.parametrize("value", [0, 1, "true", "false", None, [], {}])
+def test_legacy_pi_pin_flag_requires_json_boolean(tmp_path, value):
+    path = tmp_path / "poc_config.json"
+    path.write_text(json.dumps({
+        "use_legacy_pi_pins": value,
+    }), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="use_legacy_pi_pins"):
+        ConfigStore(path)
 
 
 def test_legacy_wheelchair_platform_key_is_migrated(tmp_path):
