@@ -1,4 +1,14 @@
-# changelog.txt ver 89
+# changelog.txt ver 90
+
+
+Global release v248 - POC runtime v248 / MDX Ride Analyzer runtime v247 - Legacy Raspberry Pi control-panel mapping - 2026-11-23
+- Add the original hand-wired Raspberry Pi BCM mapping as `LEGACY_PINS`: Dispatch 18, Pause 17, VR Reset 23, Activate 22, encoder A/B 9/11 and encoder push 26. The current PCB mapping remains unchanged and remains the default.
+- Add top-level `poc_config.json` boolean `use_legacy_pi_pins`, default false. `PocCore` passes it only to the Raspberry Pi `LocalControlItf`; Windows/serial-remote behavior is unchanged. Configuration validation requires a real JSON boolean so malformed values fail closed.
+- Represent the absent legacy load selector explicitly as `LOAD_PIN=-1`. `LocalControlItf` does not register or read that sentinel GPIO and does not emit a startup payload action in legacy mode. POC therefore retains Normal load at startup and the existing touch-panel Normal/Full buttons select load.
+- Make activation-switch diagnostics report the selected mapping's actual GPIO number instead of hard-coding GPIO24.
+- Add regression coverage for the unchanged PCB default, exact legacy pin map, no GPIO -1 registration, legacy encoder/buttons, GPIO22 activation startup interlock/debug, core-to-control configuration handoff, config migration/default/validation, and preservation of `true`.
+- Update Raspberry Pi deployment documentation. Existing deployed `poc_config.json` files migrate to version 7 with `use_legacy_pi_pins=false`; older hand-wired systems must set it to true. No `setup-console.sh` rerun is required.
+- POC runtime advances to v248. MDX Ride Analyzer remains v247; no simulator, kinematics, platform geometry, pressure mapping, display-layout or motion-cue behavior changes.
 
 
 Global release v247 - POC runtime v247 / MDX Ride Analyzer runtime v247 - Chair V3 yaw commissioning correction - 2026-11-22
