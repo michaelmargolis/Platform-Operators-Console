@@ -1,4 +1,4 @@
-#runtime_dependencies.txt ver 7
+#runtime_dependencies.txt ver 8
 # Runtime-version baseline established at global release v239.
 # Format: relative path|apps|last_runtime_release
 # Apps are poc, analyzer, or poc,analyzer.
@@ -13,17 +13,17 @@ app_versions.py|poc,analyzer|239
 config/platforms.py|poc,analyzer|239
 controls/__init__.py|poc|239
 controls/buttons.py|poc|239
-controls/physical_controls.py|poc|239
+controls/physical_controls.py|poc|248
 controls/rotary_encoder.py|poc|239
 controls/serial_remote.py|poc|239
-core/config_store.py|poc|239
+core/config_store.py|poc|248
 core/digital_twin.py|poc,analyzer|239
 core/dynamic_import.py|poc|240
 core/dynamic_profiles.py|poc,analyzer|239
 core/dynamic_qualification.py|poc,analyzer|239
 core/platform_controller.py|poc|239
 core/platform_geometry.py|poc,analyzer|239
-core/poc_core.py|poc|245
+core/poc_core.py|poc|248
 core/ride_neutral.py|poc,analyzer|239
 core/sim_interface.py|poc|239
 core/sim_registry.py|poc|239
