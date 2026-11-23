@@ -1,4 +1,4 @@
-#physical_controls.py  ver 7
+#physical_controls.py  ver 8
 """Raspberry Pi physical control-panel adapter for POC.
 
 GPIO callbacks never call PocCore directly. Buttons are polled by ``service()``
@@ -26,13 +26,33 @@ PCB_PINS = {
     "ENCODER_SW_PIN": 17,
 }
 
+# Original hand-wired Raspberry Pi control panel. LOAD_PIN=-1 is deliberate:
+# this hardware has no physical load selector, so payload is chosen on the
+# touchscreen and no GPIO is registered or read for load.
+LEGACY_PINS = {
+    "DISPATCH_PIN": 18,
+    "PAUSE_PIN": 17,
+    "VR_RESET_PIN": 23,
+    "LOAD_PIN": -1,
+    "ACTIVATE_PIN": 22,
+    "ENCODER_A": 9,
+    "ENCODER_B": 11,
+    "ENCODER_SW_PIN": 26,
+}
+
 
 class LocalControlItf:
     """Expose Raspberry Pi panel events through the common POC action map."""
 
-    def __init__(self, actions: Mapping[str, Callable], initial_intensity: int = 10):
+    def __init__(
+        self,
+        actions: Mapping[str, Callable],
+        initial_intensity: int = 10,
+        use_legacy_pi_pins: bool = False,
+    ):
         self.actions = dict(actions)
-        self.pins = dict(PCB_PINS)
+        self.use_legacy_pi_pins = bool(use_legacy_pi_pins)
+        self.pins = dict(LEGACY_PINS if self.use_legacy_pi_pins else PCB_PINS)
         self.intensity = max(0, min(10, int(initial_intensity)))
         self.buttons = None
         self.decoder = None
@@ -77,12 +97,16 @@ class LocalControlItf:
             self.buttons.append(
                 self.pins["ACTIVATE_PIN"], ["activate", "deactivate"], "pullup", "both"
             )
-            # Pull-up load selector specified for POC:
+            # Pull-up load selector specified for the PCB panel:
             #   open/high -> NORMAL (payload level 1)
             #   closed/low -> FULL   (payload level 2)
-            self.buttons.append(
-                self.pins["LOAD_PIN"], ["load_full", "load_normal"], "pullup", "both"
-            )
+            # The legacy panel has no load switch (LOAD_PIN=-1); in that mode
+            # the touchscreen Normal/Full buttons remain the only load control.
+            load_pin = int(self.pins["LOAD_PIN"])
+            if load_pin >= 0:
+                self.buttons.append(
+                    load_pin, ["load_full", "load_normal"], "pullup", "both"
+                )
             self.buttons.append(
                 self.pins["ENCODER_SW_PIN"], "encoder_press", "pullup", "falling"
             )
@@ -94,7 +118,10 @@ class LocalControlItf:
 
             # A two-position load switch has meaningful state at startup; apply
             # it immediately rather than waiting for the first edge transition.
-            self._apply_load_level(self.buttons.value(self.pins["LOAD_PIN"]))
+            # Legacy hardware has no load GPIO, so leave PocCore/UI at its
+            # normal startup payload level until the operator uses touch.
+            if load_pin >= 0:
+                self._apply_load_level(self.buttons.value(load_pin))
 
             # Never activate from the switch state found at application startup.
             # If it was left in ACTIVATE (LOW), require the operator to return it
@@ -192,7 +219,7 @@ class LocalControlItf:
             self.last_error = str(exc)
             return f"error: {exc}"
         state = "ACTIVATED" if level == 0 else "DEACTIVATED"
-        return f"{state} (GPIO24={level})"
+        return f"{state} (GPIO{self.pins['ACTIVATE_PIN']}={level})"
 
     @property
     def activation_switch_level(self) -> int | None:
