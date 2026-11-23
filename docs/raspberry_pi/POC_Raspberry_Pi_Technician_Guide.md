@@ -1,4 +1,4 @@
-#POC_Raspberry_Pi_Technician_Guide.md  ver 13
+#POC_Raspberry_Pi_Technician_Guide.md  ver 14
 
 # POC Raspberry Pi Technician Guide
 ## 1. Raspberry Pi environment
@@ -42,6 +42,14 @@ Relevant configuration files are:
 
 GPIO controls are serviced by POC on the Pi. Keep the motion platform disabled
 or otherwise made safe during installation and control testing.
+
+Current PCB wiring is the default. For the original hand-wired panel, set
+`"use_legacy_pi_pins": true` in `/home/poc/Runtime/poc_config.json` and restart
+POC. Legacy BCM pins are Dispatch 18, Pause 17, VR Reset 23, Activate 22,
+encoder A/B 9/11 and encoder push 26. There is no legacy load switch: load
+starts at Normal and must be selected with the touchscreen **Normal** / **Full**
+buttons. Leave the flag false on current PCB hardware. No installer rerun is
+required for this setting.
 ## 2. Software installation and updating
 ### Fresh installation
 
