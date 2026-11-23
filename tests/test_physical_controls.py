@@ -1,5 +1,7 @@
-#test_physical_controls.py  ver 6
-from controls.physical_controls import LocalControlItf
+#test_physical_controls.py  ver 7
+from unittest.mock import patch
+
+from controls.physical_controls import LEGACY_PINS, PCB_PINS, LocalControlItf
 
 
 class FakeButtons:
@@ -42,7 +44,7 @@ class FakeRotaryModule:
     decoder = FakeDecoder
 
 
-def make_controls(initial_load=1, initial_activate=1):
+def make_controls(initial_load=1, initial_activate=1, use_legacy_pi_pins=False):
     calls = []
 
     def record(name):
@@ -60,11 +62,15 @@ def make_controls(initial_load=1, initial_activate=1):
         "encoder_rotate",
         "encoder_press",
     )
-    controls = LocalControlItf({name: record(name) for name in action_names})
+    controls = LocalControlItf(
+        {name: record(name) for name in action_names},
+        use_legacy_pi_pins=use_legacy_pi_pins,
+    )
     FakeButtons.initial_values = {
-        controls.pins["LOAD_PIN"]: initial_load,
         controls.pins["ACTIVATE_PIN"]: initial_activate,
     }
+    if controls.pins["LOAD_PIN"] >= 0:
+        FakeButtons.initial_values[controls.pins["LOAD_PIN"]] = initial_load
     controls._load_gpio_modules = lambda: (FakeButtonsModule, FakeRotaryModule)
     assert controls.start()
     return controls, calls
@@ -73,6 +79,73 @@ def make_controls(initial_load=1, initial_activate=1):
 def entry_for(controls, pin_name):
     pin = controls.pins[pin_name]
     return next(entry for entry in controls.buttons.entries if entry[0] == pin)
+
+
+def test_default_mapping_remains_current_pcb_mapping():
+    controls = LocalControlItf({})
+    assert controls.pins == PCB_PINS
+    assert controls.use_legacy_pi_pins is False
+
+
+def test_legacy_mapping_is_selected_atomically_and_has_no_load_gpio():
+    controls, calls = make_controls(use_legacy_pi_pins=True)
+    assert controls.pins == LEGACY_PINS
+    assert controls.use_legacy_pi_pins is True
+    assert controls.pins == {
+        "DISPATCH_PIN": 18,
+        "PAUSE_PIN": 17,
+        "VR_RESET_PIN": 23,
+        "LOAD_PIN": -1,
+        "ACTIVATE_PIN": 22,
+        "ENCODER_A": 9,
+        "ENCODER_B": 11,
+        "ENCODER_SW_PIN": 26,
+    }
+    assert all(entry[0] != -1 for entry in controls.buttons.entries)
+    assert controls.decoder.pin_a == 9
+    assert controls.decoder.pin_b == 11
+    assert calls == [("deactivate", ())]
+
+
+def test_legacy_buttons_use_expected_gpio_numbers():
+    controls, _calls = make_controls(use_legacy_pi_pins=True)
+    assert entry_for(controls, "DISPATCH_PIN") == (
+        18, ["dispatch_press", "dispatch_release"], "pullup", "both"
+    )
+    assert entry_for(controls, "PAUSE_PIN") == (17, "pause", "pullup", "falling")
+    assert entry_for(controls, "VR_RESET_PIN") == (23, "reset_vr", "pullup", "falling")
+    assert entry_for(controls, "ACTIVATE_PIN") == (
+        22, ["activate", "deactivate"], "pullup", "both"
+    )
+    assert entry_for(controls, "ENCODER_SW_PIN") == (
+        26, "encoder_press", "pullup", "falling"
+    )
+
+
+def test_legacy_activation_startup_interlock_and_debug_use_gpio22():
+    controls, calls = make_controls(
+        use_legacy_pi_pins=True,
+        initial_activate=0,
+    )
+    assert calls == [("activate_startup_invalid", ())]
+    assert controls.activation_switch_debug == "ACTIVATED (GPIO22=0)"
+
+
+def test_poc_core_passes_legacy_pin_flag_to_pi_controls():
+    from core.poc_core import PocCore
+
+    class Config:
+        def get(self, key, default=None):
+            return {"use_legacy_pi_pins": True}.get(key, default)
+
+    core = PocCore.__new__(PocCore)
+    core.config_store = Config()
+    core.intensity_percent = 100
+    with patch.object(PocCore, "_is_raspberry_pi", return_value=True):
+        controls = core._create_physical_control_interface({})
+
+    assert controls.pins == LEGACY_PINS
+    assert controls.use_legacy_pi_pins is True
 
 
 def test_load_high_is_normal_and_applied_at_startup():
