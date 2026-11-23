@@ -1,14 +1,15 @@
 {
-  "_file_version": "poc_config.json ver 6",
+  "_file_version": "poc_config.json ver 7",
   "selected_sim": "nolimits2",
   "selected_platform": "chair_v3",
-  "ground_loading_min_clearance_mm": 15.0,
+  "use_legacy_pi_pins": false,
+  "ground_loading_min_clearance_mm": 15,
   "sim_host_service": {
     "enabled": true,
     "address": "192.168.0.4",
     "port": 10040,
-    "heartbeat_interval_s": 1.0,
-    "heartbeat_timeout_s": 3.0
+    "heartbeat_interval_s": 1,
+    "heartbeat_timeout_s": 3
   },
   "digital_twin": {
     "address": "192.168.1.50",
