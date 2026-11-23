@@ -1,4 +1,4 @@
-#test_app_versions_v239.py ver 9
+#test_app_versions_v239.py ver 10
 from pathlib import Path
 
 import pytest
@@ -74,8 +74,8 @@ def test_runtime_version_cannot_exceed_global_release(tmp_path):
 
 
 def test_current_manifest_versions_and_membership_are_consistent():
-    assert app_versions.read_global_release(ROOT) == 247
-    assert app_versions.get_app_versions(ROOT) == {"analyzer": 247, "poc": 247}
+    assert app_versions.read_global_release(ROOT) == 248
+    assert app_versions.get_app_versions(ROOT) == {"analyzer": 247, "poc": 248}
 
     tracked = set()
     for raw in (ROOT / "file_versions.txt").read_text(encoding="utf-8").splitlines():
@@ -104,7 +104,9 @@ def test_current_manifest_versions_and_membership_are_consistent():
     assert "core/dynamic_import.py" not in analyzer_paths
 
     dependency_releases = {item.path: item.last_runtime_release for item in dependencies}
-    assert dependency_releases["core/poc_core.py"] == 245
+    assert dependency_releases["core/poc_core.py"] == 248
+    assert dependency_releases["core/config_store.py"] == 248
+    assert dependency_releases["controls/physical_controls.py"] == 248
     assert dependency_releases["sims/nolimits2/sim.py"] == 246
     assert dependency_releases["kinematics/cfg_SuspendedChairV3.py"] == 247
     assert dependency_releases["sim_host_service/server.py"] == 243
