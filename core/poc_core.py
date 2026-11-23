@@ -1,4 +1,4 @@
-#poc_core.py ver 61
+#poc_core.py ver 62
 from __future__ import annotations
 
 import logging
@@ -212,7 +212,11 @@ class PocCore(QtCore.QObject):
         if self._is_raspberry_pi():
             from controls.physical_controls import LocalControlItf
 
-            return LocalControlItf(actions, initial_intensity=self.intensity_percent // 10)
+            return LocalControlItf(
+                actions,
+                initial_intensity=self.intensity_percent // 10,
+                use_legacy_pi_pins=self.config_store.get("use_legacy_pi_pins", False),
+            )
         return SerialRemote(actions)
 
     def start(self) -> None:
