@@ -1,6 +1,6 @@
-#file_versions.txt  ver 244
-# Global release: v247
-# Runtime versions are derived from runtime_dependencies.txt (POC v247; Analyzer v247)
+#file_versions.txt  ver 245
+# Global release: v248
+# Runtime versions are derived from runtime_dependencies.txt (POC v248; Analyzer v247)
 # Relative path | expected version
 .gitattributes|1
 config/platforms.py|7
@@ -8,10 +8,10 @@ controls/__init__.py|1
 controls/serial_remote.py|1
 controls/buttons.py|1
 controls/rotary_encoder.py|1
-controls/physical_controls.py|7
-core/config_store.py|9
+controls/physical_controls.py|8
+core/config_store.py|10
 core/digital_twin.py|2
-core/poc_core.py|61
+core/poc_core.py|62
 core/platform_controller.py|20
 kinematics/cfg_SuspendedPlatformMdx.py|5
 kinematics/cfg_SuspendedChairFalcon.py|1
@@ -55,10 +55,10 @@ sims/xplane/transport.py|1
 sims/xplane/plugin/PI_Mdx_telemetry_ui.py|2
 sims/xplane/plugin/PI_Mdx_telemetry.py|3
 tests/__init__.py|1
-tests/test_config_store.py|7
+tests/test_config_store.py|8
 tests/test_digital_twin.py|3
 tests/test_serial_remote.py|1
-tests/test_physical_controls.py|6
+tests/test_physical_controls.py|7
 tests/test_sim_host_service.py|22
 tests/test_spacecoaster_adapter.py|18
 tests/test_activation_control.py|2
@@ -87,9 +87,9 @@ ui/transform_viewer.py|1
 ui/sim_tabs.py|2
 requirements.txt|3
 poc.py|5
-poc_config.json|6
+poc_config.json|7
 app_versions.py|1
-runtime_dependencies.txt|7
+runtime_dependencies.txt|8
 version_check.py|7
 raspi/setup-console.sh|13
 raspi/start_console.sh|5
@@ -102,13 +102,13 @@ raspi/network_check.py|2
 raspi/start-test-poc.sh|5
 raspi/install-test-poc-launcher.sh|4
 raspi/test-poc-network-helper.sh|1
-raspi/README.md|16
+raspi/README.md|17
 raspi/assets/README.md|3
 docs/ARCHITECTURE.md|5
 docs/CANONICAL_RIDE_CAPTURE_V230.md|2
 docs/digital_twin/POC_DIGITAL_TWIN_UDP_HANDOVER_v1.md|3
 docs/digital_twin/UNITY_DIGITAL_TWIN_DEVELOPMENT_HANDOFF.md|7
-docs/raspberry_pi/POC_Raspberry_Pi_Technician_Guide.md|13
+docs/raspberry_pi/POC_Raspberry_Pi_Technician_Guide.md|14
 reference_data/README.md|1
 tools/README.md|4
 tools/diagnostics/monitor_activation_switch.py|1
@@ -120,9 +120,9 @@ tools/shs_local_sim_cycle.py|6
 tools/poc_sim_swap_test.py|1
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|89
-README.md|22
-file_versions.txt|244
+changelog.txt|90
+README.md|23
+file_versions.txt|245
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|2
 tests/test_twin_extension_v150.py|1
@@ -314,7 +314,7 @@ tools/sim_player/dynamic_export_inventory.py|3
 tests/test_dynamic_candidate_import_v202.py|2
 tests/test_dynamic_import_refresh_v214.py|1
 tests/test_poc_ride_selector_v237.py|2
-tests/test_app_versions_v239.py|9
+tests/test_app_versions_v239.py|10
 tests/test_shs_local_sim_cycle_v241.py|3
 tests/test_poc_sim_swap_test_v243.py|1
 tests/test_dynamic_clearance_v202.py|1
