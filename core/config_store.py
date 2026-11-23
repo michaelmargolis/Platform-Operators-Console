@@ -1,4 +1,4 @@
-#config_store.py  ver 9
+#config_store.py  ver 10
 from __future__ import annotations
 
 import ipaddress
@@ -6,13 +6,14 @@ import json
 from pathlib import Path
 
 
-CONFIG_FILE_VERSION = "poc_config.json ver 6"
+CONFIG_FILE_VERSION = "poc_config.json ver 7"
 
 
 DEFAULTS = {
     "_file_version": CONFIG_FILE_VERSION,
     "selected_sim": "nolimits2",
     "selected_platform": "platform_v2",
+    "use_legacy_pi_pins": False,
     "ground_loading_min_clearance_mm": 15.0,
     "sim_host_service": {
         "enabled": True,
@@ -99,6 +100,12 @@ class ConfigStore:
             raise RuntimeError(
                 f"Invalid selected_sim {simulator!r} in {self.path}; "
                 f"expected one of: {', '.join(sorted(simulator_keys))}"
+            )
+        legacy_pins = data.get("use_legacy_pi_pins")
+        if not isinstance(legacy_pins, bool):
+            raise RuntimeError(
+                f"Invalid use_legacy_pi_pins {legacy_pins!r} in {self.path}; "
+                "expected JSON true or false"
             )
         from core.platform_geometry import validate_operating_floor_clearance
         try:
