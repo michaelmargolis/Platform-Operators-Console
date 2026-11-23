@@ -1,4 +1,4 @@
-#README.md  ver 16
+#README.md  ver 17
 # POC Raspberry Pi deployment
 
 The concise technician procedure is maintained in
@@ -133,6 +133,26 @@ grep '^Exec=' ~/.config/autostart/poc.desktop
 ```
 
 It must point to `/home/poc/Runtime/raspi/start_console.sh`.
+
+## Legacy physical-control panel
+
+The current PCB GPIO mapping remains the default. On an original hand-wired
+Raspberry Pi control panel, edit the deployed `/home/poc/Runtime/poc_config.json`
+and set:
+
+```json
+"use_legacy_pi_pins": true
+```
+
+Restart POC after changing this value. The legacy BCM mapping is Dispatch 18,
+Pause 17, VR Reset 23, Activate 22, encoder A/B 9/11 and encoder push 26.
+The legacy panel has **no physical load switch**. POC therefore does not register
+or read a load GPIO in legacy mode; load starts at Normal and the operator uses
+the touchscreen **Normal** / **Full** load buttons. Current PCB systems must
+leave `use_legacy_pi_pins` false (the default).
+
+This is an application configuration change only; rerunning
+`raspi/setup-console.sh` is not required.
 
 ## Platform and development networks
 
