@@ -1,4 +1,4 @@
-#config_store.py  ver 11
+#config_store.py  ver 12
 from __future__ import annotations
 
 import ipaddress
@@ -99,6 +99,7 @@ class ConfigStore:
             else self.path.with_name(LOCAL_CONFIG_FILENAME)
         )
         self.local_created = False
+        self.local_migrated_fields = ()
         self.data = self._load()
 
     @staticmethod
@@ -133,10 +134,31 @@ class ConfigStore:
             self.local_created = True
 
         local = self._read_json(self.local_path, "local POC configuration")
+
+        # v250 adds one machine-local physical wiring field. Older v249 local
+        # files did not contain it. Add only this field, using canonical values
+        # chosen to reproduce each platform's pre-v250 geometry/channel order.
+        # This is a one-time schema migration, not runtime value merging.
+        migrated = []
+        if "festo_valve0_side" in canonical and "festo_valve0_side" not in local:
+            local["festo_valve0_side"] = dict(canonical["festo_valve0_side"])
+            migrated.append("festo_valve0_side")
+
         mismatch = _structure_error(self.path, self.local_path, canonical, local)
         if mismatch is not None:
             raise mismatch
         self._validate(local, self.local_path)
+
+        if migrated:
+            try:
+                self.local_path.write_text(
+                    json.dumps(local, indent=2) + "\n", encoding="utf-8"
+                )
+            except OSError as exc:
+                raise RuntimeError(
+                    f"Unable to migrate local POC configuration {self.local_path}: {exc}"
+                ) from exc
+            self.local_migrated_fields = tuple(migrated)
         return local
 
     def _validate(self, data: dict, source_path: Path) -> None:
@@ -162,6 +184,24 @@ class ConfigStore:
                 f"Invalid use_legacy_pi_pins {legacy_pins!r} in {source_path}; "
                 "expected JSON true or false"
             )
+        valve0_sides = data.get("festo_valve0_side")
+        if not isinstance(valve0_sides, dict):
+            raise RuntimeError(
+                f"Invalid festo_valve0_side {valve0_sides!r} in {source_path}; "
+                "expected an object keyed by platform"
+            )
+        expected_platforms = set(PLATFORMS)
+        if set(valve0_sides) != expected_platforms:
+            raise RuntimeError(
+                f"Invalid festo_valve0_side keys in {source_path}; expected exactly: "
+                + ", ".join(sorted(expected_platforms))
+            )
+        for platform_key, side in valve0_sides.items():
+            if side not in ("left", "right"):
+                raise RuntimeError(
+                    f"Invalid festo_valve0_side[{platform_key!r}]={side!r} in "
+                    f"{source_path}; expected 'left' or 'right'"
+                )
         from core.platform_geometry import validate_operating_floor_clearance
         try:
             validate_operating_floor_clearance(
