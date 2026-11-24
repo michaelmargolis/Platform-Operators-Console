@@ -1,127 +1,190 @@
-#config_store.py  ver 10
+#config_store.py  ver 11
 from __future__ import annotations
 
 import ipaddress
 import json
 from pathlib import Path
+import shutil
 
 
-CONFIG_FILE_VERSION = "poc_config.json ver 7"
+LOCAL_CONFIG_FILENAME = "poc_config_local.json"
 
 
-DEFAULTS = {
-    "_file_version": CONFIG_FILE_VERSION,
-    "selected_sim": "nolimits2",
-    "selected_platform": "platform_v2",
-    "use_legacy_pi_pins": False,
-    "ground_loading_min_clearance_mm": 15.0,
-    "sim_host_service": {
-        "enabled": True,
-        "address": "192.168.0.4",
-        "port": 10040,
-        "heartbeat_interval_s": 1.0,
-        "heartbeat_timeout_s": 3.0
-    },
-    "digital_twin": {
-        "address": "-",
-        "port": 10020
-    }
-}
+def _json_type(value) -> str:
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, dict):
+        return "object"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, (int, float)):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if value is None:
+        return "null"
+    return type(value).__name__
+
+
+def _structure(value: dict, prefix: str = "") -> dict[str, str]:
+    result: dict[str, str] = {}
+    for key, child in value.items():
+        path = f"{prefix}.{key}" if prefix else str(key)
+        result[path] = _json_type(child)
+        if isinstance(child, dict):
+            result.update(_structure(child, path))
+    return result
+
+
+def _structure_error(canonical_path: Path, local_path: Path,
+                     canonical: dict, local: dict) -> RuntimeError | None:
+    expected = _structure(canonical)
+    actual = _structure(local)
+
+    missing = sorted(set(expected) - set(actual))
+    extra = sorted(set(actual) - set(expected))
+    type_mismatches = sorted(
+        path for path in set(expected) & set(actual)
+        if expected[path] != actual[path]
+    )
+    if not (missing or extra or type_mismatches):
+        return None
+
+    lines = [
+        "Local POC configuration does not match the canonical field structure.",
+        f"Canonical: {canonical_path}",
+        f"Local: {local_path}",
+        "",
+        "The local file is the runtime configuration and is never merged with "
+        "the canonical file. Update it so both files contain the same fields "
+        "and JSON field types; values may differ.",
+    ]
+    if missing:
+        lines.extend(("", "Missing from local:"))
+        lines.extend(f"  - {path} ({expected[path]})" for path in missing)
+    if extra:
+        lines.extend(("", "Not present in canonical:"))
+        lines.extend(f"  - {path} ({actual[path]})" for path in extra)
+    if type_mismatches:
+        lines.extend(("", "Field type mismatch:"))
+        lines.extend(
+            f"  - {path}: canonical={expected[path]}, local={actual[path]}"
+            for path in type_mismatches
+        )
+    return RuntimeError("\n".join(lines))
 
 
 class ConfigStore:
-    def __init__(self, path: str | Path = "poc_config.json"):
+    """Use a complete machine-local config validated against a tracked template.
+
+    poc_config.json is the Git-tracked canonical template/schema.
+    poc_config_local.json is the complete machine-local runtime file and is
+    excluded from Git. If local does not exist it is copied byte-for-byte from
+    canonical. Thereafter values are never merged between the files.
+
+    At every load the recursive field names and JSON field types must match.
+    This catches added, removed, renamed or structurally modified fields while
+    deliberately allowing machine-specific values to differ.
+    """
+
+    def __init__(
+        self,
+        path: str | Path = "poc_config.json",
+        local_path: str | Path | None = None,
+    ):
         self.path = Path(path)
-        self.data, migrated = self._load()
-        if migrated:
-            self.save()
+        self.local_path = (
+            Path(local_path)
+            if local_path is not None
+            else self.path.with_name(LOCAL_CONFIG_FILENAME)
+        )
+        self.local_created = False
+        self.data = self._load()
 
-    def _load(self):
-        data = json.loads(json.dumps(DEFAULTS))
-        migrated = False
-        if self.path.exists():
+    @staticmethod
+    def _read_json(path: Path, label: str) -> dict:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            raise RuntimeError(f"Unable to read {label} {path}: {exc}") from exc
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Invalid JSON in {label} {path} at line {exc.lineno}, "
+                f"column {exc.colno}: {exc.msg}"
+            ) from exc
+        if not isinstance(data, dict):
+            raise RuntimeError(f"{label.capitalize()} {path} must contain a JSON object")
+        return data
+
+    def _load(self) -> dict:
+        if not self.path.is_file():
+            raise RuntimeError(f"Canonical POC configuration is missing: {self.path}")
+
+        canonical = self._read_json(self.path, "canonical POC configuration")
+        self._validate(canonical, self.path)
+
+        if not self.local_path.exists():
             try:
-                loaded = json.loads(self.path.read_text(encoding="utf-8"))
+                shutil.copyfile(self.path, self.local_path)
             except OSError as exc:
-                raise RuntimeError(f"Unable to read POC configuration {self.path}: {exc}") from exc
-            except json.JSONDecodeError as exc:
                 raise RuntimeError(
-                    f"Invalid JSON in POC configuration {self.path} "
-                    f"at line {exc.lineno}, column {exc.colno}: {exc.msg}"
+                    f"Unable to create local POC configuration {self.local_path}: {exc}"
                 ) from exc
-            if not isinstance(loaded, dict):
-                raise RuntimeError(f"POC configuration {self.path} must contain a JSON object")
+            self.local_created = True
 
-            # v31+: all simulators are hosted by the SHS PC. Remove the
-            # obsolete per-simulator address map from existing configs.
-            if "sim_addresses" in loaded:
-                loaded.pop("sim_addresses", None)
-                migrated = True
-            # Physical Festo UDP output is always available. Remove the
-            # obsolete output gate from configurations created by earlier POC.
-            if "virtual_output" in loaded:
-                loaded.pop("virtual_output", None)
-                migrated = True
-            # The original wheelchair key is retained only as a migration alias.
-            # platform_v2 is the current Ground-Loading Platform selection.
-            if loaded.get("selected_platform") == "wheelchair":
-                loaded["selected_platform"] = "platform_v2"
-                migrated = True
-            if loaded.get("_file_version") != CONFIG_FILE_VERSION:
-                migrated = True
-            data.update(loaded)
-            # Keep the config file itself versioned without using invalid JSON
-            # comments. version_check.py recognises this first field.
-            data["_file_version"] = CONFIG_FILE_VERSION
-            if isinstance(loaded.get("sim_host_service"), dict):
-                data["sim_host_service"] = {
-                    **DEFAULTS["sim_host_service"], **loaded["sim_host_service"]
-                }
-            if isinstance(loaded.get("digital_twin"), dict):
-                data["digital_twin"] = {
-                    **DEFAULTS["digital_twin"], **loaded["digital_twin"]
-                }
-        self._validate(data)
-        return data, migrated
+        local = self._read_json(self.local_path, "local POC configuration")
+        mismatch = _structure_error(self.path, self.local_path, canonical, local)
+        if mismatch is not None:
+            raise mismatch
+        self._validate(local, self.local_path)
+        return local
 
-    def _validate(self, data: dict) -> None:
+    def _validate(self, data: dict, source_path: Path) -> None:
         from config.platforms import PLATFORMS
         from core.sim_registry import SIMS
 
         platform = data.get("selected_platform")
         if platform not in PLATFORMS:
             raise RuntimeError(
-                f"Invalid selected_platform {platform!r} in {self.path}; "
+                f"Invalid selected_platform {platform!r} in {source_path}; "
                 f"expected one of: {', '.join(PLATFORMS)}"
             )
         simulator = data.get("selected_sim")
         simulator_keys = {definition.key for definition in SIMS}
         if simulator not in simulator_keys:
             raise RuntimeError(
-                f"Invalid selected_sim {simulator!r} in {self.path}; "
+                f"Invalid selected_sim {simulator!r} in {source_path}; "
                 f"expected one of: {', '.join(sorted(simulator_keys))}"
             )
         legacy_pins = data.get("use_legacy_pi_pins")
         if not isinstance(legacy_pins, bool):
             raise RuntimeError(
-                f"Invalid use_legacy_pi_pins {legacy_pins!r} in {self.path}; "
+                f"Invalid use_legacy_pi_pins {legacy_pins!r} in {source_path}; "
                 "expected JSON true or false"
             )
         from core.platform_geometry import validate_operating_floor_clearance
         try:
-            validate_operating_floor_clearance(data.get('ground_loading_min_clearance_mm'))
+            validate_operating_floor_clearance(
+                data.get("ground_loading_min_clearance_mm")
+            )
         except ValueError as exc:
-            raise RuntimeError(f'Invalid ground-loading clearance in {self.path}: {exc}') from exc
+            raise RuntimeError(
+                f"Invalid ground-loading clearance in {source_path}: {exc}"
+            ) from exc
         self._validate_endpoint(
-            data.get("sim_host_service"), "sim_host_service", allow_disabled=False
+            data.get("sim_host_service"), "sim_host_service", source_path,
+            allow_disabled=False,
         )
         self._validate_endpoint(
-            data.get("digital_twin"), "digital_twin", allow_disabled=True
+            data.get("digital_twin"), "digital_twin", source_path,
+            allow_disabled=True,
         )
 
-    def _validate_endpoint(self, value, name: str, *, allow_disabled: bool) -> None:
+    @staticmethod
+    def _validate_endpoint(value, name: str, source_path: Path,
+                           *, allow_disabled: bool) -> None:
         if not isinstance(value, dict):
-            raise RuntimeError(f"{name} in {self.path} must be a JSON object")
+            raise RuntimeError(f"{name} in {source_path} must be a JSON object")
         address = value.get("address")
         if allow_disabled and address == "-":
             pass
@@ -129,22 +192,34 @@ class ConfigStore:
             try:
                 parsed = ipaddress.ip_address(str(address))
             except ValueError as exc:
-                raise RuntimeError(f"Invalid {name} IPv4 address {address!r} in {self.path}") from exc
+                raise RuntimeError(
+                    f"Invalid {name} IPv4 address {address!r} in {source_path}"
+                ) from exc
             if parsed.version != 4:
-                raise RuntimeError(f"{name} address in {self.path} must be IPv4")
+                raise RuntimeError(f"{name} address in {source_path} must be IPv4")
         try:
             port = int(value.get("port"))
         except (TypeError, ValueError) as exc:
-            raise RuntimeError(f"Invalid {name} port in {self.path}") from exc
+            raise RuntimeError(f"Invalid {name} port in {source_path}") from exc
         if not 1 <= port <= 65535:
-            raise RuntimeError(f"{name} port in {self.path} must be between 1 and 65535")
+            raise RuntimeError(
+                f"{name} port in {source_path} must be between 1 and 65535"
+            )
 
     def save(self) -> None:
-        self.path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
+        try:
+            self.local_path.write_text(
+                json.dumps(self.data, indent=2) + "\n", encoding="utf-8"
+            )
+        except OSError as exc:
+            raise RuntimeError(
+                f"Unable to write local POC configuration {self.local_path}: {exc}"
+            ) from exc
 
     def get(self, key, default=None):
         return self.data.get(key, default)
 
     def set(self, key, value) -> None:
         self.data[key] = value
+        self._validate(self.data, self.local_path)
         self.save()
