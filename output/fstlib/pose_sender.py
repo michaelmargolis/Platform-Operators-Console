@@ -1,4 +1,4 @@
-# pose_sender.py ver 3
+# pose_sender.py ver 4
 """POC standalone six-DOF EasyIP pose sender.
 
 Run from the POC project root (or from any directory):
@@ -16,7 +16,6 @@ accessible; do not operate with people on or near the platform.
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import socket
 import sys
@@ -29,6 +28,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from config.platforms import PLATFORMS
+from core.config_store import ConfigStore
 from output.fstlib import easyip
 from output.fstlib.pose_sender_logic import (
     DOF_NAMES, DEFAULT_TARGET_IP, FRAME_PERIOD_S, MAX_PRESSURE_MBAR,
@@ -40,15 +40,12 @@ INTERVAL_MS = int(FRAME_PERIOD_S * 1000)
 
 
 def selected_platform_from_poc():
-    config_path = PROJECT_ROOT / "poc_config.json"
-    if not config_path.is_file():
-        return "platform_v2"
-    data = json.loads(config_path.read_text(encoding="utf-8"))
-    key = data.get("selected_platform", "platform_v2")
-    if key == "wheelchair":
-        key = "platform_v2"
+    config = ConfigStore(PROJECT_ROOT / "poc_config.json")
+    key = config.get("selected_platform", "platform_v2")
     if key not in PLATFORMS:
-        raise RuntimeError(f"Unknown selected_platform {key!r} in {config_path}")
+        raise RuntimeError(
+            f"Unknown selected_platform {key!r} in {config.local_path}"
+        )
     return key
 
 
