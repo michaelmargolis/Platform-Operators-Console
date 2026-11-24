@@ -1,4 +1,4 @@
-<!-- POC_DIGITAL_TWIN_UDP_HANDOVER_v1.md ver 3 -->
+<!-- POC_DIGITAL_TWIN_UDP_HANDOVER_v1.md ver 4 -->
 # POC digital-twin UDP handover
 
 ## Purpose and scope
@@ -24,7 +24,7 @@ The default configuration disables transmission:
 }
 ```
 
-Set `address` in `poc_config.json` to the digital-twin PC's IPv4 address. A
+Set `address` in the machine-local `poc_config_local.json` to the digital-twin PC's IPv4 address. A
 literal `"-"` means disabled. `port` defaults to UDP 10020 and can be changed
 if required. Restart POC after editing the configuration.
 
@@ -155,6 +155,6 @@ visible. The supplied POC default is `wheelchair_platform` (`platform_v2`).
 - `core/digital_twin.py`: protocol encoding, validation and non-blocking UDP.
 - `core/poc_core.py`: snapshot assembly after the platform/fan work in each
   50 ms data cycle.
-- `core/config_store.py` and `poc_config.json`: destination configuration.
+- `core/config_store.py`, canonical `poc_config.json`, and machine-local `poc_config_local.json`: destination configuration.
 - `tests/test_digital_twin.py`: schema, validation, error isolation and core
   field-mapping tests.
