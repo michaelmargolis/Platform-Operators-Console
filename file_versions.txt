@@ -1,5 +1,5 @@
-#file_versions.txt  ver 248
-# Global release: v250
+#file_versions.txt  ver 249
+# Global release: v251
 # Runtime versions are derived from runtime_dependencies.txt (POC v250; Analyzer v250)
 # Relative path | expected version
 .gitattributes|1
@@ -37,7 +37,8 @@ sim_host_service/server.py|19
 sim_host_service/sim_host_service.ini|7
 sim_host_service/sims/nolimits2.bat|3
 sim_host_service/sims/spacecoaster.bat|2
-sim_host_service/windows/README.md|8
+sim_host_service/windows/README.md|9
+sim_host_service/windows/configure_shs_network.ps1|1
 sim_host_service/windows/configure_shs_firewall.ps1|1
 sim_host_service/windows/install_shs_startup.ps1|5
 sim_host_service/windows/start_shs.cmd|3
@@ -120,9 +121,9 @@ tools/shs_local_sim_cycle.py|6
 tools/poc_sim_swap_test.py|1
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|92
+changelog.txt|93
 README.md|24
-file_versions.txt|248
+file_versions.txt|249
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|2
 tests/test_twin_extension_v150.py|1

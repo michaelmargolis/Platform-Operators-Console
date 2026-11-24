@@ -1,4 +1,4 @@
-<!-- README.md ver 8 -->
+<!-- README.md ver 9 -->
 # POC Sim Host Service — Windows setup
 
 The Windows simulator PC runs SHS in the logged-in simulator-operator session. SHS must not run as a Windows service because it starts and controls interactive simulator applications.
@@ -18,6 +18,33 @@ The private network has no gateway or DNS server. Leave those fields blank.
 The POC machine-local `poc_config_local.json` normally uses `192.168.0.4`
 as the SHS/simulator address; `poc_config.json` is the tracked canonical
 configuration template.
+
+## Configure the dedicated POC network adapter
+
+Connect the Windows PC to the POC platform Ethernet network and disconnect all
+other active network connections, including external Ethernet, Wi-Fi and VPNs.
+Run locally, not over a remote network session. Open PowerShell as Administrator,
+change to the permanent POC checkout and run:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\sim_host_service\windows\configure_shs_network.ps1
+```
+
+The script requires exactly one active network connection profile and displays
+the adapter and current IPv4 settings. Confirm only if this is the dedicated
+POC Ethernet adapter. It configures static IPv4 `192.168.0.4/24`, with DHCP
+disabled and no IPv4 default gateway or DNS servers, and sets the connection
+category to Private. Existing IPv4 addresses/gateways on that adapter are
+replaced if necessary. It verifies the result, reports an already-correct
+configuration without modifying it, and stops if multiple active profiles
+or a domain-authenticated profile are found. If a change is declined, nothing
+is modified. If an error occurs during a change, inspect the adapter and retry
+locally with only the POC connection active.
+
+The script does not enable Network Discovery or File Sharing and does not
+change firewall rules or IPv6. Once the adapter has been verified, other
+network connections may be restored as needed.
 
 ## Install Python 3.10 or later
 

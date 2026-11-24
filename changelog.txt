@@ -1,4 +1,11 @@
-# changelog.txt ver 92
+# changelog.txt ver 93
+
+
+Global release v251 - POC runtime v250 / MDX Ride Analyzer runtime v250 - Windows SHS network configuration utility - 2026-11-24
+- Add `sim_host_service/windows/configure_shs_network.ps1` for elevated, interactive local setup. Require exactly one active network connection profile; show the current configuration and request confirmation before changing the dedicated POC Ethernet adapter to static IPv4 192.168.0.4/24, no IPv4 gateway or DNS, DHCP disabled, and Private. Verify the resulting address/profile, reject multiple or domain-authenticated profiles, and leave an already-correct configuration alone.
+- Document the isolated-network setup in the Windows SHS README. Do not change the existing firewall script, firewall state, Network Discovery, File Sharing or IPv6.
+- Technician/setup-only release: no deployed POC, Analyzer or SHS runtime behavior changes. Both application runtime versions remain v250.
+
 
 
 Global release v250 - POC runtime v250 / MDX Ride Analyzer runtime v250 - machine-local Festo valve-0 side geometry normalisation - 2026-11-24
