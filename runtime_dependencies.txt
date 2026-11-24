@@ -1,4 +1,4 @@
-#runtime_dependencies.txt ver 9
+#runtime_dependencies.txt ver 10
 # Runtime-version baseline established at global release v239.
 # Format: relative path|apps|last_runtime_release
 # Apps are poc, analyzer, or poc,analyzer.
@@ -16,14 +16,14 @@ controls/buttons.py|poc|239
 controls/physical_controls.py|poc|248
 controls/rotary_encoder.py|poc|239
 controls/serial_remote.py|poc|239
-core/config_store.py|poc,analyzer|249
+core/config_store.py|poc,analyzer|250
 core/digital_twin.py|poc,analyzer|239
 core/dynamic_import.py|poc|240
 core/dynamic_profiles.py|poc,analyzer|239
 core/dynamic_qualification.py|poc,analyzer|239
-core/platform_controller.py|poc|239
+core/platform_controller.py|poc|250
 core/platform_geometry.py|poc,analyzer|239
-core/poc_core.py|poc|248
+core/poc_core.py|poc|250
 core/ride_neutral.py|poc,analyzer|239
 core/sim_interface.py|poc|239
 core/sim_registry.py|poc|239
@@ -42,11 +42,11 @@ output/fstlib/__init__.py|poc|239
 output/fstlib/easyip.py|poc|239
 output/fstlib/festoEmulator.py|poc|239
 output/fstlib/festoSender.py|poc|239
-output/fstlib/pose_sender.py|poc|249
-output/fstlib/pose_sender_logic.py|poc|239
+output/fstlib/pose_sender.py|poc|250
+output/fstlib/pose_sender_logic.py|poc|250
 output/muscle_output.py|poc|239
 poc.py|poc|249
-poc_config.json|poc,analyzer|249
+poc_config.json|poc,analyzer|250
 requirements.txt|poc,analyzer|239
 sim_host_service/__init__.py|poc|239
 sim_host_service/client.py|poc|239
