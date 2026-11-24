@@ -14,6 +14,9 @@ htmlcov/
 .env
 .env.*
 !.env.example
+
+# Complete machine-local POC runtime configuration
+/poc_config_local.json
 .venv/
 venv/
 env/
