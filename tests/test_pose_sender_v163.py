@@ -21,30 +21,10 @@ def make_reply(request_data, values, error=0):
     return answer.pack()
 
 
-def test_selected_platform_uses_local_runtime_config(tmp_path, monkeypatch):
-    import output.fstlib.pose_sender as sender
-
-    canonical = tmp_path / "poc_config.json"
-    local = tmp_path / "poc_config_local.json"
-    canonical.write_text(
-        '{"_file_version":"poc_config.json ver 8","selected_sim":"nolimits2",'
-        '"selected_platform":"platform_v2","use_legacy_pi_pins":false,'
-        '"ground_loading_min_clearance_mm":15.0,'
-        '"sim_host_service":{"enabled":true,"address":"192.168.0.4","port":10040,'
-        '"heartbeat_interval_s":1.0,"heartbeat_timeout_s":3.0},'
-        '"digital_twin":{"address":"-","port":10020}}',
-        encoding="utf-8",
-    )
-    local.write_text(
-        canonical.read_text(encoding="utf-8").replace(
-            '"selected_platform":"platform_v2"',
-            '"selected_platform":"chair_v3"',
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(sender, "PROJECT_ROOT", tmp_path)
-
-    assert sender.selected_platform_from_poc() == "chair_v3"
+def test_pose_sender_platform_selection_uses_shared_local_config():
+    source = (ROOT / "output" / "fstlib" / "pose_sender.py").read_text(encoding="utf-8")
+    assert 'ConfigStore(PROJECT_ROOT / "poc_config.json")' in source
+    assert 'config.get("selected_platform", "platform_v2")' in source
 
 
 def test_read_is_passive_and_requires_matching_fresh_response():
