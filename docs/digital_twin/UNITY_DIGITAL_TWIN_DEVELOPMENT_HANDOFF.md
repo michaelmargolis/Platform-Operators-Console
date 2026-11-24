@@ -1,4 +1,4 @@
-<!-- UNITY_DIGITAL_TWIN_DEVELOPMENT_HANDOFF.md ver 7 -->
+<!-- UNITY_DIGITAL_TWIN_DEVELOPMENT_HANDOFF.md ver 8 -->
 # POC Unity Digital Twin Development Handoff
 
 Prepared 12 September 2026
@@ -79,7 +79,7 @@ Relevant POC files:
 | `output/festo_itf.py` | EasyIP UDP transport and optional actual-pressure polling |
 | `output/fstlib/easyip.py` | Festo packet encoding |
 
-`poc_config.json` identifies the startup platform through `selected_platform`.
+`poc_config_local.json` identifies the runtime startup platform through `selected_platform`; `poc_config.json` is only the tracked canonical template.
 Do not assume the chair geometry applies to every selectable platform.
 
 ## 4. Current geometry conventions
