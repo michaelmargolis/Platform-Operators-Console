@@ -1,4 +1,4 @@
-<!-- README.md ver 7 -->
+<!-- README.md ver 8 -->
 # POC Sim Host Service — Windows setup
 
 The Windows simulator PC runs SHS in the logged-in simulator-operator session. SHS must not run as a Windows service because it starts and controls interactive simulator applications.
@@ -14,7 +14,10 @@ The Windows simulator PC runs SHS in the logged-in simulator-operator session. S
 | NoLimits telemetry | TCP `15151`, inbound from the POC |
 | SpaceCoaster telemetry | UDP `10009`, outbound to the POC |
 
-The private network has no gateway or DNS server. Leave those fields blank. `poc_config.json` must use `192.168.0.4` as the SHS/simulator address.
+The private network has no gateway or DNS server. Leave those fields blank.
+The POC machine-local `poc_config_local.json` normally uses `192.168.0.4`
+as the SHS/simulator address; `poc_config.json` is the tracked canonical
+configuration template.
 
 ## Install Python 3.10 or later
 
