@@ -1,4 +1,4 @@
-<!-- ARCHITECTURE.md ver 6 -->
+<!-- ARCHITECTURE.md ver 7 -->
 # Platform Operators Console — Architecture and Hardware Guide
 
 **Audience:**  maintainers, Engineering students and researchers extending the motion-platform system  
@@ -111,6 +111,8 @@ POC should remain usable with test adapters and a receiver emulator even when th
 6. Festo output transmits six pressure commands; the optional seventh word controls the parking prop command on equipped platforms.
 
 Critical conventions: muscle indices **0–5 must retain the same upper/lower attachment pairing throughout**; platform-local lower coordinates move rigidly with the deck; the code's axis flips and neutral-height calculation are part of the established kinematic convention. Do not interchange CAD positions, normalized POC transforms or real-world pose without explicit conversion and regression checks.
+
+Machine-local Festo wiring is described by `festo_valve0_side` in `poc_config_local.json`, keyed by platform and expressed as rider `left`/`right`. Repository geometry remains channel-indexed. At backend construction POC checks the Y sign of both valve-0 attachment points and the supported consecutive channel-side ordering. If the configured physical valve-0 side is opposite to the repository geometry, POC mirrors all channel-indexed Y coordinates while retaining channel numbers; Ground-Loading Platform underside-hull Y coordinates are mirrored at the same time so floor-strike calculations use the identical physical frame. Ambiguous geometry fails startup rather than being guessed. The canonical defaults reproduce the pre-v250 geometry/channel arrangement: Ground-Loading/Falcon valve 0 right, Chair V2/V3 valve 0 left.
 
 The Ground-Loading Platform `WORKSPACE_LIMIT_MODE` is normally `geometry` (underside floor hull plus physical actuator envelope). `reserve` and `off` exist for specific testing/fallback, not as general alternatives to safe operation. Chair workspace limiting is currently off, which does **not** mean every theoretical pose is physically safe.
 
