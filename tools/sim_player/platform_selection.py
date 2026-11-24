@@ -1,11 +1,11 @@
-# platform_selection.py ver 2
+# platform_selection.py ver 3
 """Read-only platform identity/provenance for offline replay (no hardware I/O)."""
 from importlib import import_module
 import hashlib
-import json
 from pathlib import Path
 
 from config.platforms import PLATFORMS
+from core.config_store import ConfigStore
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -46,11 +46,14 @@ def platform_choices():
 
 
 def initial_platform_key(path=None):
-    path = Path(path) if path is not None else ROOT / 'poc_config.json'
-    if not path.exists():
-        return 'platform_v2'
-    data = json.loads(path.read_text(encoding='utf-8-sig'))
-    key = data.get('selected_platform', 'platform_v2')
+    canonical = Path(path) if path is not None else ROOT / 'poc_config.json'
+    try:
+        config = ConfigStore(canonical)
+    except RuntimeError as exc:
+        raise ValueError(str(exc)) from exc
+    key = config.get('selected_platform', 'platform_v2')
     if key not in PLATFORMS:
-        raise ValueError(f"Invalid selected_platform {key!r} in {path}")
+        raise ValueError(
+            f"Invalid selected_platform {key!r} in {config.local_path}"
+        )
     return key
