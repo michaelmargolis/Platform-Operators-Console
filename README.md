@@ -1,4 +1,4 @@
-<!-- README.md ver 23 -->
+<!-- README.md ver 24 -->
 # Platform Operators Console
 
 The Platform Operators Console (POC) is the Raspberry Pi operator console for
@@ -117,7 +117,7 @@ Make sure the platform physically safe before development or maintenance runs.
   defaults to the physical Switch, while Windows defaults to Touch UI. The
   Debug tab can change the activation source for the session.
 - Raspberry Pi deployments default to the current PCB GPIO mapping. Set
-  `"use_legacy_pi_pins": true` in `poc_config.json` only for the original
+  `"use_legacy_pi_pins": true` in `poc_config_local.json` only for the original
   hand-wired panel. That legacy panel has no physical load selector, so Normal
   or Full load is selected with the touchscreen buttons.
 - The encoder browses experiences while deactivated; holding Dispatch while
@@ -168,18 +168,28 @@ player updates are POC releases; separate sim_player version ZIPs end at v20.
 
 ## Platform configuration
 
-`poc_config.json` selects the simulator, physical platform and SHS address. Its
-`digital_twin` group optionally sends complete 20 Hz POC output snapshots to a
-configured IPv4 address; `"address": "-"` disables this output.
+`poc_config.json` is the Git-tracked canonical configuration/template.
+`poc_config_local.json` is the complete machine-local runtime configuration and
+is excluded from Git. If the local file does not exist, POC copies the canonical
+file to it and reports that creation at startup. Thereafter all runtime reads and
+writes use only the local file.
+
+At startup, POC recursively compares canonical and local field names and JSON
+field types. Values may differ. Added, removed, renamed or structurally changed
+fields block startup with a discrepancy report; POC does not merge the files.
+This makes canonical schema changes visible while allowing local values to
+survive pulls and hard resets.
+
+The local `digital_twin` group optionally sends complete 20 Hz POC output
+snapshots to a configured IPv4 address; `"address": "-"` disables this output.
 Physical platforms are registered in `config/platforms.py`.
 
-The supplied `poc_config.json` explicitly selects `platform_v2`, which is the
-Ground-Loading Platform. Its platform/protocol name remains `wheelchair_platform`
+The supplied canonical `poc_config.json` explicitly selects `platform_v2`,
+which is the Ground-Loading Platform. Its platform/protocol name remains `wheelchair_platform`
 for wire compatibility, while its geometry comes from
 `kinematics/cfg_SuspendedPlatformMdx.py`. The six fixed and moving
 attachment points are CAD-derived XYZ coordinates using the current 84 mm CAD
-reference-plane datum. Existing configurations containing the old `wheelchair`
-key are migrated automatically.
+reference-plane datum. Machine-local configurations must use the current `platform_v2` key.
 
 The Ground-Loading Platform uses a 60 mm muscle-extension reserve to establish neutral
 height, then normally runs with `WORKSPACE_LIMIT_MODE="geometry"`: a precomputed
