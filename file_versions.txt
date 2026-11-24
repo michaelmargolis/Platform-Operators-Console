@@ -1,6 +1,6 @@
-#file_versions.txt  ver 245
-# Global release: v248
-# Runtime versions are derived from runtime_dependencies.txt (POC v248; Analyzer v247)
+#file_versions.txt  ver 246
+# Global release: v249
+# Runtime versions are derived from runtime_dependencies.txt (POC v249; Analyzer v249)
 # Relative path | expected version
 .gitattributes|1
 config/platforms.py|7
@@ -9,7 +9,7 @@ controls/serial_remote.py|1
 controls/buttons.py|1
 controls/rotary_encoder.py|1
 controls/physical_controls.py|8
-core/config_store.py|10
+core/config_store.py|11
 core/digital_twin.py|2
 core/poc_core.py|62
 core/platform_controller.py|20
@@ -37,7 +37,7 @@ sim_host_service/server.py|19
 sim_host_service/sim_host_service.ini|7
 sim_host_service/sims/nolimits2.bat|3
 sim_host_service/sims/spacecoaster.bat|2
-sim_host_service/windows/README.md|7
+sim_host_service/windows/README.md|8
 sim_host_service/windows/configure_shs_firewall.ps1|1
 sim_host_service/windows/install_shs_startup.ps1|5
 sim_host_service/windows/start_shs.cmd|3
@@ -55,7 +55,7 @@ sims/xplane/transport.py|1
 sims/xplane/plugin/PI_Mdx_telemetry_ui.py|2
 sims/xplane/plugin/PI_Mdx_telemetry.py|3
 tests/__init__.py|1
-tests/test_config_store.py|8
+tests/test_config_store.py|9
 tests/test_digital_twin.py|3
 tests/test_serial_remote.py|1
 tests/test_physical_controls.py|7
@@ -86,12 +86,12 @@ ui/ui_widgets.py|7
 ui/transform_viewer.py|1
 ui/sim_tabs.py|2
 requirements.txt|3
-poc.py|5
-poc_config.json|7
+poc.py|6
+poc_config.json|8
 app_versions.py|1
-runtime_dependencies.txt|8
+runtime_dependencies.txt|9
 version_check.py|7
-raspi/setup-console.sh|13
+raspi/setup-console.sh|14
 raspi/start_console.sh|5
 raspi/switch-to-runtime.sh|1
 raspi/install-display-assets.sh|4
@@ -102,27 +102,27 @@ raspi/network_check.py|2
 raspi/start-test-poc.sh|5
 raspi/install-test-poc-launcher.sh|4
 raspi/test-poc-network-helper.sh|1
-raspi/README.md|17
+raspi/README.md|18
 raspi/assets/README.md|3
-docs/ARCHITECTURE.md|5
+docs/ARCHITECTURE.md|6
 docs/CANONICAL_RIDE_CAPTURE_V230.md|2
-docs/digital_twin/POC_DIGITAL_TWIN_UDP_HANDOVER_v1.md|3
-docs/digital_twin/UNITY_DIGITAL_TWIN_DEVELOPMENT_HANDOFF.md|7
-docs/raspberry_pi/POC_Raspberry_Pi_Technician_Guide.md|14
+docs/digital_twin/POC_DIGITAL_TWIN_UDP_HANDOVER_v1.md|4
+docs/digital_twin/UNITY_DIGITAL_TWIN_DEVELOPMENT_HANDOFF.md|8
+docs/raspberry_pi/POC_Raspberry_Pi_Technician_Guide.md|15
 reference_data/README.md|1
 tools/README.md|4
 tools/diagnostics/monitor_activation_switch.py|1
 tools/diagnostics/raspi/dsi_reboot_test.sh|1
 tools/diagnostics/spacecoaster/dummySHS.py|1
-tools/diagnostics/test_shs_connection.py|3
+tools/diagnostics/test_shs_connection.py|4
 tools/diagnostics/windows/test_close_sim.py|4
 tools/shs_local_sim_cycle.py|6
 tools/poc_sim_swap_test.py|1
 kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|21
-changelog.txt|90
-README.md|23
-file_versions.txt|245
+changelog.txt|91
+README.md|24
+file_versions.txt|246
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|2
 tests/test_twin_extension_v150.py|1
@@ -141,10 +141,10 @@ tests/test_poc_performance_v158.py|1
 tests/test_transform_bars_v159.py|1
 tests/test_transform_bars_v160.py|1
 tests/test_nl2_shs_gate_v161.py|1
-output/fstlib/pose_sender.py|3
+output/fstlib/pose_sender.py|4
 output/fstlib/pose_sender_logic.py|2
-output/fstlib/POSE_SENDER_README.md|3
-tests/test_pose_sender_v163.py|1
+output/fstlib/POSE_SENDER_README.md|4
+tests/test_pose_sender_v163.py|2
 tests/test_pose_sender_v164.py|1
 tests/test_pose_sender_v165.py|1
 tools/analyze_nl2_csv.py|16
@@ -189,7 +189,7 @@ tools/sim_player/muscle_extrema.py|2
 tools/sim_player/options_dialog.py|2
 tools/sim_player/panel_state.py|1
 tools/sim_player/panels.py|5
-tools/sim_player/platform_selection.py|2
+tools/sim_player/platform_selection.py|3
 tools/sim_player/player_ui.py|10
 tools/sim_player/recording.py|5
 tools/sim_player/settings.py|1
@@ -199,7 +199,7 @@ tools/sim_player/tests/test_anomaly_detection_v10.py|1
 tools/sim_player/tests/test_loop_range_v8.py|1
 tools/sim_player/tests/test_muscle_extrema_v12.py|1
 tools/sim_player/tests/test_paused_video_preview.py|1
-tools/sim_player/tests/test_platform_variants_v178.py|4
+tools/sim_player/tests/test_platform_variants_v178.py|5
 tools/sim_player/tests/test_qt6_api_migration_v5.py|1
 tools/sim_player/tests/test_qt6_backend_contract.py|1
 tools/sim_player/tests/test_qt6_gui_smoke.py|1
@@ -314,10 +314,10 @@ tools/sim_player/dynamic_export_inventory.py|3
 tests/test_dynamic_candidate_import_v202.py|2
 tests/test_dynamic_import_refresh_v214.py|1
 tests/test_poc_ride_selector_v237.py|2
-tests/test_app_versions_v239.py|10
+tests/test_app_versions_v239.py|11
 tests/test_shs_local_sim_cycle_v241.py|3
 tests/test_poc_sim_swap_test_v243.py|1
-tests/test_dynamic_clearance_v202.py|1
+tests/test_dynamic_clearance_v202.py|2
 tools/sim_player/tests/test_dynamic_study_workspace_v202.py|1
 tools/sim_player/tests/test_dynamic_session_rides_v211.py|2
 tools/sim_player/tests/test_dynamic_session_selector_v212.py|5
