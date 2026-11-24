@@ -1,4 +1,15 @@
-# changelog.txt ver 91
+# changelog.txt ver 92
+
+
+Global release v250 - POC runtime v250 / MDX Ride Analyzer runtime v250 - machine-local Festo valve-0 side geometry normalisation - 2026-11-24
+- Add machine-local `festo_valve0_side` values, keyed by physical platform and expressed as rider `left`/`right`. Canonical defaults reproduce the pre-v250 channel geometry: Ground-Loading/Falcon valve 0 right; Chair V2/V3 valve 0 left.
+- At physical backend construction, validate that valve-0 upper and lower attachment Y signs agree and that channel-indexed geometry follows the supported consecutive three-on-one-side/three-on-the-other arrangement. Ambiguous or inconsistent geometry fails startup rather than guessing.
+- If a machine's configured valve-0 side is opposite to the repository geometry, mirror Y only for every channel-indexed base/moving attachment while retaining channel indices 0..5. Do not reorder Festo pressure channels.
+- Mirror Ground-Loading Platform underside-hull Y coordinates with the attachment geometry so floor-clearance/workspace limiting remains in the same physical frame.
+- Matching-side configurations are a no-op, preserving all pre-v250 actuator calculations. This release deliberately does not remove the temporary Chair V3 yaw mask or perform the wider simulator/kinematics DOF-convention refactor.
+- Pose Sender now uses the same machine-local valve-side setting as live POC. Offline Analyzer geometry remains repository-normalised and independent of a particular machine's wiring; dynamic gain requalification remains a separate post-refactor task.
+- ConfigStore performs one narrow migration for existing v249 local files that lack `festo_valve0_side`, adding only the canonical per-platform defaults that reproduce prior behavior. All other canonical/local structural mismatches still fail closed.
+- Add regression coverage for migration/validation and machine-local geometry mirroring. Both POC and Analyzer derived runtime versions advance to v250 because their shared configuration schema changes.
 
 
 Global release v249 - POC runtime v249 / MDX Ride Analyzer runtime v249 - Canonical plus machine-local POC configuration - 2026-11-24
