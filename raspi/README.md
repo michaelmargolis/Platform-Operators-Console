@@ -1,4 +1,4 @@
-#README.md  ver 17
+#README.md  ver 18
 # POC Raspberry Pi deployment
 
 The concise technician procedure is maintained in
@@ -83,10 +83,25 @@ connection and activate on reboot; a requested Wi-Fi shutdown is likewise
 performed at the next boot. SSH detection checks both the session environment
 and process ancestry, so it remains effective when `sudo` removes SSH variables.
 The installer never reboots automatically. Rerunning setup preserves the deployed
-`poc_config.json` and `raspi/network-config.conf`, so site-specific simulator
-settings and an accepted Pi MAC are not reset from the original upload.
+`poc_config_local.json` and `raspi/network-config.conf`. The tracked
+`poc_config.json` is allowed to update because it is the canonical template.
 
 ## Updating with a delta ZIP
+
+**One-time migration when moving an existing pre-v249 Pi to v249 or later:** before
+overwriting or hard-resetting the old tracked `poc_config.json`, preserve its
+machine-specific values as the new local runtime file:
+
+```bash
+cd /home/poc/Runtime
+test -f poc_config_local.json || cp -a poc_config.json poc_config_local.json
+```
+
+Do this before the first v249 `git reset --hard`, pull workflow that replaces
+tracked files, or manual upload of the new canonical `poc_config.json`.
+Afterwards `poc_config_local.json` is gitignored and survives normal repository
+updates. Fresh installations need no manual copy; first POC startup creates the
+local file from canonical and shows an informational dialog.
 
 Delta ZIP contents are relative to the runtime root so the directory structure
 is easy to inspect and compare after extracting on Windows. Upload each changed
@@ -137,7 +152,7 @@ It must point to `/home/poc/Runtime/raspi/start_console.sh`.
 ## Legacy physical-control panel
 
 The current PCB GPIO mapping remains the default. On an original hand-wired
-Raspberry Pi control panel, edit the deployed `/home/poc/Runtime/poc_config.json`
+Raspberry Pi control panel, edit the deployed `/home/poc/Runtime/poc_config_local.json`
 and set:
 
 ```json
@@ -153,6 +168,11 @@ leave `use_legacy_pi_pins` false (the default).
 
 This is an application configuration change only; rerunning
 `raspi/setup-console.sh` is not required.
+
+`poc_config.json` is repository-owned and should not be edited for a specific
+machine. POC requires `poc_config_local.json` to contain the same recursive
+fields and JSON field types as canonical; values may differ. A discrepancy is
+reported at startup and blocks operation until the local file is updated.
 
 ## Platform and development networks
 
@@ -216,7 +236,7 @@ ip -br address
 ip route
 ```
 
-The default SHS address remains configurable in `poc_config.json`; the supplied
+The SHS address is configured in `poc_config_local.json`; the canonical
 deployment default is `192.168.0.4`. The Festo controller remains
 `192.168.0.10`.
 
