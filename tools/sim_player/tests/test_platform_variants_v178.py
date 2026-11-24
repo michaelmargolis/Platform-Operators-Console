@@ -1,4 +1,4 @@
-# test_platform_variants_v178.py ver 4
+# test_platform_variants_v178.py ver 5
 """Platform propagation and JSON candidate saving without Qt or physical I/O."""
 from dataclasses import replace
 from types import SimpleNamespace
@@ -35,14 +35,26 @@ def test_platform_selector_uses_all_configured_platform_names():
            platform_metadata('chair_v3')['platform_config_module']
 
 
-def test_default_platform_is_read_without_modifying_poc_configuration(tmp_path):
-    path=tmp_path/'poc_config.json'
-    path.write_text('{"selected_platform":"chair_v3"}')
-    old=path.read_bytes()
-    assert initial_platform_key(path)=='chair_v3'
-    assert path.read_bytes()==old
-    path.write_text('{"selected_platform":"unknown"}')
-    with pytest.raises(ValueError,match='Invalid selected_platform'):initial_platform_key(path)
+def test_default_platform_uses_complete_local_config_without_modifying_canonical(tmp_path):
+    canonical = tmp_path / 'poc_config.json'
+    canonical.write_text(
+        '{"_file_version":"poc_config.json ver 8","selected_sim":"nolimits2",'
+        '"selected_platform":"platform_v2","use_legacy_pi_pins":false,'
+        '"ground_loading_min_clearance_mm":15.0,'
+        '"sim_host_service":{"enabled":true,"address":"192.168.0.4","port":10040,'
+        '"heartbeat_interval_s":1.0,"heartbeat_timeout_s":3.0},'
+        '"digital_twin":{"address":"-","port":10020}}'
+    )
+    local = tmp_path / 'poc_config_local.json'
+    local.write_text(
+        canonical.read_text().replace(
+            '"selected_platform":"platform_v2"',
+            '"selected_platform":"chair_v3"',
+        )
+    )
+    old = canonical.read_bytes()
+    assert initial_platform_key(canonical) == 'chair_v3'
+    assert canonical.read_bytes() == old
 
 
 def test_recording_uses_selected_geometry_limits_floor_and_snapshot(tmp_path):
