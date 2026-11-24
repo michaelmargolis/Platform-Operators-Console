@@ -1,4 +1,4 @@
-#test_dynamic_clearance_v202.py ver 1
+#test_dynamic_clearance_v202.py ver 2
 """Commissioning floor-clearance setting, independent of hardware and live Qt."""
 from pathlib import Path
 from types import SimpleNamespace
@@ -40,9 +40,19 @@ def test_floor_setting_does_not_change_geometry_or_park(tmp_path):
     assert backend._workspace_min_floor_clearance == 20.
 
 
-def test_config_store_persists_adjustment(tmp_path):
-    path=tmp_path/'poc_config.json'
-    conf=ConfigStore(path)
+def test_config_store_persists_adjustment_only_to_local_file(tmp_path):
+    canonical = tmp_path / 'poc_config.json'
+    canonical.write_text(
+        '{"_file_version":"poc_config.json ver 8","selected_sim":"nolimits2",'
+        '"selected_platform":"platform_v2","use_legacy_pi_pins":false,'
+        '"ground_loading_min_clearance_mm":15.0,'
+        '"sim_host_service":{"enabled":true,"address":"192.168.0.4","port":10040,'
+        '"heartbeat_interval_s":1.0,"heartbeat_timeout_s":3.0},'
+        '"digital_twin":{"address":"-","port":10020}}'
+    )
+    canonical_before = canonical.read_bytes()
+    conf = ConfigStore(canonical)
     assert conf.get('ground_loading_min_clearance_mm') == 15.
     conf.set('ground_loading_min_clearance_mm',25.5)
-    assert ConfigStore(path).get('ground_loading_min_clearance_mm') == 25.5
+    assert canonical.read_bytes() == canonical_before
+    assert ConfigStore(canonical).get('ground_loading_min_clearance_mm') == 25.5
