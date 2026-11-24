@@ -1,7 +1,13 @@
 {
-  "_file_version": "poc_config.json ver 8",
+  "_file_version": "poc_config.json ver 9",
   "selected_sim": "nolimits2",
   "selected_platform": "chair_v3",
+  "festo_valve0_side": {
+    "platform_v2": "right",
+    "chair_v3": "left",
+    "chair_v2": "left",
+    "Falcon": "right"
+  },
   "use_legacy_pi_pins": false,
   "ground_loading_min_clearance_mm": 15.0,
   "sim_host_service": {
