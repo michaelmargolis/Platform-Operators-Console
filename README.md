@@ -184,9 +184,10 @@ The local `digital_twin` group optionally sends complete 20 Hz POC output
 snapshots to a configured IPv4 address; `"address": "-"` disables this output.
 Physical platforms are registered in `config/platforms.py`.
 
-The supplied canonical `poc_config.json` explicitly selects `platform_v2`,
-which is the Ground-Loading Platform. Its platform/protocol name remains `wheelchair_platform`
-for wire compatibility, while its geometry comes from
+The tracked canonical file supplies complete initial values for a new local
+configuration; deployed machines may legitimately use different values. The
+Ground-Loading Platform selector is `platform_v2`; its platform/protocol name
+remains `wheelchair_platform` for wire compatibility, while its geometry comes from
 `kinematics/cfg_SuspendedPlatformMdx.py`. The six fixed and moving
 attachment points are CAD-derived XYZ coordinates using the current 84 mm CAD
 reference-plane datum. Machine-local configurations must use the current `platform_v2` key.
