@@ -1,19 +1,33 @@
-#test_config_store.py  ver 8
+#test_config_store.py  ver 9
 import json
 
 import pytest
 
-from core.config_store import ConfigStore, DEFAULTS
+from core.config_store import ConfigStore
 
 
-def test_defaults_have_single_shs_address():
-    assert "sim_addresses" not in DEFAULTS
-    assert DEFAULTS["sim_host_service"]["address"] == "192.168.0.4"
-    assert DEFAULTS["selected_platform"] == "platform_v2"
-    assert DEFAULTS["use_legacy_pi_pins"] is False
-    assert "virtual_output" not in DEFAULTS
-    assert DEFAULTS["digital_twin"] == {"address": "-", "port": 10020}
+CANONICAL = {
+    "_file_version": "poc_config.json ver 8",
+    "selected_sim": "nolimits2",
+    "selected_platform": "platform_v2",
+    "use_legacy_pi_pins": False,
+    "ground_loading_min_clearance_mm": 15.0,
+    "sim_host_service": {
+        "enabled": True,
+        "address": "192.168.0.4",
+        "port": 10040,
+        "heartbeat_interval_s": 1.0,
+        "heartbeat_timeout_s": 3.0,
+    },
+    "digital_twin": {
+        "address": "-",
+        "port": 10020,
+    },
+}
 
+
+def write_config(path, data):
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
 def test_platform_v2_maps_to_ground_loading_platform():
@@ -30,145 +44,169 @@ def test_platform_v2_maps_to_ground_loading_platform():
     assert cfg.WORKSPACE_LIMIT_MODE == "geometry"
     assert cfg.MUSCLE_EXTENSION_RESERVE == 60.0
 
-def test_legacy_sim_addresses_are_removed_from_existing_config(tmp_path):
-    path = tmp_path / "poc_config.json"
-    path.write_text(json.dumps({
-        "selected_sim": "xplane",
-        "sim_addresses": {"xplane": "10.0.0.99"},
-        "sim_host_service": {"address": "10.0.0.10"},
-    }), encoding="utf-8")
 
-    store = ConfigStore(path)
+def test_missing_local_is_copied_from_canonical_byte_for_byte(tmp_path):
+    canonical = tmp_path / "poc_config.json"
+    write_config(canonical, CANONICAL)
 
-    assert "sim_addresses" not in store.data
-    assert store.get("sim_host_service")["address"] == "10.0.0.10"
-    persisted = json.loads(path.read_text(encoding="utf-8"))
-    assert "sim_addresses" not in persisted
+    store = ConfigStore(canonical)
+    local = tmp_path / "poc_config_local.json"
+
+    assert store.local_created is True
+    assert local.read_bytes() == canonical.read_bytes()
+    assert store.data == CANONICAL
 
 
-def test_config_file_version_metadata_is_added(tmp_path):
-    path = tmp_path / "poc_config.json"
-    path.write_text(json.dumps({
-        "selected_sim": "spacecoaster",
-        "sim_host_service": {"address": "192.168.1.93"},
-    }), encoding="utf-8")
+def test_existing_local_values_are_authoritative_and_canonical_is_unchanged(tmp_path):
+    canonical = tmp_path / "poc_config.json"
+    local = tmp_path / "poc_config_local.json"
+    write_config(canonical, CANONICAL)
 
-    ConfigStore(path)
+    local_data = json.loads(json.dumps(CANONICAL))
+    local_data["selected_platform"] = "chair_v3"
+    local_data["use_legacy_pi_pins"] = True
+    local_data["sim_host_service"]["address"] = "192.168.0.7"
+    write_config(local, local_data)
+    before = canonical.read_bytes()
 
-    persisted = json.loads(path.read_text(encoding="utf-8"))
-    assert persisted["_file_version"] == "poc_config.json ver 7"
-    assert "sim_addresses" not in persisted
+    store = ConfigStore(canonical)
 
-
-def test_obsolete_virtual_output_is_removed(tmp_path):
-    path = tmp_path / "poc_config.json"
-    path.write_text(json.dumps({
-        "_file_version": "poc_config.json ver 2",
-        "virtual_output": True,
-    }), encoding="utf-8")
-
-    store = ConfigStore(path)
-
-    assert "virtual_output" not in store.data
-    persisted = json.loads(path.read_text(encoding="utf-8"))
-    assert "virtual_output" not in persisted
-
-
-def test_digital_twin_defaults_are_added_and_partial_config_is_merged(tmp_path):
-    path = tmp_path / "poc_config.json"
-    path.write_text(json.dumps({
-        "_file_version": "poc_config.json ver 3",
-        "digital_twin": {"address": "192.168.0.20"},
-    }), encoding="utf-8")
-
-    store = ConfigStore(path)
-
-    assert store.get("digital_twin") == {
-        "address": "192.168.0.20",
-        "port": 10020,
-    }
-    persisted = json.loads(path.read_text(encoding="utf-8"))
-    assert persisted["digital_twin"] == {
-        "address": "192.168.0.20",
-        "port": 10020,
-    }
-
-
-def test_legacy_pi_pin_flag_defaults_false_and_is_persisted_on_migration(tmp_path):
-    path = tmp_path / "poc_config.json"
-    path.write_text(json.dumps({
-        "_file_version": "poc_config.json ver 6",
-        "selected_platform": "platform_v2",
-    }), encoding="utf-8")
-
-    store = ConfigStore(path)
-
-    assert store.get("use_legacy_pi_pins") is False
-    persisted = json.loads(path.read_text(encoding="utf-8"))
-    assert persisted["use_legacy_pi_pins"] is False
-    assert persisted["_file_version"] == "poc_config.json ver 7"
-
-
-def test_legacy_pi_pin_flag_true_is_retained(tmp_path):
-    path = tmp_path / "poc_config.json"
-    path.write_text(json.dumps({
-        "use_legacy_pi_pins": True,
-    }), encoding="utf-8")
-
-    store = ConfigStore(path)
-
+    assert store.local_created is False
+    assert store.get("selected_platform") == "chair_v3"
     assert store.get("use_legacy_pi_pins") is True
-    assert json.loads(path.read_text(encoding="utf-8"))["use_legacy_pi_pins"] is True
+    assert store.get("sim_host_service")["address"] == "192.168.0.7"
+    assert canonical.read_bytes() == before
 
 
-@pytest.mark.parametrize("value", [0, 1, "true", "false", None, [], {}])
-def test_legacy_pi_pin_flag_requires_json_boolean(tmp_path, value):
-    path = tmp_path / "poc_config.json"
-    path.write_text(json.dumps({
-        "use_legacy_pi_pins": value,
-    }), encoding="utf-8")
+def test_set_writes_only_local_file(tmp_path):
+    canonical = tmp_path / "poc_config.json"
+    write_config(canonical, CANONICAL)
+    before = canonical.read_bytes()
 
-    with pytest.raises(RuntimeError, match="use_legacy_pi_pins"):
-        ConfigStore(path)
+    store = ConfigStore(canonical)
+    store.set("ground_loading_min_clearance_mm", 25.5)
 
-
-def test_legacy_wheelchair_platform_key_is_migrated(tmp_path):
-    path = tmp_path / "poc_config.json"
-    path.write_text(json.dumps({
-        "selected_platform": "wheelchair",
-    }), encoding="utf-8")
-
-    store = ConfigStore(path)
-
-    assert store.get("selected_platform") == "platform_v2"
-    assert json.loads(path.read_text(encoding="utf-8"))["selected_platform"] == "platform_v2"
+    assert canonical.read_bytes() == before
+    local = json.loads((tmp_path / "poc_config_local.json").read_text(encoding="utf-8"))
+    assert local["ground_loading_min_clearance_mm"] == 25.5
+    assert ConfigStore(canonical).get("ground_loading_min_clearance_mm") == 25.5
 
 
-def test_malformed_json_fails_with_location(tmp_path):
-    path = tmp_path / "poc_config.json"
-    path.write_text('{"selected_sim":', encoding="utf-8")
+@pytest.mark.parametrize("missing_path", [
+    ("use_legacy_pi_pins",),
+    ("sim_host_service", "heartbeat_timeout_s"),
+    ("digital_twin", "port"),
+])
+def test_missing_local_field_blocks_startup(tmp_path, missing_path):
+    canonical = tmp_path / "poc_config.json"
+    local = tmp_path / "poc_config_local.json"
+    write_config(canonical, CANONICAL)
+    local_data = json.loads(json.dumps(CANONICAL))
+
+    parent = local_data
+    for part in missing_path[:-1]:
+        parent = parent[part]
+    del parent[missing_path[-1]]
+    write_config(local, local_data)
+
+    with pytest.raises(RuntimeError, match=r"Missing from local"):
+        ConfigStore(canonical)
+
+
+@pytest.mark.parametrize("extra_path", [
+    ("obsolete_setting",),
+    ("sim_host_service", "old_port"),
+])
+def test_extra_local_field_blocks_startup(tmp_path, extra_path):
+    canonical = tmp_path / "poc_config.json"
+    local = tmp_path / "poc_config_local.json"
+    write_config(canonical, CANONICAL)
+    local_data = json.loads(json.dumps(CANONICAL))
+
+    parent = local_data
+    for part in extra_path[:-1]:
+        parent = parent[part]
+    parent[extra_path[-1]] = 1
+    write_config(local, local_data)
+
+    with pytest.raises(RuntimeError, match=r"Not present in canonical"):
+        ConfigStore(canonical)
+
+
+@pytest.mark.parametrize("path,value", [
+    (("use_legacy_pi_pins",), "false"),
+    (("ground_loading_min_clearance_mm",), "15"),
+    (("sim_host_service",), "192.168.0.4"),
+    (("sim_host_service", "port"), "10040"),
+])
+def test_json_type_mismatch_blocks_startup(tmp_path, path, value):
+    canonical = tmp_path / "poc_config.json"
+    local = tmp_path / "poc_config_local.json"
+    write_config(canonical, CANONICAL)
+    local_data = json.loads(json.dumps(CANONICAL))
+
+    parent = local_data
+    for part in path[:-1]:
+        parent = parent[part]
+    parent[path[-1]] = value
+    write_config(local, local_data)
+
+    with pytest.raises(RuntimeError, match=r"Field type mismatch"):
+        ConfigStore(canonical)
+
+
+def test_value_differences_do_not_count_as_structure_mismatch(tmp_path):
+    canonical = tmp_path / "poc_config.json"
+    local = tmp_path / "poc_config_local.json"
+    write_config(canonical, CANONICAL)
+    local_data = json.loads(json.dumps(CANONICAL))
+    local_data["_file_version"] = "local note"
+    local_data["selected_sim"] = "spacecoaster"
+    local_data["selected_platform"] = "chair_v3"
+    local_data["use_legacy_pi_pins"] = True
+    local_data["digital_twin"]["address"] = "192.168.1.99"
+    write_config(local, local_data)
+
+    store = ConfigStore(canonical)
+
+    assert store.get("selected_sim") == "spacecoaster"
+    assert store.get("selected_platform") == "chair_v3"
+    assert store.get("use_legacy_pi_pins") is True
+
+
+def test_malformed_local_json_fails_with_location(tmp_path):
+    canonical = tmp_path / "poc_config.json"
+    local = tmp_path / "poc_config_local.json"
+    write_config(canonical, CANONICAL)
+    local.write_text('{"selected_sim":', encoding="utf-8")
 
     with pytest.raises(RuntimeError, match=r"Invalid JSON.*line 1"):
-        ConfigStore(path)
+        ConfigStore(canonical)
 
 
 @pytest.mark.parametrize("key,value", [
     ("selected_platform", "not-a-platform"),
     ("selected_sim", "not-a-simulator"),
 ])
-def test_invalid_runtime_selection_fails_closed(tmp_path, key, value):
-    path = tmp_path / "poc_config.json"
-    path.write_text(json.dumps({key: value}), encoding="utf-8")
+def test_invalid_local_runtime_selection_fails_closed(tmp_path, key, value):
+    canonical = tmp_path / "poc_config.json"
+    local = tmp_path / "poc_config_local.json"
+    write_config(canonical, CANONICAL)
+    local_data = json.loads(json.dumps(CANONICAL))
+    local_data[key] = value
+    write_config(local, local_data)
 
     with pytest.raises(RuntimeError, match=key):
-        ConfigStore(path)
+        ConfigStore(canonical)
 
 
-def test_invalid_network_endpoint_fails_closed(tmp_path):
-    path = tmp_path / "poc_config.json"
-    path.write_text(json.dumps({
-        "sim_host_service": {"address": "not-an-address", "port": 10040},
-    }), encoding="utf-8")
+def test_invalid_local_network_endpoint_fails_closed(tmp_path):
+    canonical = tmp_path / "poc_config.json"
+    local = tmp_path / "poc_config_local.json"
+    write_config(canonical, CANONICAL)
+    local_data = json.loads(json.dumps(CANONICAL))
+    local_data["sim_host_service"]["address"] = "not-an-address"
+    write_config(local, local_data)
 
     with pytest.raises(RuntimeError, match="sim_host_service IPv4 address"):
-        ConfigStore(path)
+        ConfigStore(canonical)
