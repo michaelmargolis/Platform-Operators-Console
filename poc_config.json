@@ -1,7 +1,7 @@
 {
-  "_file_version": "poc_config.json ver 7",
+  "_file_version": "poc_config.json ver 8",
   "selected_sim": "nolimits2",
-  "selected_platform": "chair_v3",
+  "selected_platform": "platform_v2",
   "use_legacy_pi_pins": false,
   "ground_loading_min_clearance_mm": 15.0,
   "sim_host_service": {
@@ -12,7 +12,7 @@
     "heartbeat_timeout_s": 3.0
   },
   "digital_twin": {
-    "address": "192.168.1.50",
+    "address": "-",
     "port": 10020
   }
 }
