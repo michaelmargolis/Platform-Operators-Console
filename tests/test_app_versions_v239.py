@@ -1,4 +1,4 @@
-#test_app_versions_v239.py ver 10
+#test_app_versions_v239.py ver 11
 from pathlib import Path
 
 import pytest
@@ -74,8 +74,8 @@ def test_runtime_version_cannot_exceed_global_release(tmp_path):
 
 
 def test_current_manifest_versions_and_membership_are_consistent():
-    assert app_versions.read_global_release(ROOT) == 248
-    assert app_versions.get_app_versions(ROOT) == {"analyzer": 247, "poc": 248}
+    assert app_versions.read_global_release(ROOT) == 249
+    assert app_versions.get_app_versions(ROOT) == {"analyzer": 249, "poc": 249}
 
     tracked = set()
     for raw in (ROOT / "file_versions.txt").read_text(encoding="utf-8").splitlines():
@@ -105,7 +105,11 @@ def test_current_manifest_versions_and_membership_are_consistent():
 
     dependency_releases = {item.path: item.last_runtime_release for item in dependencies}
     assert dependency_releases["core/poc_core.py"] == 248
-    assert dependency_releases["core/config_store.py"] == 248
+    assert dependency_releases["core/config_store.py"] == 249
+    assert dependency_releases["poc.py"] == 249
+    assert dependency_releases["poc_config.json"] == 249
+    assert dependency_releases["output/fstlib/pose_sender.py"] == 249
+    assert dependency_releases["tools/sim_player/platform_selection.py"] == 249
     assert dependency_releases["controls/physical_controls.py"] == 248
     assert dependency_releases["sims/nolimits2/sim.py"] == 246
     assert dependency_releases["kinematics/cfg_SuspendedChairV3.py"] == 247
