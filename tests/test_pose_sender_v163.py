@@ -1,4 +1,4 @@
-# test_pose_sender_v163.py ver 2
+# test_pose_sender_v163.py ver 3
 """Pure tests for Pose Sender, without Qt, sockets or actual actuator output."""
 from pathlib import Path
 
@@ -25,6 +25,7 @@ def test_pose_sender_platform_selection_uses_shared_local_config():
     source = (ROOT / "output" / "fstlib" / "pose_sender.py").read_text(encoding="utf-8")
     assert 'ConfigStore(PROJECT_ROOT / "poc_config.json")' in source
     assert 'config.get("selected_platform", "platform_v2")' in source
+    assert 'config.get("festo_valve0_side", {})' in source
 
 
 def test_read_is_passive_and_requires_matching_fresh_response():
@@ -76,6 +77,18 @@ def test_capture_has_no_network_side_effects(monkeypatch):
     real, applied = model.preview()
     assert real == applied == (0.0,) * 6
     assert model.capture.generation == 0
+
+
+def test_pose_sender_can_apply_machine_local_valve0_side():
+    right = PoseMotion("platform_v2", ROOT, festo_valve0_side="right")
+    left = PoseMotion("platform_v2", ROOT, festo_valve0_side="left")
+
+    assert right.backend.geometry_valve0_source_side == "right"
+    assert right.backend.geometry_y_mirrored is False
+    assert left.backend.geometry_valve0_source_side == "right"
+    assert left.backend.geometry_y_mirrored is True
+    assert left.backend.k.base_coords[0, 0] == pytest.approx(right.backend.k.base_coords[0, 0])
+    assert left.backend.k.base_coords[0, 1] == pytest.approx(-right.backend.k.base_coords[0, 1])
 
 
 def test_mdx_unpark_move_park_reuses_backend_and_floor_limiter():
