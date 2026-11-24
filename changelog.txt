@@ -1,4 +1,15 @@
-# changelog.txt ver 90
+# changelog.txt ver 91
+
+
+Global release v249 - POC runtime v249 / MDX Ride Analyzer runtime v249 - Canonical plus machine-local POC configuration - 2026-11-24
+- Split POC configuration ownership without merging: tracked `poc_config.json` is now the canonical complete field/template file; gitignored `poc_config_local.json` is the complete machine-local runtime file used for all reads and writes.
+- If the local file does not exist, `ConfigStore` copies canonical to local byte-for-byte. Main POC startup reports this once in an informational dialog.
+- On every load, recursively compare canonical and local field names and JSON field types. Values may differ. Missing, extra, renamed or structurally/type-changed fields block startup with a detailed discrepancy report. No schema/version-number compatibility mechanism and no canonical/local value merging are used.
+- Runtime changes such as simulator/platform selection and floor-clearance adjustment write only `poc_config_local.json`; canonical remains repository-owned.
+- Pose Sender, Ride Analyzer initial platform selection, and SHS connection diagnostics now resolve settings through the same local-config path so auxiliary tools cannot silently use different machine settings.
+- Raspberry Pi installer preservation now keeps `poc_config_local.json`. When installing from a separate source tree onto a pre-v249 Runtime with no local file, it preserves the old deployed `poc_config.json` as the new local file while allowing the new canonical template to install.
+- Existing Pis updated by hard reset/manual tracked-file replacement require one one-time step before the first v249 update: `cp -a poc_config.json poc_config_local.json` (only if the local file does not already exist). Fresh installs need no manual step.
+- Update deployment, architecture, Pose Sender, SHS and Twin documentation for the canonical/local split. Existing canonical values are preserved; this release does not intentionally change platform, simulator, Twin destination, motion processing or hardware behavior.
 
 
 Global release v248 - POC runtime v248 / MDX Ride Analyzer runtime v247 - Legacy Raspberry Pi control-panel mapping - 2026-11-23
