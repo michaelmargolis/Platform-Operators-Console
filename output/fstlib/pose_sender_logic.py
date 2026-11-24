@@ -1,4 +1,4 @@
-# pose_sender_logic.py ver 2
+# pose_sender_logic.py ver 3
 """Non-GUI pose-to-pressure logic and EasyIP pressure-read validation.
 
 This module intentionally has no socket or GUI dependencies. In particular,
@@ -70,7 +70,10 @@ class MemoryFesto:
 class PoseMotion:
     """Reuse POC workspace limiting, D-to-P mapping and park transition steps."""
 
-    def __init__(self, selected_platform: str, project_root: Path):
+    def __init__(
+        self, selected_platform: str, project_root: Path,
+        festo_valve0_side: str | None = None,
+    ):
         if selected_platform not in PLATFORMS:
             raise ValueError(f"Unknown platform {selected_platform!r}")
         self.project_root = Path(project_root).resolve()
@@ -87,6 +90,7 @@ class PoseMotion:
                 self.platform_info["sop_config_module"],
                 festo_ip=DEFAULT_TARGET_IP,
                 festo_interface=self.capture,
+                festo_valve0_side=festo_valve0_side,
             )
         finally:
             os.chdir(old_cwd)
