@@ -1,4 +1,4 @@
-<!-- ARCHITECTURE.md ver 5 -->
+<!-- ARCHITECTURE.md ver 6 -->
 # Platform Operators Console — Architecture and Hardware Guide
 
 **Audience:**  maintainers, Engineering students and researchers extending the motion-platform system  
@@ -88,10 +88,17 @@ This diagram shows software responsibilities, not a certified interlock or real-
 | [`controls/physical_controls.py`](../controls/physical_controls.py), [`controls/serial_remote.py`](../controls/serial_remote.py) | GPIO or serial operator input, passed as semantic actions to `PocCore` | Physical panel integration |
 | [`sim_host_service/`](../sim_host_service/) | Windows simulator launcher/control, heartbeat, fan serial output | Windows-host features |
 | [`core/digital_twin.py`](../core/digital_twin.py) | Validate and transmit optional one-way Twin JSON snapshots | Protocol additions, test without hardware |
-| [`core/config_store.py`](../core/config_store.py), [`poc_config.json`](../poc_config.json) | Selected simulator/platform, SHS and Twin endpoint configuration | Persistent global settings |
+| [`core/config_store.py`](../core/config_store.py), [`poc_config.json`](../poc_config.json), `poc_config_local.json` | Canonical config structure plus complete machine-local runtime values | Persistent global settings |
 | [`raspi/`](../raspi/) | Installer, display/network profiles, startup, diagnostics | Raspberry Pi deployment only |
 
 The boundary is deliberate: simulator adapters convert their telemetry into **common samples**; they must not import or command the Festo backend.
+
+Configuration ownership is similarly explicit: `poc_config.json` is the tracked
+canonical structure/template and is not a runtime settings file.
+`poc_config_local.json` is a complete, gitignored copy used for every runtime
+read/write. `ConfigStore` compares recursive field names and JSON types at
+startup and refuses to run if canonical and local structures differ; values are
+expected to differ between machines and are never merged.
 POC should remain usable with test adapters and a receiver emulator even when the real platform is disconnected — provided the hardware is safely isolated.
 
 ## 4. Motion processing and coordinate conventions
@@ -161,7 +168,7 @@ The full-size Qt layout includes the Transform Viewer; the 800×480 compact layo
 
 ## 7. Digital-twin and research interfaces
 
-`core/digital_twin.py` publishes complete best-effort `POC_TWIN` JSON datagrams at up to 20 Hz. Configuration lives in `poc_config.json`; the address `"-"` disables Twin output, and the Output-tab checkbox can disable or re-enable transmission for the current run.
+`core/digital_twin.py` publishes complete best-effort `POC_TWIN` JSON datagrams at up to 20 Hz. Runtime configuration lives in `poc_config_local.json`; the address `"-"` disables Twin output, and the Output-tab checkbox can disable or re-enable transmission for the current run.
 
 The common fields include normalized `transform`, six `muscle_length_mm`, six `contraction_pct`, six `command_pressure_mbar`, load estimate, simulator/platform state, timestamps and sequence. **v150 also adds** `parking_state` and `applied_transform_real` (`[x,y,z,roll,pitch,yaw]` in mm/radians), with `null` permitted when unavailable. The protocol version remains 1. Inspect [the serializer](../core/digital_twin.py) when implementing a receiver; [the historical Twin handover](digital_twin/POC_DIGITAL_TWIN_UDP_HANDOVER_v1.md) predates these two optional fields.
 
