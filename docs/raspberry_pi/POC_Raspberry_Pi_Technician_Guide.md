@@ -1,4 +1,4 @@
-#POC_Raspberry_Pi_Technician_Guide.md  ver 14
+#POC_Raspberry_Pi_Technician_Guide.md  ver 15
 
 # POC Raspberry Pi Technician Guide
 ## 1. Raspberry Pi environment
@@ -36,7 +36,9 @@ available at compact resolution. The standard interface is used at 1280 x 720
 and 1280 x 800.
 Relevant configuration files are:
 
-- `poc_config.json`: selected simulator, SHS address and application options.
+- `poc_config.json`: Git-tracked canonical configuration/template; do not use
+  it for machine-specific values.
+- `poc_config_local.json`: complete machine-local runtime configuration; ignored by Git.
 - `raspi/network-config.conf`: Pi Ethernet interface roles and static platform IP.
 - `file_versions.txt`: expected versions of all tracked runtime files.
 
@@ -44,7 +46,7 @@ GPIO controls are serviced by POC on the Pi. Keep the motion platform disabled
 or otherwise made safe during installation and control testing.
 
 Current PCB wiring is the default. For the original hand-wired panel, set
-`"use_legacy_pi_pins": true` in `/home/poc/Runtime/poc_config.json` and restart
+`"use_legacy_pi_pins": true` in `/home/poc/Runtime/poc_config_local.json` and restart
 POC. Legacy BCM pins are Dispatch 18, Pause 17, VR Reset 23, Activate 22,
 encoder A/B 9/11 and encoder push 26. There is no legacy load switch: load
 starts at Normal and must be selected with the touchscreen **Normal** / **Full**
@@ -101,14 +103,29 @@ explicitly requires the installer, run
 `/home/poc/Runtime/raspi/setup-console.sh` from the Runtime root.
 ### Applying a delta update
 
+When upgrading an existing pre-v249 installation for the first time, preserve
+its current machine-specific config **before** replacing the tracked canonical
+file:
+
+```bash
+cd /home/poc/Runtime
+test -f poc_config_local.json || cp -a poc_config.json poc_config_local.json
+```
+
+After v249, `poc_config_local.json` is the only runtime configuration and is
+ignored by Git. Fresh installations create it automatically from canonical on
+first POC startup. At every startup, canonical and local must have identical
+recursive field names and JSON field types; values may differ. A mismatch
+blocks startup and lists missing, extra or type-mismatched fields. There is no
+automatic merge.
+
 Delta ZIP paths are relative to `/home/poc/Runtime`. The normal Windows/WinSCP
 procedure is:
 
 1. Extract the ZIP on Windows and review differences if required.
 2. Upload every supplied file to the matching path below
    `/home/poc/Runtime`, preserving the directory structure.
-3. Preserve local values in `poc_config.json` when an update does not explicitly
-   replace them.
+3. Do not overwrite `poc_config_local.json`; it is machine-local and untracked.
 4. On the Pi, restore permissions and validate the complete runtime:
 ```bash
 cd /home/poc/Runtime
