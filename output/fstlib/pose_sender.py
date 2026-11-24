@@ -1,4 +1,4 @@
-# pose_sender.py ver 4
+# pose_sender.py ver 5
 """POC standalone six-DOF EasyIP pose sender.
 
 Run from the POC project root (or from any directory):
@@ -46,13 +46,16 @@ def selected_platform_from_poc():
         raise RuntimeError(
             f"Unknown selected_platform {key!r} in {config.local_path}"
         )
-    return key
+    valve0_sides = config.get("festo_valve0_side", {})
+    return key, valve0_sides[key]
 
 
 class PoseSenderWindow(QtWidgets.QMainWindow):
-    def __init__(self, platform_key):
+    def __init__(self, platform_key, festo_valve0_side):
         super().__init__()
-        self.model = PoseMotion(platform_key, PROJECT_ROOT)
+        self.model = PoseMotion(
+            platform_key, PROJECT_ROOT, festo_valve0_side=festo_valve0_side
+        )
         self.monitor = PressureMonitor()
         self.armed = False
         self.fault_latched = False
@@ -417,7 +420,8 @@ class PoseSenderWindow(QtWidgets.QMainWindow):
 def main():
     app = QtWidgets.QApplication(sys.argv)
     try:
-        window = PoseSenderWindow(selected_platform_from_poc())
+        platform_key, valve0_side = selected_platform_from_poc()
+        window = PoseSenderWindow(platform_key, valve0_side)
     except Exception as exc:
         QtWidgets.QMessageBox.critical(None, "Pose Sender startup error", str(exc))
         return 2
