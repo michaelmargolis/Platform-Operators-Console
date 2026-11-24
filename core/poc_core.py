@@ -1,4 +1,4 @@
-#poc_core.py ver 62
+#poc_core.py ver 63
 from __future__ import annotations
 
 import logging
@@ -89,9 +89,11 @@ class PocCore(QtCore.QObject):
             self._startup_variant_store.validate_display()
         platform_def = PLATFORMS[self.platform_key]
         self.platform_name = platform_def.get("platform_name", self.platform_key)
+        valve0_sides = self.config_store.get("festo_valve0_side", {})
         platform_backend = SopPlatformBackend(
             platform_def["sop_config_module"],
             platform_def.get("festo_ip", "192.168.0.10"),
+            festo_valve0_side=valve0_sides[self.platform_key],
         )
         if self.platform_key == 'platform_v2':
             platform_backend.set_minimum_operating_floor_clearance_mm(
