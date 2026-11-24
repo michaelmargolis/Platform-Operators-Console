@@ -1,5 +1,5 @@
 #!/bin/bash
-# setup-console.sh  ver 13
+# setup-console.sh  ver 14
 set -euo pipefail
 
 APP_USER="${SUDO_USER:-}"
@@ -142,20 +142,26 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y "${PACKAGES[@]}"
 
 install -d -o "$APP_USER" -g "$APP_USER" "$APP_DIR"
 if [[ "$SOURCE_DIR" != "$APP_DIR" ]]; then
-    SAVED_POC_CONFIG=""
+    SAVED_POC_LOCAL=""
     SAVED_NETWORK_CONFIG=""
-    if [[ -f "$APP_DIR/poc_config.json" ]]; then
-        SAVED_POC_CONFIG="$(mktemp)"
-        cp -a "$APP_DIR/poc_config.json" "$SAVED_POC_CONFIG"
+    if [[ -f "$APP_DIR/poc_config_local.json" ]]; then
+        SAVED_POC_LOCAL="$(mktemp)"
+        cp -a "$APP_DIR/poc_config_local.json" "$SAVED_POC_LOCAL"
+    elif [[ -f "$APP_DIR/poc_config.json" ]]; then
+        # First migration from pre-v249: the old tracked file may contain
+        # machine-specific values. Preserve it as the new local runtime config;
+        # the source tree's poc_config.json remains the canonical template.
+        SAVED_POC_LOCAL="$(mktemp)"
+        cp -a "$APP_DIR/poc_config.json" "$SAVED_POC_LOCAL"
     fi
     if [[ -f "$APP_DIR/raspi/network-config.conf" ]]; then
         SAVED_NETWORK_CONFIG="$(mktemp)"
         cp -a "$APP_DIR/raspi/network-config.conf" "$SAVED_NETWORK_CONFIG"
     fi
     cp -a "$SOURCE_DIR/." "$APP_DIR/"
-    if [[ -n "$SAVED_POC_CONFIG" ]]; then
-        cp -a "$SAVED_POC_CONFIG" "$APP_DIR/poc_config.json"
-        rm -f "$SAVED_POC_CONFIG"
+    if [[ -n "$SAVED_POC_LOCAL" ]]; then
+        cp -a "$SAVED_POC_LOCAL" "$APP_DIR/poc_config_local.json"
+        rm -f "$SAVED_POC_LOCAL"
     fi
     if [[ -n "$SAVED_NETWORK_CONFIG" ]]; then
         cp -a "$SAVED_NETWORK_CONFIG" "$APP_DIR/raspi/network-config.conf"
