@@ -13,12 +13,9 @@ from sim_host_service.client import SimHostClient
 
 
 def configured_endpoint():
-    try:
-        config = ConfigStore(PROJECT_ROOT / "poc_config.json")
-        host = config.get("sim_host_service", {})
-        return host.get("address", "192.168.0.4"), int(host.get("port", 10040))
-    except (OSError, RuntimeError, ValueError, TypeError):
-        return "192.168.0.4", 10040
+    config = ConfigStore(PROJECT_ROOT / "poc_config.json")
+    host = config.get("sim_host_service", {})
+    return host.get("address", "192.168.0.4"), int(host.get("port", 10040))
 
 
 def main():
