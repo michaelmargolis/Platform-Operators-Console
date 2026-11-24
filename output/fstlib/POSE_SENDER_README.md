@@ -1,12 +1,13 @@
-<!-- POSE_SENDER_README.md ver 3 -->
+<!-- POSE_SENDER_README.md ver 4 -->
 # POC Pose Sender v165
 
 Standalone Qt utility for the six normalized DOF commands (Surge, Sway, Heave,
 Roll, Pitch, Yaw, -1.00 to +1.00). Operator-facing signs follow the rider-frame
 convention: +X forward, +Y left, +Z up, +roll right side down, +pitch nose down,
 +yaw CCW. Heave is inverted at the UI boundary so positive slider motion means up.
-Starts with the platform from
-`poc_config.json` (`selected_platform`); no changes to POC saved settings.
+Starts with the platform from the machine-local `poc_config_local.json`
+(`selected_platform`) through the shared `ConfigStore`. The tracked
+`poc_config.json` is only the canonical structure/template.
 
 From the repository root, on Windows/Python with POC dependencies installed:
 
