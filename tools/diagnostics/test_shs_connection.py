@@ -1,6 +1,5 @@
-# test_shs_connection.py ver 3
+# test_shs_connection.py ver 4
 import argparse
-import json
 from pathlib import Path
 import sys
 import time
@@ -9,16 +8,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from core.config_store import ConfigStore
 from sim_host_service.client import SimHostClient
 
 
 def configured_endpoint():
-    config_path = PROJECT_ROOT / "poc_config.json"
     try:
-        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config = ConfigStore(PROJECT_ROOT / "poc_config.json")
         host = config.get("sim_host_service", {})
         return host.get("address", "192.168.0.4"), int(host.get("port", 10040))
-    except (OSError, ValueError, TypeError):
+    except (OSError, RuntimeError, ValueError, TypeError):
         return "192.168.0.4", 10040
 
 
