@@ -1,4 +1,4 @@
-#platform_controller.py  ver 20
+#platform_controller.py  ver 21
 from __future__ import annotations
 
 import importlib
@@ -11,6 +11,92 @@ from core.ride_neutral import validated_ride_neutral_delta, real_heave_for_physi
 from core.types import PlatformState, PlatformMotionState
 
 log = logging.getLogger(__name__)
+
+
+def _y_side(value: float, label: str) -> str:
+    y = float(value)
+    if not math.isfinite(y) or abs(y) < 1.0e-6:
+        raise RuntimeError(
+            f"{label} must have a finite non-zero Y coordinate to identify "
+            "the physical side of Festo valve 0"
+        )
+    return "left" if y > 0.0 else "right"
+
+
+def _validate_channel_side_sequence(coords, source_side: str, label: str) -> None:
+    if len(coords) not in (3, 6):
+        raise RuntimeError(f"{label} must contain 3 or 6 channel-indexed points")
+    source_sign = 1.0 if source_side == "left" else -1.0
+    expected = [source_sign] * 3
+    if len(coords) == 6:
+        expected.extend([-source_sign] * 3)
+    for index, (point, sign) in enumerate(zip(coords, expected)):
+        if len(point) < 2:
+            raise RuntimeError(f"{label}[{index}] lacks a Y coordinate")
+        y = float(point[1])
+        if not math.isfinite(y) or abs(y) < 1.0e-6 or y * sign <= 0.0:
+            raise RuntimeError(
+                f"{label} channel order is not the supported consecutive "
+                f"{source_side}-side then opposite-side arrangement at index {index}"
+            )
+
+
+def _mirror_point_y(point):
+    values = [float(value) for value in point]
+    if len(values) < 2:
+        raise RuntimeError("Platform geometry point lacks a Y coordinate")
+    values[1] = -values[1]
+    return values
+
+
+def normalize_festo_channel_geometry(cfg, requested_side: str):
+    """Return source-side/mirror metadata after normalising channel geometry.
+
+    Geometry remains in physical Festo channel order 0..5. The machine-local
+    setting says which rider side physical valve 0 is connected to. If that
+    differs from the repository geometry, mirror Y coordinates only; channel
+    indices are never reordered.
+    """
+    if requested_side not in ("left", "right"):
+        raise RuntimeError(
+            f"Invalid Festo valve 0 side {requested_side!r}; expected 'left' or 'right'"
+        )
+
+    platform_attr = (
+        "platform_coords" if hasattr(cfg, "platform_coords") else "platform_coords_xy"
+    )
+    if not hasattr(cfg, "base_coords") or not hasattr(cfg, platform_attr):
+        raise RuntimeError("Platform configuration lacks channel-indexed geometry")
+
+    base = getattr(cfg, "base_coords")
+    platform = getattr(cfg, platform_attr)
+    if not base or not platform:
+        raise RuntimeError("Platform configuration has empty channel geometry")
+
+    base_side = _y_side(base[0][1], "base_coords[0]")
+    platform_side = _y_side(platform[0][1], f"{platform_attr}[0]")
+    if base_side != platform_side:
+        raise RuntimeError(
+            "Festo valve 0 upper/lower attachment points are on opposite Y sides"
+        )
+
+    _validate_channel_side_sequence(base, base_side, "base_coords")
+    _validate_channel_side_sequence(platform, base_side, platform_attr)
+
+    mirrored = requested_side != base_side
+    if mirrored:
+        cfg.base_coords = [_mirror_point_y(point) for point in base]
+        setattr(cfg, platform_attr, [_mirror_point_y(point) for point in platform])
+
+        # Ground-loading floor-strike calculations must use the same reflected
+        # rider-frame geometry as inverse kinematics.
+        if hasattr(cfg, "PLATFORM_UNDERSIDE_HULL_XY"):
+            cfg.PLATFORM_UNDERSIDE_HULL_XY = tuple(
+                (float(point[0]), -float(point[1]))
+                for point in cfg.PLATFORM_UNDERSIDE_HULL_XY
+            )
+
+    return base_side, mirrored
 
 
 class SopPlatformBackend:
@@ -27,7 +113,7 @@ class SopPlatformBackend:
 
     def __init__(
         self, config_module: str, festo_ip: str = "192.168.0.10",
-        festo_interface=None,
+        festo_interface=None, festo_valve0_side: str | None = None,
     ):
         from kinematics.kinematics_V3 import Kinematics, PlatformParams
         from output.d_to_p import DistanceToPressure
@@ -35,6 +121,22 @@ class SopPlatformBackend:
 
         cfg_module = importlib.import_module(config_module)
         self.cfg = cfg_module.PlatformConfig()
+
+        self.festo_valve0_side = None
+        self.geometry_valve0_source_side = None
+        self.geometry_y_mirrored = False
+        if festo_valve0_side is not None:
+            source_side, mirrored = normalize_festo_channel_geometry(
+                self.cfg, festo_valve0_side
+            )
+            self.festo_valve0_side = festo_valve0_side
+            self.geometry_valve0_source_side = source_side
+            self.geometry_y_mirrored = mirrored
+            log.info(
+                "Festo valve 0 geometry: source=%s configured=%s y_mirrored=%s",
+                source_side, festo_valve0_side, mirrored,
+            )
+
         platform_coords = getattr(self.cfg, "platform_coords", None)
         if platform_coords is None:
             # Temporary compatibility with older external configs. New POC
