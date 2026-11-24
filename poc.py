@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#poc.py ver 5
+#poc.py ver 6
 from __future__ import annotations
 
 import argparse
@@ -56,6 +56,18 @@ def main() -> int:
             str(exc),
         )
         return 2
+
+    if config.local_created:
+        QtWidgets.QMessageBox.information(
+            None,
+            "Local POC configuration created",
+            "Created the machine-local runtime configuration from the tracked "
+            "canonical configuration:\n\n"
+            f"{config.local_path}\n\n"
+            "POC now reads and writes only this local file. It is excluded from "
+            "Git updates, so machine-specific values survive pulls and resets. "
+            "Review the values before operating this installation if required.",
+        )
 
     try:
         # Catalog validation happens in PocCore before constructing its physical
