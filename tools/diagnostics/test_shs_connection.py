@@ -19,7 +19,11 @@ def configured_endpoint():
 
 
 def main():
-    default_address, default_port = configured_endpoint()
+    try:
+        default_address, default_port = configured_endpoint()
+    except RuntimeError as exc:
+        print(f"POC configuration error: {exc}", file=sys.stderr)
+        return 2
     parser = argparse.ArgumentParser(description="Test connectivity to the POC Sim Host Service")
     parser.add_argument("--address", default=default_address, help="SHS host address")
     parser.add_argument("--port", type=int, default=default_port, help="SHS UDP port")
@@ -50,4 +54,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
