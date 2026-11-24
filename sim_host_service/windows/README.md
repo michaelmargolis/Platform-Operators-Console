@@ -1,4 +1,4 @@
-<!-- README.md ver 9 -->
+<!-- README.md ver 10 -->
 # POC Sim Host Service — Windows setup
 
 The Windows simulator PC runs SHS in the logged-in simulator-operator session. SHS must not run as a Windows service because it starts and controls interactive simulator applications.
@@ -14,7 +14,7 @@ The Windows simulator PC runs SHS in the logged-in simulator-operator session. S
 | NoLimits telemetry | TCP `15151`, inbound from the POC |
 | SpaceCoaster telemetry | UDP `10009`, outbound to the POC |
 
-The private network has no gateway or DNS server. Leave those fields blank.
+The isolated POC network has no gateway or DNS server. Leave those fields blank.
 The POC machine-local `poc_config_local.json` normally uses `192.168.0.4`
 as the SHS/simulator address; `poc_config.json` is the tracked canonical
 configuration template.
@@ -45,6 +45,12 @@ locally with only the POC connection active.
 The script does not enable Network Discovery or File Sharing and does not
 change firewall rules or IPv6. Once the adapter has been verified, other
 network connections may be restored as needed.
+
+Windows may identify this isolated Ethernet network as Unidentified and
+classify it as Public again after reboot. This does not prevent POC operation:
+the firewall rules below support both Public and Private profiles. If the
+static IPv4 settings are correct, there is no need to rerun the network
+configuration script just to change the network category.
 
 ## Install Python 3.10 or later
 
@@ -108,7 +114,15 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\sim_host_service\windows\configure_shs_firewall.ps1
 ```
 
-This stages restricted rules for the private POC interface without changing the current firewall state. After testing, enable Windows Firewall and install/verify the same rules with:
+This installs or replaces the POC-specific rules for both Public and Private
+network profiles without changing the current firewall state, network
+category, IP configuration, Network Discovery or File Sharing. Each rule is
+restricted to the interface carrying the SHS address, the configured SHS
+and POC IPv4 addresses, and the required protocol/port. Other interfaces
+(such as an Internet connection temporarily enabled for software updates)
+are not opened by these rules.
+
+After testing, enable Windows Firewall and install/verify the same rules with:
 
 ```powershell
 .\sim_host_service\windows\configure_shs_firewall.ps1 -EnableFirewall

@@ -1,4 +1,11 @@
-# changelog.txt ver 93
+# changelog.txt ver 94
+
+
+Global release v252 - POC runtime v250 / MDX Ride Analyzer runtime v250 - Windows SHS firewall profile independence - 2026-11-24
+- Update `sim_host_service/windows/configure_shs_firewall.ps1` so the existing SHS control UDP 10040 inbound, NoLimits TCP 15151 inbound and SpaceCoaster UDP 10009 outbound rules apply to Public and Private network profiles. Retain the specific SHS/POC IPv4 addresses and restrict all three rules to the interface carrying the SHS address. Reject ambiguous duplicate SHS address assignments.
+- Remove the firewall script's network-category change. An isolated gateway-free POC Ethernet link may be classified as Unidentified/Public at reboot; correct POC operation no longer requires setting it to Private. Keep the existing optional firewall-enable behavior and replacement of the POC Simulator rule group.
+- Update Windows SHS setup documentation. Leave the separate network configuration script unchanged; no deployed POC, Analyzer or SHS runtime behavior changes. Both app runtime versions remain v250.
+
 
 
 Global release v251 - POC runtime v250 / MDX Ride Analyzer runtime v250 - Windows SHS network configuration utility - 2026-11-24
