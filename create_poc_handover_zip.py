@@ -1,4 +1,4 @@
-# create_poc_handover_zip.py ver 21
+# create_poc_handover_zip.py ver 22
 """Create a complete, reviewable POC handover archive.
 
 Run this script from any location. The project root is the directory containing
@@ -151,6 +151,8 @@ def load_versioned_paths(manifest: Path) -> set[Path]:
 
 def excluded_unversioned(relative: Path, output: Path, root: Path) -> bool:
     if relative in EXCLUDED_RELATIVE_PATHS:
+        return True
+    if relative.name in {'poc_config_local.json', 'telemetry_config_local.ini'}:
         return True
     if OLD_RELEASE_NOTE_RE.fullmatch(relative.name):
         return True

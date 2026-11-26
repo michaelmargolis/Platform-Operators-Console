@@ -1,5 +1,5 @@
 #!/bin/bash
-# setup-console.sh  ver 14
+# setup-console.sh  ver 15
 set -euo pipefail
 
 APP_USER="${SUDO_USER:-}"
@@ -158,7 +158,24 @@ if [[ "$SOURCE_DIR" != "$APP_DIR" ]]; then
         SAVED_NETWORK_CONFIG="$(mktemp)"
         cp -a "$APP_DIR/raspi/network-config.conf" "$SAVED_NETWORK_CONFIG"
     fi
+    SAVED_TELEMETRY="$(mktemp -d)"
+    for sim in nolimits2 spacecoaster xplane; do
+        local_ini="sims/$sim/telemetry_config_local.ini"
+        if [[ -f "$APP_DIR/$local_ini" ]]; then
+            mkdir -p "$SAVED_TELEMETRY/sims/$sim"
+            cp -a "$APP_DIR/$local_ini" "$SAVED_TELEMETRY/$local_ini"
+        fi
+    done
     cp -a "$SOURCE_DIR/." "$APP_DIR/"
+    for sim in nolimits2 spacecoaster xplane; do
+        local_ini="sims/$sim/telemetry_config_local.ini"
+        if [[ -f "$SAVED_TELEMETRY/$local_ini" ]]; then
+            cp -a "$SAVED_TELEMETRY/$local_ini" "$APP_DIR/$local_ini"
+        else
+            rm -f "$APP_DIR/$local_ini"
+        fi
+    done
+    rm -rf "$SAVED_TELEMETRY"
     if [[ -n "$SAVED_POC_LOCAL" ]]; then
         cp -a "$SAVED_POC_LOCAL" "$APP_DIR/poc_config_local.json"
         rm -f "$SAVED_POC_LOCAL"

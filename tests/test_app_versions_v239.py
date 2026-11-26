@@ -1,4 +1,4 @@
-#test_app_versions_v239.py ver 12
+#test_app_versions_v239.py ver 13
 from pathlib import Path
 
 import pytest
@@ -74,8 +74,8 @@ def test_runtime_version_cannot_exceed_global_release(tmp_path):
 
 
 def test_current_manifest_versions_and_membership_are_consistent():
-    assert app_versions.read_global_release(ROOT) == 250
-    assert app_versions.get_app_versions(ROOT) == {"analyzer": 250, "poc": 250}
+    assert app_versions.read_global_release(ROOT) == 253
+    assert app_versions.get_app_versions(ROOT) == {"analyzer": 253, "poc": 253}
 
     tracked = set()
     for raw in (ROOT / "file_versions.txt").read_text(encoding="utf-8").splitlines():
@@ -104,7 +104,7 @@ def test_current_manifest_versions_and_membership_are_consistent():
     assert "core/dynamic_import.py" not in analyzer_paths
 
     dependency_releases = {item.path: item.last_runtime_release for item in dependencies}
-    assert dependency_releases["core/poc_core.py"] == 250
+    assert dependency_releases["core/poc_core.py"] == 253
     assert dependency_releases["core/config_store.py"] == 250
     assert dependency_releases["poc.py"] == 249
     assert dependency_releases["poc_config.json"] == 250

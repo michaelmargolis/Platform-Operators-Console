@@ -1,4 +1,11 @@
-# changelog.txt ver 94
+# changelog.txt ver 95
+
+
+Global release v253 - POC runtime v253 / MDX Ride Analyzer runtime v253 - Global/Local telemetry settings - 2026-11-26
+- Add per-simulator Global/Local selection in Input Control, widen Washout relative to Motion Gains. Global is read-only; Local settings and source persist on Save. Cancel restores saved source and settings. Source selection requires parked/deactivated static ride.
+- Keep complete optional local INIs ignored by Git; preserve them during installation and exclude from handovers. Existing complete local copies default to Local. No motion algorithm changes.
+- Use effective saved settings for operational audit, capture and new studies; archived studies use frozen values. Add configuration regressions.
+- Account for the previously pushed attraction-mode protocol change in runtime metadata without editing the protocol file.
 
 
 Global release v252 - POC runtime v250 / MDX Ride Analyzer runtime v250 - Windows SHS firewall profile independence - 2026-11-24

@@ -1,4 +1,4 @@
-# analyze_nl2_csv.py ver 16
+# analyze_nl2_csv.py ver 17
 """Standalone NL2 CSV playback / muscle-length study; no POC outputs are created.
 
 Place in POC/tools; run: python tools/analyze_nl2_csv.py PATH_TO_CAPTURE.csv
@@ -110,7 +110,8 @@ def analyze(data, platform_key, mode, amplitude, intensity, process_telemetry, r
         backend.set_ride_neutral_height_delta_mm(
             variant_snapshot.get("neutral_height_delta_mm", 0.0))
     cfg = backend.cfg
-    telem = TelemetryConfig(ROOT / "sims/nolimits2/telemetry_config.ini")
+    telem = TelemetryConfig(ROOT / "sims/nolimits2/telemetry_config.ini",
+                            source="global" if global_settings is not None else None)
     if global_settings is not None:
         # Frozen offline study settings; never save to the operational INI.
         telem.apply_values(global_settings)

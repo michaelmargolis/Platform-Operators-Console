@@ -17,6 +17,7 @@ htmlcov/
 
 # Complete machine-local POC runtime configuration
 /poc_config_local.json
+/sims/*/telemetry_config_local.ini
 .venv/
 venv/
 env/

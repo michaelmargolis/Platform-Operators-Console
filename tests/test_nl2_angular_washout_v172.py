@@ -1,4 +1,4 @@
-# test_nl2_angular_washout_v172.py ver 2
+# test_nl2_angular_washout_v172.py ver 3
 """Regression tests for inherited and ride-specific Roll/Pitch filtering."""
 
 from pathlib import Path
@@ -10,7 +10,7 @@ from sims.nolimits2 import config as nl2_config
 
 
 def configured(tmp_path):
-    cfg = TelemetryConfig(tmp_path / "telemetry_config.ini")
+    cfg = TelemetryConfig(tmp_path / "telemetry_config.ini", source="local")
     values = cfg.snapshot()
     values["washout_type"] = "classical"
     values["enabled"] = [False, False, False, False, False, False]

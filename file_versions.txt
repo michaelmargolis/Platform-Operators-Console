@@ -1,6 +1,6 @@
-#file_versions.txt  ver 250
-# Global release: v252
-# Runtime versions are derived from runtime_dependencies.txt (POC v250; Analyzer v250)
+#file_versions.txt  ver 251
+# Global release: v253
+# Runtime versions are derived from runtime_dependencies.txt (POC v253; Analyzer v253)
 # Relative path | expected version
 .gitattributes|1
 config/platforms.py|7
@@ -11,7 +11,7 @@ controls/rotary_encoder.py|1
 controls/physical_controls.py|8
 core/config_store.py|12
 core/digital_twin.py|2
-core/poc_core.py|63
+core/poc_core.py|64
 core/platform_controller.py|21
 kinematics/cfg_SuspendedPlatformMdx.py|5
 kinematics/cfg_SuspendedChairFalcon.py|1
@@ -72,15 +72,15 @@ tests/test_nl2_estop_recovery_v232.py|1
 tests/test_nl2_service_timestamp_v213.py|1
 tests/test_platform_controller.py|12
 tests/test_d_to_p.py|1
-core/telemetry_config.py|7
+core/telemetry_config.py|8
 sims/nolimits2/telemetry_config.ini|2
 sims/spacecoaster/telemetry_config.ini|2
 sims/xplane/telemetry_config.ini|2
-tests/test_telemetry_config.py|4
+tests/test_telemetry_config.py|5
 tests/test_operator_status.py|5
 tests/test_ui_layout.py|11
 tests/test_sim_registry.py|1
-ui/main_window.py|83
+ui/main_window.py|84
 ui/poc_main.ui|15
 ui/poc_main_800x480.ui|18
 ui/ui_widgets.py|7
@@ -90,9 +90,9 @@ requirements.txt|3
 poc.py|6
 poc_config.json|9
 app_versions.py|1
-runtime_dependencies.txt|10
+runtime_dependencies.txt|11
 version_check.py|7
-raspi/setup-console.sh|14
+raspi/setup-console.sh|15
 raspi/start_console.sh|5
 raspi/switch-to-runtime.sh|1
 raspi/install-display-assets.sh|4
@@ -120,10 +120,10 @@ tools/diagnostics/windows/test_close_sim.py|4
 tools/shs_local_sim_cycle.py|6
 tools/poc_sim_swap_test.py|1
 kinematics/kinematics_V3.py|4
-create_poc_handover_zip.py|21
-changelog.txt|94
-README.md|24
-file_versions.txt|250
+create_poc_handover_zip.py|22
+changelog.txt|95
+README.md|25
+file_versions.txt|251
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|2
 tests/test_twin_extension_v150.py|1
@@ -148,7 +148,7 @@ output/fstlib/POSE_SENDER_README.md|4
 tests/test_pose_sender_v163.py|3
 tests/test_pose_sender_v164.py|1
 tests/test_pose_sender_v165.py|1
-tools/analyze_nl2_csv.py|16
+tools/analyze_nl2_csv.py|17
 tests/test_mdx_roll_channels_v166.py|2
 tests/test_festo_valve0_side_v250.py|1
 tests/test_nl2_angular_scaling_v167.py|1
@@ -156,7 +156,7 @@ tests/test_nl2_park_selection_v168.py|1
 tests/test_nl2_ride_completion_v169.py|2
 tests/test_nl2_multitrain_v170.py|2
 tests/test_nl2_multistation_v171.py|2
-tests/test_nl2_angular_washout_v172.py|2
+tests/test_nl2_angular_washout_v172.py|3
 sims/nolimits2/ride_config.py|8
 sims/nolimits2/angular_cues.py|1
 tests/test_ride_variants_v176.py|3
@@ -265,9 +265,9 @@ tools/nl2_local_test_harness/tests/test_harness.py|1
 sims/nolimits2/station_modes.py|3
 tests/test_nl2_station_modes_v189.py|3
 # v192 offline ride optimiser additions
-tools/sim_player/optimization_search.py|1
+tools/sim_player/optimization_search.py|2
 tools/sim_player/optimizer.py|3
-tools/sim_player/study_bundle.py|2
+tools/sim_player/study_bundle.py|3
 tools/sim_player/task_workspace.py|1
 tools/sim_player/tests/test_optimizer_v192.py|1
 
@@ -316,7 +316,7 @@ tools/sim_player/dynamic_export_inventory.py|3
 tests/test_dynamic_candidate_import_v202.py|2
 tests/test_dynamic_import_refresh_v214.py|1
 tests/test_poc_ride_selector_v237.py|2
-tests/test_app_versions_v239.py|12
+tests/test_app_versions_v239.py|13
 tests/test_shs_local_sim_cycle_v241.py|3
 tests/test_poc_sim_swap_test_v243.py|1
 tests/test_dynamic_clearance_v202.py|2

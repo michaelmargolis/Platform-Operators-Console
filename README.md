@@ -1,4 +1,4 @@
-<!-- README.md ver 24 -->
+<!-- README.md ver 25 -->
 # Platform Operators Console
 
 The Platform Operators Console (POC) is the Raspberry Pi operator console for
@@ -165,6 +165,17 @@ added/tuned definitions on restart. PC and Pi catalogs need explicit transfer.
 See [the v178 configuration, migration and operator guide](docs/NO_LIMITS_VARIANT_CURATION_V178.md)
 for full workflow, file protection and verification instructions. All future
 player updates are POC releases; separate sim_player version ZIPs end at v20.
+
+## Telemetry configuration (Input Control)
+
+Global selects the tracked, read-only simulator INI. Local selects the complete
+machine-local telemetry_config_local.ini (initially copied from Global in memory).
+Select while parked and deactivated on a static ride. Save remembers the source
+and local settings; Cancel reloads the last saved source and settings. Global
+retains the local copy. Local files are ignored by Git and excluded from handovers.
+Before updating, back up any customised tracked telemetry_config.ini to its
+sibling telemetry_config_local.ini, then restore the tracked file. Existing
+complete local copies without a Configuration section default to Local.
 
 ## Platform configuration
 

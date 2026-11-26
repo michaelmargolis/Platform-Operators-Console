@@ -1,4 +1,4 @@
-# optimization_search.py ver 1
+# optimization_search.py ver 2
 """Deterministic bounded search using production POC motion/geometry methods.
 
 Screening uses a small set of actual frames AFTER whole-trace filtering. All
@@ -123,7 +123,7 @@ def prepare_normalized(capture: Capture, snapshot: dict, cue: str, global_settin
                        initial_lift_m=float(nl2_config.INITIAL_LIFT_HEIGHT_M))
     if cue != EULER and capture.quaternions is None:
         raise ValueError(f"{capture.path.name}: {cue} requires valid captured quaternions")
-    telem = TelemetryConfig(ROOT / "sims/nolimits2/telemetry_config.ini")
+    telem = TelemetryConfig(ROOT / "sims/nolimits2/telemetry_config.ini", source="global")
     telem.apply_values(global_settings)
     telem.set_temporary_classical_z(snapshot["heave_mode"] == "vertical_g")
     telem.set_angular_washout_overrides(snapshot.get("roll_washout"), snapshot.get("pitch_washout"))

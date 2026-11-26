@@ -1,4 +1,4 @@
-# study_bundle.py ver 2
+# study_bundle.py ver 3
 """Read-only, self-describing optimiser studies for normal Ride Analyzer opening.
 
 The CSV keeps ORIGINAL telemetry columns. The sidecar specifies the processing
@@ -67,7 +67,7 @@ def checked_global_settings(value: dict) -> dict:
                *value["tau"], *value["legacy_duration"]]
     if any(type(v) not in (float, int) or not math.isfinite(v) for v in numbers):
         raise ValueError("Nonfinite/non-numeric archived global settings")
-    config = TelemetryConfig(ROOT / "sims/nolimits2/telemetry_config.ini")
+    config = TelemetryConfig(ROOT / "sims/nolimits2/telemetry_config.ini", source="global")
     config.apply_values(value)
     canonical = config.snapshot()
     if canonical != value:
