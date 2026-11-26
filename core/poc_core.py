@@ -1,5 +1,7 @@
-#poc_core.py ver 63
+#poc_core.py ver 64
 from __future__ import annotations
+
+import configparser
 
 import logging
 import math
@@ -1018,11 +1020,47 @@ class PocCore(QtCore.QObject):
             return {}
         return self.telemetry_config.snapshot()
 
+    def telemetry_config_source(self) -> str:
+        return self.telemetry_config.source if self.telemetry_config is not None else "global"
+
+    def can_select_telemetry_source(self) -> bool:
+        return bool(self.telemetry_config is not None
+                    and not self._dynamic_profile_required
+                    and self.platform.state is PlatformState.DEACTIVATED
+                    and self.platform.parked)
+
+    def can_edit_telemetry_config(self) -> bool:
+        return bool(self.telemetry_config is not None
+                    and not self._dynamic_profile_required
+                    and self.telemetry_config.source == "local")
+
+    def can_commit_telemetry_config(self) -> bool:
+        return bool(self.telemetry_config is not None
+                    and not self._dynamic_profile_required
+                    and (self.telemetry_config.source == self.telemetry_config.saved_source
+                         or self.can_select_telemetry_source()))
+
+    def select_telemetry_source(self, source: str) -> bool:
+        if not self.can_select_telemetry_source():
+            self.message.emit("Choose telemetry configuration while deactivated and parked on a static ride")
+            return False
+        if source == self.telemetry_config.source:
+            return True
+        try:
+            self.telemetry_config.select_source(source)
+        except (OSError, ValueError, configparser.Error) as exc:
+            self.message.emit(f"Cannot load telemetry settings: {exc}")
+            return False
+        self.message.emit(f"{source.capitalize()} telemetry settings selected (Save to remember)")
+        return True
+
     def apply_telemetry_config(self, values: dict) -> bool:
         if self.telemetry_config is None:
             return False
         if self._dynamic_profile_required:
             self.message.emit("Global gains/washout are frozen for a dynamic ride; select a static ride before tuning")
+            return False
+        if not self.can_edit_telemetry_config():
             return False
         self.telemetry_config.apply_values(values)
         return True
@@ -1033,17 +1071,28 @@ class PocCore(QtCore.QObject):
         if self._dynamic_profile_required:
             self.message.emit("Dynamic ride processing is frozen; save prevented")
             return False
-        self.telemetry_config.apply_values(values)
-        self.telemetry_config.save()
-        self.message.emit(f"Telemetry settings saved for {self.sim.name}")
+        if not self.can_commit_telemetry_config():
+            return False
+        if self.telemetry_config.source == "local":
+            self.telemetry_config.apply_values(values)
+        try:
+            self.telemetry_config.save()
+        except (OSError, ValueError, configparser.Error) as exc:
+            self.message.emit(f"Cannot save telemetry settings: {exc}")
+            return False
+        self.message.emit(f"{self.telemetry_config.source.capitalize()} telemetry settings saved for {self.sim.name}")
         return True
 
     def cancel_telemetry_config(self) -> dict:
         if self.telemetry_config is None:
             return {}
-        if self._dynamic_profile_required:
+        if not self.can_commit_telemetry_config():
             return self.telemetry_config.snapshot()
-        values = self.telemetry_config.load()
+        try:
+            values = self.telemetry_config.load()
+        except (OSError, ValueError, configparser.Error) as exc:
+            self.message.emit(f"Cannot restore telemetry settings: {exc}")
+            return self.telemetry_config.snapshot()
         self.message.emit(f"Telemetry settings restored for {self.sim.name}")
         return values
 

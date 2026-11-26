@@ -1,7 +1,8 @@
-#telemetry_config.py  ver 7
+#telemetry_config.py  ver 8
 from __future__ import annotations
 
 import configparser
+import tempfile
 from pathlib import Path
 from typing import Iterable
 
@@ -47,8 +48,9 @@ class _LegacyDecayFilter:
 class TelemetryConfig:
     """Editable per-simulator gain and washout settings.
 
-    The file lives in the selected simulator directory because POC writes these
-    values and each simulator needs independent motion tuning.
+    The tracked INI is read-only. An optional complete sibling _local.ini
+    stores machine-specific settings and the persisted Global/Local selection.
+    Offline callers may explicitly select the repository defaults.
     """
 
     DEFAULTS = {
@@ -61,13 +63,17 @@ class TelemetryConfig:
         "legacy_duration": [12.0] * 6,
     }
 
-    def __init__(self, path: Path, *, max_intensity_percent: int = 100):
+    def __init__(self, path: Path, *, max_intensity_percent: int = 100,
+                 source: str | None = None):
         # The 0..150 commissioning override is explicit and transient; no
         # simulator INI or existing global gain setting is changed.
         if type(max_intensity_percent) is not int or max_intensity_percent not in (100, 150):
             raise ValueError("max_intensity_percent must be 100 or 150")
         self.max_intensity_percent = max_intensity_percent
         self.path = Path(path)
+        self.local_path = self.path.with_name(self.path.stem + "_local" + self.path.suffix)
+        self.source = "global"
+        self.saved_source = "global"
         self.values = {}
         self._filters = [None] * 6
         # Runtime-only per-ride switches; never saved to telemetry_config.ini.
@@ -75,9 +81,37 @@ class TelemetryConfig:
         self._variant_gain_percent = (100.0,) * 6
         self._temporary_classical_z = False
         self._temporary_classical_z_filter = None
-        self.load()
+        self.load(source=source)
 
-    def load(self) -> dict:
+    @staticmethod
+    def _read_ini(path: Path):
+        parser = configparser.ConfigParser()
+        if path.exists():
+            with path.open("r", encoding="utf-8") as stream:
+                parser.read_file(stream)
+        return parser
+
+    def _saved_source(self) -> str:
+        if not self.local_path.exists():
+            return "global"
+        parser = self._read_ini(self.local_path)
+        source = parser.get("Configuration", "active", fallback="local").strip().lower()
+        if source not in ("global", "local"):
+            raise ValueError(f"Invalid Configuration.active in {self.local_path}: {source!r}")
+        return source
+
+    def load(self, *, source: str | None = None) -> dict:
+        """Restore saved settings, or explicitly load a source for offline work."""
+        selected = self._saved_source() if source is None else source
+        values = self.select_source(selected)
+        self.saved_source = selected
+        return values
+
+    def select_source(self, source: str) -> dict:
+        """Load a source in memory; do not persist the choice until Save."""
+        if source not in ("global", "local"):
+            raise ValueError(f"Invalid telemetry configuration source: {source!r}")
+        path = self.local_path if source == "local" and self.local_path.exists() else self.path
         values = {
             "master_gain": self.DEFAULTS["master_gain"],
             "gains": list(self.DEFAULTS["gains"]),
@@ -87,9 +121,19 @@ class TelemetryConfig:
             "tau": list(self.DEFAULTS["tau"]),
             "legacy_duration": list(self.DEFAULTS["legacy_duration"]),
         }
-        parser = configparser.ConfigParser()
-        if self.path.exists():
-            parser.read(self.path)
+        parser = self._read_ini(path)
+        if path == self.local_path:
+            required = {
+                "Gains": {"master", *AXES},
+                "Washout": {"type", "gain", *(f"{prefix}_{axis}"
+                    for prefix in ("enabled", "tau", "legacy_duration") for axis in AXES)},
+            }
+            for section, keys in required.items():
+                missing = keys - set(parser[section]) if parser.has_section(section) else keys
+                if missing:
+                    raise ValueError(f"Incomplete local telemetry INI {path}: "
+                                     f"[{section}] missing {', '.join(sorted(missing))}")
+        if path.exists():
             gains = parser["Gains"] if parser.has_section("Gains") else {}
             values["master_gain"] = _int(gains.get("master", 100), 100, 0, 100)
             values["gains"] = [
@@ -115,6 +159,7 @@ class TelemetryConfig:
             ]
 
         self.values = values
+        self.source = source
         self._rebuild_filters()
         return self.snapshot()
 
@@ -146,7 +191,19 @@ class TelemetryConfig:
         self._rebuild_filters()
 
     def save(self) -> None:
+        """Persist the selection and local values, never write the tracked INI."""
+        if self.source == "global":
+            if self.local_path.exists():
+                parser = self._read_ini(self.local_path)
+                if not parser.has_section("Configuration"):
+                    parser.add_section("Configuration")
+                parser.set("Configuration", "active", "global")
+                self._write_local(parser)
+            self.saved_source = "global"
+            return
+
         parser = configparser.ConfigParser()
+        parser["Configuration"] = {"active": "local"}
         parser["Gains"] = {"master": str(int(self.values["master_gain"]))}
         for axis, value in zip(AXES, self.values["gains"]):
             parser["Gains"][axis] = str(int(value))
@@ -160,10 +217,23 @@ class TelemetryConfig:
             parser["Washout"][f"tau_{axis}"] = f"{float(self.values['tau'][i]):.4f}"
             parser["Washout"][f"legacy_duration_{axis}"] = f"{float(self.values['legacy_duration'][i]):.4f}"
 
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("w", encoding="utf-8") as stream:
-            stream.write("#telemetry_config.ini ver 2\n")
-            parser.write(stream)
+        self._write_local(parser)
+        self.saved_source = "local"
+
+    def _write_local(self, parser) -> None:
+        self.local_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
+                    dir=self.local_path.parent, prefix=self.local_path.name + ".",
+                    suffix=".tmp", delete=False) as stream:
+                temporary = Path(stream.name)
+                stream.write("#telemetry_config.ini ver 2\n")
+                parser.write(stream)
+            temporary.replace(self.local_path)
+        finally:
+            if temporary is not None and temporary.exists():
+                temporary.unlink()
 
     def scale_without_washout(self, transform: Iterable[float], intensity_percent: float) -> tuple[float, ...]:
         master = self.values["master_gain"] / 100.0

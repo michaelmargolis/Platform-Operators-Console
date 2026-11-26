@@ -1,4 +1,4 @@
-#main_window.py  ver 83
+#main_window.py  ver 84
 from __future__ import annotations
 
 import csv
@@ -1322,6 +1322,26 @@ class MainWindow(QtWidgets.QMainWindow):
         self.washout_checks = [getattr(self, f"chk_washout_{i}") for i in range(6)]
         self.washout_spins = [getattr(self, f"spin_washout_{i}") for i in range(6)]
 
+        # Shared by both desktop and compact .ui layouts.
+        self.telemetryControlLayout.setStretch(0, 62)
+        self.telemetryControlLayout.setStretch(1, 38)
+        self.grp_telemetry_source = QtWidgets.QGroupBox("Configuration", self.grp_washout)
+        source_layout = QtWidgets.QVBoxLayout(self.grp_telemetry_source)
+        source_layout.setContentsMargins(6, 6, 6, 6)
+        self.rb_telemetry_global = QtWidgets.QRadioButton("Global", self.grp_telemetry_source)
+        self.rb_telemetry_local = QtWidgets.QRadioButton("Local", self.grp_telemetry_source)
+        self.rb_telemetry_global.setObjectName("rb_telemetry_global")
+        self.rb_telemetry_local.setObjectName("rb_telemetry_local")
+        self.rb_telemetry_global.setToolTip("Use the read-only repository telemetry_config.ini")
+        self.rb_telemetry_local.setToolTip("Tune a local copy; Save remembers the settings and source")
+        source_layout.addWidget(self.rb_telemetry_global)
+        source_layout.addWidget(self.rb_telemetry_local)
+        self.washoutGrid.addWidget(self.grp_telemetry_source, 2, 2, 6, 1)
+        self.rb_telemetry_global.toggled.connect(
+            lambda checked: self._telemetry_source_changed("global") if checked else None)
+        self.rb_telemetry_local.toggled.connect(
+            lambda checked: self._telemetry_source_changed("local") if checked else None)
+
         # Built at runtime so both normal and compact .ui layouts use one
         # session-only NL2 control; unrelated simulator tabs remain unchanged.
         from sims.nolimits2 import config as nl2_config
@@ -1386,9 +1406,35 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.core.set_nl2_heave_mode(mode):
             self._sync_nl2_heave_mode()
 
+    def _telemetry_source_changed(self, source):
+        if self._updating_telemetry_controls:
+            return
+        self.core.select_telemetry_source(source)
+        self._load_telemetry_controls()
+
+    def _sync_telemetry_source_controls(self):
+        source = self.core.telemetry_config_source()
+        # Block both radios while updating their mutually exclusive state.
+        radios = (self.rb_telemetry_global, self.rb_telemetry_local)
+        blocked = [radio.blockSignals(True) for radio in radios]
+        try:
+            (radios[0] if source == "global" else radios[1]).setChecked(True)
+        finally:
+            for radio, previous in zip(radios, blocked):
+                radio.blockSignals(previous)
+        self.grp_telemetry_source.setEnabled(self.core.can_select_telemetry_source())
+        editable = self.core.can_edit_telemetry_config()
+        for slider in self.gain_sliders + [self.sld_gain_master]:
+            slider.setEnabled(editable)
+        can_commit = self.core.can_commit_telemetry_config()
+        self.btn_telemetry_save.setEnabled(can_commit)
+        self.btn_telemetry_cancel.setEnabled(can_commit)
+        return editable
+
     def _load_telemetry_controls(self, values=None):
         values = values or self.core.get_telemetry_config()
         if not values:
+            self._sync_washout_controls()
             return
         self._updating_telemetry_controls = True
         try:
@@ -1453,6 +1499,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._load_telemetry_controls(self.core.get_telemetry_config())
 
     def _sync_washout_controls(self):
+        editable = self._sync_telemetry_source_controls()
         if not bool(getattr(self.core.sim, "supports_washout", True)):
             self.combo_washout_type.setEnabled(False)
             self.spin_washout_gain.setEnabled(False)
@@ -1462,10 +1509,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 spin.setEnabled(False)
             return
 
-        self.combo_washout_type.setEnabled(True)
+        self.combo_washout_type.setEnabled(editable)
         kind = ("disabled", "classical", "legacy")[self.combo_washout_type.currentIndex()]
-        enabled = kind != "disabled"
-        self.spin_washout_gain.setEnabled(kind == "classical")
+        enabled = editable and kind != "disabled"
+        self.spin_washout_gain.setEnabled(editable and kind == "classical")
         self.labelWashoutParam.setText(
             "Time constant (s)" if kind == "classical" else
             "Decay to 2% (s)" if kind == "legacy" else
@@ -1556,6 +1603,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_sim_status(self, status):
         self._sync_review_controls()
+        self._sync_washout_controls()
         self._set_status_icon(self.lbl_pc_indicator, "ok" if status.pc_connected else "nogo")
         self._set_status_icon(
             self.lbl_sim_indicator,
@@ -1998,6 +2046,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_debug()
 
     def _on_platform_state(self, state):
+        self._sync_washout_controls()
         self.combo_nl2_heave_mode.setEnabled(
             self.core.sim_key == "nolimits2" and state is PlatformState.DEACTIVATED
         )
