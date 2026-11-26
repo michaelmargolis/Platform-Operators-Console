@@ -359,7 +359,7 @@ class NL2Protocol:
         self._send(self._message(self.N_MSG_RESET_PARK, struct.pack(">?", bool(start_paused))))
 
     def set_attraction_mode(self) -> None:
-        self._send(self._message(self.N_MSG_SET_ATTRACTION_MODEE, struct.pack(">?", bool(True))))
+        self._send(self._message(self.N_MSG_SET_ATTRACTION_MODE, struct.pack(">?", bool(True))))
         
     def recenter_vr(self) -> None:
         self._send(self._simple_message(self.N_MSG_RECENTER_VR))
