@@ -88,6 +88,7 @@ class NL2Protocol:
     N_MSG_CLOSE_PARK = 25
     N_MSG_SET_PAUSE = 27
     N_MSG_RESET_PARK = 28
+    N_MSG_SET_ATTRACTION_MODE = 30
     N_MSG_RECENTER_VR = 31
 
     PORT = 15151
@@ -113,6 +114,7 @@ class NL2Protocol:
         N_MSG_CLOSE_PARK: "CLOSE_PARK",
         N_MSG_SET_PAUSE: "SET_PAUSE",
         N_MSG_RESET_PARK: "RESET_PARK",
+        N_MSG_SET_ATTRACTION_MODE: "SET_ATTRACTION_MODE",
         N_MSG_RECENTER_VR: "RECENTER_VR",
     }
 
@@ -356,6 +358,9 @@ class NL2Protocol:
     def reset_park(self, start_paused: bool = False) -> None:
         self._send(self._message(self.N_MSG_RESET_PARK, struct.pack(">?", bool(start_paused))))
 
+    def set_attraction_mode(self) -> None:
+        self._send(self._message(self.N_MSG_SET_ATTRACTION_MODEE, struct.pack(">?", bool(True))))
+        
     def recenter_vr(self) -> None:
         self._send(self._simple_message(self.N_MSG_RECENTER_VR))
 
