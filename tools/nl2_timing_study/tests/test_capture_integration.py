@@ -143,7 +143,7 @@ def local_park(monkeypatch,tmp_path,key):
 
 
 def cli(tmp_path,server,key,root,repeats=1):
-    return ["capture","--rides",key,"--repeats",str(repeats),"--machine","FAKE_TEST_PC",
+    return ["capture","--rides",key,"--repeats",str(repeats),
             "--conditions","fake NL2 protocol test, not real simulator", "--port",str(server.port),
             "--parks-root",str(root),"--output",str(tmp_path/"captures"),"--prepare-timeout","8",
             "--depart-timeout","3","--max-duration","4","--pre-roll","0.1","--tail","0.1",
