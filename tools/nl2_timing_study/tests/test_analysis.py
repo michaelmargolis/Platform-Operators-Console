@@ -49,6 +49,33 @@ def make_trial(root, name="run", machine="fast", stretch=1., delay=.25, local=0.
     write_json(path, meta)
     return path
 
+def test_quick_preset_local_defaults():
+    from tools.nl2_timing_study.presets import resolve_plan
+
+    args = parser().parse_args(["capture"])
+    assert args.preset == "quick"
+    assert args.hz == 20
+    assert args.port == 15151
+    assert args.warmups == 0
+    assert "host" not in vars(args)
+
+    plan = resolve_plan(args)
+    assert plan.repeats == 3
+    assert plan.rides == "blackbird,fenrir,tiltcoaster"
+
+
+def test_default_park_list_excludes_hidden_and_deferred_rides():
+    default_keys = {key for _, key, _ in park_choices()}
+    assert {"blackbird", "flyingbeast"} <= default_keys
+    assert "grandnational" not in default_keys
+    assert "scenicrun" not in default_keys
+
+    assert [key for _, key, _ in park_choices("blackbird")] == ["blackbird"]
+    assert [key for _, key, _ in park_choices("Flying Beast")] == ["flyingbeast"]
+    assert [key for _, key, _ in park_choices("scenicrun")] == ["scenicrun"]
+
+    with pytest.raises(ValueError):
+        park_choices("GrandNational")
 
 def test_five_repeats_local_defaults():
     args=parser().parse_args(["capture"])

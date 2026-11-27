@@ -12,21 +12,31 @@ class FakeBackend:
         self.commands = []
         self.ticks = 0
         self.last_transform = None
+        self.ride_neutral_height_delta_mm = 0.0
 
-    def enable(self): self.enabled = True
-    def disable(self): self.enabled = False
+    def set_ride_neutral_height_delta_mm(self, delta_mm):
+        self.ride_neutral_height_delta_mm = float(delta_mm)
+
+    def enable(self):
+        self.enabled = True
+
+    def disable(self):
+        self.enabled = False
+
     def begin_activate(self, transform):
         self.commands.append(("unpark", tuple(transform)))
         self.ticks = 0
+
     def begin_deactivate(self):
         self.commands.append(("park",))
         self.ticks = 0
+
     def service_transition(self):
         self.ticks += 1
         return self.ticks == 3
+
     def move(self, transform):
         self.commands.append(("move", tuple(transform)))
-
 
 def test_parked_activation_and_completed_ride_do_not_disarm():
     out = FakeBackend()
