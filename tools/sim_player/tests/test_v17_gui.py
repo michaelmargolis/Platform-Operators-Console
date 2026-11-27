@@ -1,4 +1,4 @@
-# test_v17_gui.py ver 1
+# test_v17_gui.py ver 2
 """Qt6 integration checks for v17 startup, window resizing and v16 layout migration.
 
 Run on Windows with the normal POC checkout and PyQt6 installed.  QSettings is
@@ -58,7 +58,7 @@ def test_video_uses_extra_height_while_controls_stay_bottom(tmp_path, monkeypatc
         w.close()
 
 
-def test_v16_spacer_saved_state_is_removed_without_losing_docks(tmp_path, monkeypatch):
+def test_v16_spacer_saved_state_is_removed_with_inspector_startup_layout(tmp_path, monkeypatch):
     app, widgets, qtcore = _gui_or_skip()
     player_app = _isolated_settings(monkeypatch, tmp_path)
     w = player_app.ReplayWindow()
@@ -84,9 +84,14 @@ def test_v16_spacer_saved_state_is_removed_without_losing_docks(tmp_path, monkey
         w2 = player_app.ReplayWindow()
         w2.show()
         app.processEvents()
-        assert w2.panels['tuning'].isVisible()
-        assert w2.panels['axes'].isVisible()
-        assert w2.panels['muscles'].isVisible()
+        assert w2.panels['inspector'].isVisible()
+        for key in ('tuning', 'axes', 'muscles'):
+            dock = w2.panels[key]
+            assert not dock.isVisible()  # Advanced docks remain opt-in.
+            dock.toggleViewAction().trigger()
+            app.processEvents()
+            assert dock.isVisible()
+            dock.toggleViewAction().trigger()
         # No spacer is in the QMainWindow's dock area, even if deleteLater()
         # has not yet destroyed its QObject instance.
         legacy = w2.findChildren(widgets.QDockWidget, 'sim_player_right_spacer_v16')

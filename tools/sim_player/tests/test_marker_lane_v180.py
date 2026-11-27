@@ -1,4 +1,4 @@
-# test_marker_lane_v180.py ver 1
+# test_marker_lane_v180.py ver 2
 """Qt6 smoke tests for kinematic interval hit targets and ride marker parity."""
 import os
 import sys
@@ -20,7 +20,7 @@ def _event(start, end, peak):
 
 
 def test_kinematic_bar_spans_duration_and_selects_peak():
-    _app()
+    app = _app()
     from tools.sim_player.panels import TimelineMarkers
     from tools.sim_player.marker_intervals import timeline_x
     from PyQt6.QtCore import Qt, QPointF
@@ -44,7 +44,7 @@ def test_kinematic_bar_spans_duration_and_selects_peak():
 
 
 def test_ride_markers_unchanged():
-    _app()
+    app = _app()
     from tools.sim_player.panels import TimelineMarkers
     lane=TimelineMarkers()
     lane.resize(1036,52)

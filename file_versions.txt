@@ -1,4 +1,4 @@
-#file_versions.txt  ver 251
+#file_versions.txt  ver 252
 # Global release: v253
 # Runtime versions are derived from runtime_dependencies.txt (POC v253; Analyzer v253)
 # Relative path | expected version
@@ -57,7 +57,7 @@ sims/xplane/plugin/PI_Mdx_telemetry_ui.py|2
 sims/xplane/plugin/PI_Mdx_telemetry.py|3
 tests/__init__.py|1
 tests/test_config_store.py|10
-tests/test_digital_twin.py|3
+tests/test_digital_twin.py|4
 tests/test_serial_remote.py|1
 tests/test_physical_controls.py|7
 tests/test_sim_host_service.py|22
@@ -68,7 +68,7 @@ tests/test_fan_control.py|4
 tests/test_fan_serial.py|1
 tests/smoke_sim_interface.py|1
 tests/test_nolimits2_adapter.py|36
-tests/test_nl2_estop_recovery_v232.py|1
+tests/test_nl2_estop_recovery_v232.py|2
 tests/test_nl2_service_timestamp_v213.py|1
 tests/test_platform_controller.py|12
 tests/test_d_to_p.py|1
@@ -78,7 +78,7 @@ sims/spacecoaster/telemetry_config.ini|2
 sims/xplane/telemetry_config.ini|2
 tests/test_telemetry_config.py|5
 tests/test_operator_status.py|5
-tests/test_ui_layout.py|11
+tests/test_ui_layout.py|12
 tests/test_sim_registry.py|1
 ui/main_window.py|84
 ui/poc_main.ui|15
@@ -123,7 +123,7 @@ kinematics/kinematics_V3.py|4
 create_poc_handover_zip.py|22
 changelog.txt|95
 README.md|25
-file_versions.txt|251
+file_versions.txt|252
 tests/test_parking_workflow.py|1
 tests/test_parking_poc.py|2
 tests/test_twin_extension_v150.py|1
@@ -140,7 +140,7 @@ tests/test_nl2_request_ids_v156.py|1
 tests/test_nl2_normalized_height_v157.py|3
 tests/test_poc_performance_v158.py|1
 tests/test_transform_bars_v159.py|1
-tests/test_transform_bars_v160.py|1
+tests/test_transform_bars_v160.py|2
 tests/test_nl2_shs_gate_v161.py|1
 output/fstlib/pose_sender.py|5
 output/fstlib/pose_sender_logic.py|3
@@ -159,16 +159,16 @@ tests/test_nl2_multistation_v171.py|2
 tests/test_nl2_angular_washout_v172.py|3
 sims/nolimits2/ride_config.py|8
 sims/nolimits2/angular_cues.py|1
-tests/test_ride_variants_v176.py|3
+tests/test_ride_variants_v176.py|4
 tests/test_ride_labels_v177.py|1
 core/platform_geometry.py|3
 sims/nolimits2/ride_variants/.gitignore|1
 sims/nolimits2/variant_store.py|5
-tests/conftest.py|1
+tests/conftest.py|2
 tests/test_floor_policy_v178.py|1
 tests/test_review_dialog_gui_v178.py|2
 tests/test_review_encoder_v178.py|1
-tests/test_variant_migration_v178.py|1
+tests/test_variant_migration_v178.py|2
 tests/test_variant_selection_v178.py|3
 tests/test_variant_store_v178.py|2
 tools/migrate_nl2_variants.py|1
@@ -177,7 +177,7 @@ tools/sim_player/__main__.py|1
 tools/sim_player/angular_cues.py|1
 tools/sim_player/anomaly_detection.py|2
 tools/sim_player/anomaly_panel.py|1
-tools/sim_player/app.py|15
+tools/sim_player/app.py|16
 tools/sim_player/candidate_browser.py|3
 tools/sim_player/candidate_review.py|2
 tools/sim_player/candidate_workflow.py|3
@@ -201,29 +201,29 @@ tools/sim_player/tests/test_anomaly_detection_v10.py|1
 tools/sim_player/tests/test_loop_range_v8.py|1
 tools/sim_player/tests/test_muscle_extrema_v12.py|1
 tools/sim_player/tests/test_paused_video_preview.py|1
-tools/sim_player/tests/test_platform_variants_v178.py|5
-tools/sim_player/tests/test_qt6_api_migration_v5.py|1
+tools/sim_player/tests/test_platform_variants_v178.py|6
+tools/sim_player/tests/test_qt6_api_migration_v5.py|2
 tools/sim_player/tests/test_qt6_backend_contract.py|1
 tools/sim_player/tests/test_qt6_gui_smoke.py|1
 tools/sim_player/tests/test_recording.py|1
-tools/sim_player/tests/test_settings_v6.py|1
+tools/sim_player/tests/test_settings_v6.py|2
 tools/sim_player/tests/test_tuning_v11.py|1
 tools/sim_player/tests/test_twin_output_v6.py|1
 tools/sim_player/tests/test_v10_controller.py|1
 tools/sim_player/tests/test_v10_gui.py|1
-tools/sim_player/tests/test_v11_controller.py|2
+tools/sim_player/tests/test_v11_controller.py|3
 tools/sim_player/tests/test_v11_gui.py|1
-tools/sim_player/tests/test_v12_controller.py|1
-tools/sim_player/tests/test_v12_gui.py|1
+tools/sim_player/tests/test_v12_controller.py|2
+tools/sim_player/tests/test_v12_gui.py|2
 tools/sim_player/tests/test_v13_splitter_startup.py|1
 tools/sim_player/tests/test_v14_window_resize.py|1
 tools/sim_player/tests/test_v15_layout.py|1
 tools/sim_player/tests/test_v16_compact_layout.py|1
-tools/sim_player/tests/test_v17_gui.py|1
+tools/sim_player/tests/test_v17_gui.py|2
 tools/sim_player/tests/test_v17_layout.py|1
 tools/sim_player/tests/test_v18_variants.py|1
-tools/sim_player/tests/test_v19_default_variant.py|2
-tools/sim_player/tests/test_v20_marker_lane.py|2
+tools/sim_player/tests/test_v19_default_variant.py|3
+tools/sim_player/tests/test_v20_marker_lane.py|3
 tools/sim_player/tests/test_v7_gui.py|1
 tools/sim_player/tests/test_v8_range_slider.py|1
 tools/sim_player/tests/test_v9_gui.py|1
@@ -241,12 +241,12 @@ tools/sim_player/tests/test_muscle_scale_v179.py|1
 tools/sim_player/marker_intervals.py|1
 tools/sim_player/media_trajectory.py|1
 tools/sim_player/tests/test_marker_intervals_v180.py|1
-tools/sim_player/tests/test_marker_lane_v180.py|1
+tools/sim_player/tests/test_marker_lane_v180.py|2
 kinematics/cfg_SuspendedChairV3.py|3
 tests/test_chair_v3_neutral_v181.py|3
 core/ride_neutral.py|1
-tests/test_ride_neutral_v182.py|1
-tools/sim_player/tests/test_neutral_v182.py|1
+tests/test_ride_neutral_v182.py|2
+tools/sim_player/tests/test_neutral_v182.py|2
 tests/test_nl2_flying_beast_v183.py|1
 tests/test_nl2_reset_station_v184.py|1
 tests/test_nl2_flyer_lock_v185.py|2
@@ -269,7 +269,7 @@ tools/sim_player/optimization_search.py|2
 tools/sim_player/optimizer.py|3
 tools/sim_player/study_bundle.py|3
 tools/sim_player/task_workspace.py|1
-tools/sim_player/tests/test_optimizer_v192.py|1
+tools/sim_player/tests/test_optimizer_v192.py|2
 
 # MDX Ride Analyzer v0.2.11 additions / newly version-tracked current files
 tools/sim_player/README.md|19
@@ -289,7 +289,7 @@ tools/sim_player/dynamic_source.py|5
 tools/sim_player/dynamic_source_dialog.py|6
 tools/sim_player/dynamic_browser.py|1
 tools/sim_player/dynamic_workflow.py|1
-tools/sim_player/tests/test_dynamic_source_capture_v0211.py|6
+tools/sim_player/tests/test_dynamic_source_capture_v0211.py|7
 tools/sim_player/tests/test_workspace_menu_contract_v022.py|4
 tools/sim_player/workspace_help.py|1
 tools/sim_player/workspace_help_content.py|13
@@ -314,14 +314,14 @@ tools/sim_player/dynamic_ride_studies.py|5
 tools/sim_player/dynamic_ride_workspace.py|18
 tools/sim_player/dynamic_export_inventory.py|3
 tests/test_dynamic_candidate_import_v202.py|2
-tests/test_dynamic_import_refresh_v214.py|1
-tests/test_poc_ride_selector_v237.py|2
+tests/test_dynamic_import_refresh_v214.py|2
+tests/test_poc_ride_selector_v237.py|3
 tests/test_app_versions_v239.py|13
 tests/test_shs_local_sim_cycle_v241.py|3
 tests/test_poc_sim_swap_test_v243.py|1
 tests/test_dynamic_clearance_v202.py|2
 tools/sim_player/tests/test_dynamic_study_workspace_v202.py|1
-tools/sim_player/tests/test_dynamic_session_rides_v211.py|2
+tools/sim_player/tests/test_dynamic_session_rides_v211.py|3
 tools/sim_player/tests/test_dynamic_session_selector_v212.py|5
 tools/sim_player/tests/test_dynamic_export_inventory_v224.py|8
 docs/POC_DYNAMIC_PREPARATION_V202.md|6
@@ -359,5 +359,10 @@ tools/sim_player/tests/test_dynamic_optimizer_dependency_closure_v206.py|1
 tools/sim_player/dynamic_workflow_state.py|1
 tools/sim_player/tests/test_dynamic_workflow_state_v207.py|4
 
-tools/sim_player/tests/test_dynamic_workflow_reopen_v209.py|2
+tools/sim_player/tests/test_dynamic_workflow_reopen_v209.py|3
 tests/test_raspi_network_v218.py|6
+tests/test_dynamic_source_capture_v0211.py|5
+tools/sim_player/tests/test_canonical_workflow_v024.py|1
+tools/sim_player/tests/test_dynamic_profile_review.py|1
+tools/sim_player/tests/test_panel_parity_v023.py|1
+tools/sim_player/tests/test_workspace_panels_qt_v023.py|1

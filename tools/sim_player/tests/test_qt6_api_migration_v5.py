@@ -1,4 +1,4 @@
-# test_qt6_api_migration_v5.py ver 1
+# test_qt6_api_migration_v5.py ver 2
 """Regression check for the Qt5-to-Qt6 API migration.
 
 Static checks run in environments without PyQt6; an optional GUI test exercises
@@ -48,14 +48,15 @@ def test_qt6_menu_and_mouse_handlers_with_real_widgets():
     gui = pytest.importorskip("PyQt6.QtGui")
     test = pytest.importorskip("PyQt6.QtTest")
 
-    from tools.sim_player.app import ReplayWindow, TimelineMarkers, JumpSlider
+    from tools.sim_player.app import ReplayWindow
+    from tools.sim_player.panels import JumpSlider, TimelineMarkers
 
     application = widgets.QApplication.instance() or widgets.QApplication(["sim_player_qt6_api_smoke"])
     window = ReplayWindow()
     marker_widget = TimelineMarkers()
     slider = JumpSlider(core.Qt.Orientation.Horizontal)
     try:
-        action = window.menuBar().actions()[0].menu().actions()[0]
+        action = next(action for action in window.open_menu.actions() if action.text() == "Open capture...")
         assert action.shortcut() == gui.QKeySequence(gui.QKeySequence.StandardKey.Open)
 
         marker_widget.resize(460, 52)

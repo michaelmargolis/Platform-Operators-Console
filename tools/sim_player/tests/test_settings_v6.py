@@ -1,4 +1,4 @@
-# test_settings_v6.py ver 1
+# test_settings_v6.py ver 2
 """Settings validation/persistence and UI separation regression tests (no Qt)."""
 from __future__ import annotations
 from pathlib import Path
@@ -67,12 +67,12 @@ def test_invalid_persistent_settings_fall_back_to_disabled():
 def test_separation_of_presentation_and_motion_calculation():
     root = Path(__file__).resolve().parents[1]
     for name in ("player_ui.py", "panels.py", "options_dialog.py", "theme.py"):
-        contents = (root / name).read_text()
+        contents = (root / name).read_text(encoding="utf-8")
         assert "analyze_nl2_csv" not in contents
         assert "DigitalTwinSender" not in contents
         ast.parse(contents)
-    app = (root / "app.py").read_text()
+    app = (root / "app.py").read_text(encoding='utf-8')
     assert "def paintEvent(" not in app
     assert "class ResponsiveBars" not in app
     assert "class ReplayWindow(PlayerUiMixin, QMainWindow)" in app
-    assert "Settings…" in (root / "player_ui.py").read_text()
+    assert "Settings…" in (root / "player_ui.py").read_text(encoding="utf-8")

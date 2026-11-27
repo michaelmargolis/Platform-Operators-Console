@@ -1,4 +1,4 @@
-#test_dynamic_import_refresh_v214.py ver 1
+#test_dynamic_import_refresh_v214.py ver 2
 """Regression coverage for Pi-safe dynamic import and live catalogue refresh."""
 from __future__ import annotations
 
@@ -63,7 +63,8 @@ def test_nl2_refresh_rejects_changes_to_existing_definitions():
     original = VariantStore.for_capture('chair_v3')
     old_entries = list(original.entries())
     changed = [dict(entry) for entry in old_entries]
-    changed[0]['label'] = changed[0]['label'] + ' changed'
+    original_neutral = changed[0].get('neutral_height_delta_mm', 0.0)
+    changed[0]['neutral_height_delta_mm'] = 2.0 if original_neutral == 1.0 else 1.0
     refreshed = VariantStore('chair_v3', {
         'schema_version': 1,
         'platform_key': 'chair_v3',

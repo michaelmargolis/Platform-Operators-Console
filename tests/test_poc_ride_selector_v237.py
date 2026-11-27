@@ -1,10 +1,11 @@
-#test_poc_ride_selector_v237.py ver 2
+#test_poc_ride_selector_v237.py ver 3
 from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
 import sys
 import types
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +19,7 @@ def _stub(name, **attrs):
     return module
 
 
+@patch.dict(sys.modules)
 def _load_sim_module():
     # Load the adapter in isolation so this focused display test does not need
     # Qt, sockets or a complete NoLimits installation.
@@ -134,6 +136,6 @@ def test_operator_header_recognises_actual_designer_caption_and_reserves_long_na
 def test_nolimits_launcher_enables_vr_and_preserves_telemetry_and_start_park():
     text = (ROOT / "sim_host_service" / "sims" / "nolimits2.bat").read_text(encoding="utf-8")
     command = next(line for line in text.splitlines() if line.lower().startswith("start "))
-    assert '--telemetry --vr --openpark' in command
+    assert '--telemetry --vr --openpaused --openpark' in command
     assert 'nolimits2app.exe' in command
     assert r'C:\Program Files\NoLimits 2\parks\MDX\MdxLogoCoaster\MdxLogoCoaster.nl2park' in command

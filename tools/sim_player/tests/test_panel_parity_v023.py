@@ -1,3 +1,4 @@
+# test_panel_parity_v023.py ver 1
 """Inspector/Advanced parity and pre-refactor behaviours, without Qt.
 
 Executes the actual controller/panel methods against narrow UI test doubles.
@@ -24,7 +25,7 @@ PLAYER = Path(__file__).resolve().parents[1]
 
 
 def methods(file, cls, names, env=None):
-    tree=ast.parse((PLAYER/file).read_text())
+    tree=ast.parse((PLAYER/file).read_text(encoding='utf-8'))
     klass=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name==cls)
     nodes=[n for n in klass.body if isinstance(n,ast.FunctionDef) and n.name in names]
     assert len(nodes)==len(names)

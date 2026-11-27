@@ -1,3 +1,4 @@
+# test_dynamic_profile_review.py ver 1
 """Profile-aware review tests; synthetic fixtures, production math, no GUI needed."""
 from __future__ import annotations
 from dataclasses import replace
@@ -298,7 +299,7 @@ def test_generated_csvs_cannot_enter_raw_capture_picker():
 
 
 def _method(path,cls_name,name,namespace=None):
-    tree=ast.parse(path.read_text());cls=next(c for c in tree.body if isinstance(c,ast.ClassDef) and c.name==cls_name)
+    tree=ast.parse(path.read_text(encoding='utf-8'));cls=next(c for c in tree.body if isinstance(c,ast.ClassDef) and c.name==cls_name)
     method=next(m for m in cls.body if isinstance(m,ast.FunctionDef) and m.name==name)
     env=dict(namespace or {})
     exec(compile(ast.fix_missing_locations(ast.Module(body=[method],type_ignores=[])),str(path),'exec'),env)

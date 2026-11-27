@@ -1,4 +1,4 @@
-# test_v12_controller.py ver 1
+# test_v12_controller.py ver 2
 """Video layout and muscle peak lifecycle checks without requiring Qt6."""
 import ast
 from pathlib import Path
@@ -24,7 +24,7 @@ def test_video_and_controls_use_fixed_strip_without_obsolete_splitter():
 
 
 def test_play_from_ride_end_resets_peaks_but_automatic_loop_does_not():
-    from test_paused_video_preview import FakeWindow
+    from .test_paused_video_preview import FakeWindow
     ui = FakeWindow(has_video=False)
     ui.muscle_extrema.record((800,) * 6)
     ui.muscle_extrema.record((900,) * 6)

@@ -1,4 +1,4 @@
-# test_neutral_v182.py ver 1
+# test_neutral_v182.py ver 2
 """Offline/POC matching, replay cache and variant/experiment persistence."""
 from __future__ import annotations
 
@@ -112,7 +112,7 @@ def test_raw_replay_never_receives_named_variant_height_delta(tmp_path):
 
 def extracted(methods):
     path=Path(__file__).resolve().parents[1]/'app.py'
-    tree=ast.parse(path.read_text())
+    tree=ast.parse(path.read_text(encoding='utf-8'))
     cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='ReplayWindow')
     found=[n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name in methods]
     ns={}
@@ -139,10 +139,10 @@ def test_real_reanalysis_preserves_supplied_tuned_snapshot_not_old_recording():
     method=extracted({'_request_reanalysis'})['_request_reanalysis']
     # Verify the controlling branch at AST level; invoking its Qt LoadWorker is
     # separately tested by the existing controller suite.
-    fn=ast.parse((Path(__file__).resolve().parents[1]/'app.py').read_text())
+    fn=ast.parse((Path(__file__).resolve().parents[1]/'app.py').read_text(encoding='utf-8'))
     cls=next(n for n in fn.body if isinstance(n,ast.ClassDef) and n.name=='ReplayWindow')
     target=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='_request_reanalysis')
-    snippet=ast.get_source_segment((Path(__file__).resolve().parents[1]/'app.py').read_text(),target)
+    snippet=ast.get_source_segment((Path(__file__).resolve().parents[1]/'app.py').read_text(encoding='utf-8'),target)
     assert 'if variant_snapshot is None:' in snippet
     assert 'variant_snapshot = getattr(self.recording, "variant_snapshot", None)' in snippet
 
@@ -150,7 +150,7 @@ def test_real_reanalysis_preserves_supplied_tuned_snapshot_not_old_recording():
 def panel_methods(methods):
     """Exercise the real Qt panel methods without importing Qt in headless CI."""
     path=Path(__file__).resolve().parents[1]/'tuning_panel.py'
-    tree=ast.parse(path.read_text())
+    tree=ast.parse(path.read_text(encoding='utf-8'))
     cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='MotionTuningPanel')
     found=[n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name in methods]
     ns={}

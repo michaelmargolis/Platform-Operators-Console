@@ -1,4 +1,4 @@
-# test_v20_marker_lane.py ver 2
+# test_v20_marker_lane.py ver 3
 """v20 marker defaults and label rendering regressions (requires Qt6)."""
 import os
 import sys
@@ -30,7 +30,7 @@ def test_marker_category_defaults_to_kinematic():
 
 
 def test_dense_kinematic_lane_draws_without_per_event_labels(monkeypatch):
-    _qt()
+    app = _qt()
     from tools.sim_player.panels import TimelineMarkers
     from PyQt6.QtGui import QPainter
     from PyQt6.QtCore import Qt

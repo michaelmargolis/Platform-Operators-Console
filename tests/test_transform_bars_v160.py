@@ -1,4 +1,4 @@
-# test_transform_bars_v160.py ver 1
+# test_transform_bars_v160.py ver 2
 """Regression checks for display-only heave sign and Debug-tab bypass."""
 
 from ui import main_window
@@ -35,11 +35,13 @@ def test_sample_callback_switch_keeps_other_work():
 
     debug = object()
     other = object()
+    updates = []
     obj = SimpleNamespace(
         tab_debug=debug, tab_output=object(), tab_transform=object(),
         tabWidget=TabWidget(debug), transform_bars=Bars(),
         _capture_csv_sample=lambda sample: None,
         _update_debug=lambda: None,
+        _update_profile=lambda: updates.append("profile"),
     )
     sample = SimpleNamespace(transform=(0, 0, 0.5, 0, 0, 0))
     main_window.MainWindow._on_sample(obj, sample)
@@ -47,3 +49,4 @@ def test_sample_callback_switch_keeps_other_work():
     obj.tabWidget.active = other
     main_window.MainWindow._on_sample(obj, sample)
     assert obj.transform_bars.calls == [(0, 0, -0.5, 0, 0, 0)]
+    assert updates == ["profile", "profile"]

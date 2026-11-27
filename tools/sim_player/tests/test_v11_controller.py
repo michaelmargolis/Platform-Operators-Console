@@ -1,4 +1,4 @@
-# test_v11_controller.py ver 2
+# test_v11_controller.py ver 3
 """Qt-independent tests of v11 controller using actual extracted methods."""
 from __future__ import annotations
 import ast
@@ -16,7 +16,7 @@ METHODS = ('_cache_recording', '_request_reanalysis', '_apply_reanalysis', '_res
 
 
 def extract():
-    tree = ast.parse(APP.read_text())
+    tree = ast.parse(APP.read_text(encoding='utf-8'))
     cls = next(c for c in tree.body if isinstance(c, ast.ClassDef) and c.name == 'ReplayWindow')
     methods = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in METHODS]
     assert {m.name for m in methods} == set(METHODS)

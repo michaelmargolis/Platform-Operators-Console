@@ -1,3 +1,4 @@
+# test_canonical_workflow_v024.py ver 1
 """Execute actual media/controller methods with decoder doubles (NOT Qt rendering)."""
 from pathlib import Path
 from types import SimpleNamespace as NS
@@ -10,7 +11,7 @@ PLAYER=Path(__file__).resolve().parents[1]
 
 
 def method(filename,cls,name,extra=None):
-    tree=ast.parse((PLAYER/filename).read_text())
+    tree=ast.parse((PLAYER/filename).read_text(encoding='utf-8'))
     c=next(x for x in tree.body if isinstance(x,ast.ClassDef) and x.name==cls)
     n=next(x for x in c.body if isinstance(x,ast.FunctionDef) and x.name==name)
     env={};env.update(extra or {})
@@ -122,7 +123,7 @@ def test_same_source_reanalysis_keeps_map_decoder_and_clock():
 
 
 def test_menu_entry_and_reference_switch_are_wired():
-    from test_workspace_menu_contract_v022 import menu_host,actions
+    from .test_workspace_menu_contract_v022 import menu_host, actions
     h=menu_host()
     actions(h.open_menu)['Ride reference video...'].triggered.emit()
     h.manage_canonical_video.assert_called_once_with()

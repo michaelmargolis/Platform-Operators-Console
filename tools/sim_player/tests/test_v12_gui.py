@@ -1,4 +1,4 @@
-# test_v12_gui.py ver 1
+# test_v12_gui.py ver 2
 """Optional Windows/Qt6 smoke checks: fixed controls, video and peak rendering."""
 import os
 import sys
@@ -37,7 +37,7 @@ def test_main_window_resize_changes_video_not_control_strip():
 
 
 def test_muscle_peak_lines_and_red_overrange_flags_render():
-    app_or_skip()
+    app = app_or_skip()
     from tools.sim_player.panels import ResponsiveBars
     bars = ResponsiveBars(False)
     try:

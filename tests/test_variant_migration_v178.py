@@ -1,4 +1,4 @@
-# test_variant_migration_v178.py ver 1
+# test_variant_migration_v178.py ver 2
 """Migration is non-executing, explicit, platform-local and non-overwriting."""
 import ast
 from pathlib import Path
@@ -74,7 +74,7 @@ def test_invalid_startup_catalog_errors_are_caught_before_output():
     root=Path(__file__).resolve().parents[1]
     tree=ast.parse((root/'poc.py').read_text())
     main_node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='main')
-    assert any(isinstance(n,ast.Try) and 'core = PocCore(config)' in ast.unparse(n) and
+    assert any(isinstance(n,ast.Try) and 'core = PocCore(config, max_intensity_percent=args.max_intensity)' in ast.unparse(n) and
                'POC Configuration Error' in ast.unparse(n) for n in main_node.body)
     core_text=(root/'core/poc_core.py').read_text()
     assert core_text.index('self._startup_variant_store.validate_display()') < core_text.index('platform_backend = SopPlatformBackend(')

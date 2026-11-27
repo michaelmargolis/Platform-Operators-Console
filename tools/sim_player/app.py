@@ -1,4 +1,4 @@
-# app.py ver 15
+# app.py ver 16
 """MDX Ride Analyzer: offline ride-analysis controller (PyQt6 only).
 
 UI layout is in player_ui.py; presentation panels in panels.py. This module
@@ -127,6 +127,8 @@ class ReplayWindow(PlayerUiMixin, QMainWindow):
         self.setDockOptions(QMainWindow.DockOption.AllowNestedDocks | QMainWindow.DockOption.AllowTabbedDocks |
                             QMainWindow.DockOption.AnimatedDocks)
         self._create_central()
+        self._refresh_marker_lane()
+        self._refresh_range_controls()
         self._create_docks()
         self._create_menus()
         self._task_mode_selected('review')

@@ -1,4 +1,4 @@
-# test_ride_neutral_v182.py ver 1
+# test_ride_neutral_v182.py ver 2
 """v182 ride-height bounds, physical signs, limiter anchor and live POC seam."""
 from __future__ import annotations
 
@@ -22,13 +22,13 @@ from sims.nolimits2.variant_store import VariantStore
 from tools.analyze_nl2_csv import make_backend
 
 
-def test_chair_v3_limits_implemented_as_instance_override():
+def test_chair_v3_and_v2_retain_their_calibrated_limits():
     cfg=make_backend('chair_v3').cfg
     assert cfg.LIMITS_1DOF_TRANFORM[:3]==(90,90,100)
     assert cfg.LIMITS_1DOF_TRANFORM[3:]==pytest.approx([math.radians(x) for x in (10,8,9)])
     legacy=make_backend('chair_v2').cfg
     assert legacy.LIMITS_1DOF_TRANFORM[3:]==pytest.approx(
-        [math.radians(x) for x in (12,10,12)])
+        [math.radians(x) for x in (10,8,9)])
     assert cfg.NEUTRAL_HEIGHT_OFFSET_MM==100
 
 

@@ -1,4 +1,4 @@
-# test_ride_variants_v176.py ver 3
+# test_ride_variants_v176.py ver 4
 """v176 regression: labels are IDs; park reloads only for different park keys.
 
 Tests are offline. They send no SHS/Festo output or physical platform commands.
@@ -141,12 +141,15 @@ def test_gain_scales_use_global_config_without_persisting(tmp_path):
 def test_core_variant_sync_uses_confirmed_label_and_clears_overrides(tmp_path):
     pytest.importorskip("PyQt5")
     from core.poc_core import PocCore
+    from tests.test_parking_workflow import FakeBackend
+
     sim, client = connected()
     completed(sim, client)
     sim.select_experience(idx(sim, 'Blackbird'))
     completed(sim, client)
     cfg = TelemetryConfig(tmp_path/'telemetry_config.ini')
     core = SimpleNamespace(sim_key='nolimits2', telemetry_config=cfg, sim=sim,
+                           platform=SimpleNamespace(backend=FakeBackend()),
                            _angular_washout_ride=None, _motion_transform=(0,)*6)
     PocCore._sync_nl2_angular_washout(core)
     assert core._angular_washout_ride == 'Blackbird'

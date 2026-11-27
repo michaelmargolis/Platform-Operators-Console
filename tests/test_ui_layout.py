@@ -1,4 +1,4 @@
-#test_ui_layout.py  ver 11
+#test_ui_layout.py  ver 12
 from pathlib import Path
 from types import SimpleNamespace
 import xml.etree.ElementTree as ET
@@ -123,10 +123,15 @@ def test_debug_controls_own_activation_mode_and_exit():
 
 
 def test_ready_indicator_priority_and_states():
-    no_data = SimStatus(data_connected=False, ready_to_start=True)
+    no_data = SimStatus(data_connected=False, ready_to_start=False)
     assert readiness_indicator_key(
         PlatformState.ACTIVATED, ExperienceState.RUNNING, no_data
     ) == "nogo"
+
+    recorded_start_ready = SimStatus(data_connected=False, ready_to_start=True)
+    assert readiness_indicator_key(
+        PlatformState.ACTIVATED, ExperienceState.READY, recorded_start_ready
+    ) == "ok"
 
     data_not_ready = SimStatus(data_connected=True, ready_to_start=False)
     assert readiness_indicator_key(

@@ -1,4 +1,4 @@
-# test_v19_default_variant.py ver 2
+# test_v19_default_variant.py ver 3
 """v19: named park configuration is default, <park> raw is explicit legacy."""
 from pathlib import Path
 import pytest
@@ -75,7 +75,7 @@ def test_player_actual_dropdown_method_selects_standard_and_raw_without_qt(tmp_p
     from tools.sim_player.variant_presets import dropdown_choices_for_capture
 
     source = Path(__file__).resolve().parents[1] / 'app.py'
-    tree = ast.parse(source.read_text())
+    tree = ast.parse(source.read_text(encoding='utf-8'))
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'ReplayWindow')
     func = next(n for n in cls.body if isinstance(n, ast.FunctionDef)
                 and n.name == '_fill_variant_choices')

@@ -1,4 +1,4 @@
-# test_digital_twin.py ver 3
+# test_digital_twin.py ver 4
 import json
 import socket
 from types import SimpleNamespace
@@ -86,8 +86,8 @@ def test_snapshot_is_complete_versioned_compact_json():
     assert first["platform"] == "chair_v2"
     assert first["dtop_load_kg_per_muscle"] == 85.0 / 6.0
     assert first["transform"] == snapshot_values()["transform"]
-    assert first["parking_state"] == "UNKNOWN"
-    assert first["applied_transform_real"] is None
+    assert first["parking_state"] == "UNPARKED"
+    assert first["applied_transform_real"] == [12, 3, -5, 0, 0, .1]
     assert first["muscle_length_mm"] == [700.0, 701.0, 702.0, 703.0, 704.0, 705.0]
     assert first["command_pressure_mbar"] == [1000.0, 1100.0, 1200.0, 1300.0, 1400.0, 1500.0]
     assert len(first_data) < MAX_DATAGRAM_BYTES

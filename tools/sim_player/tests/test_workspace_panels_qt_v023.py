@@ -1,3 +1,4 @@
+# test_workspace_panels_qt_v023.py ver 1
 """Real Qt widget/parity checks. Skip rather than simulate Qt if unavailable."""
 import os
 os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
@@ -29,7 +30,7 @@ def inspector(application):
 def test_inspector_uses_original_widget_and_matches_advanced_rendering(inspector,application):
     r=inspector.recording;h=MuscleExtrema();h.advance(r.frames,0);h.advance(r.frames,2)
     state=muscle_bar_state(r,r.frames[2],extrema=h.extrema(),bounds=plot_bounds(r))
-    legacy=ResponsiveBars(False)
+    legacy=ResponsiveBars(False, inspector.muscle_readout.parentWidget())
     try:
         assert isinstance(inspector.muscle_readout,ResponsiveBars)
         for bar in (inspector.muscle_readout,legacy):

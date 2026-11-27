@@ -1,4 +1,4 @@
-# test_dynamic_source_capture_v0211.py ver 6
+# test_dynamic_source_capture_v0211.py ver 7
 """Headless contracts for Ride Analyzer dynamic-source capture integration."""
 from __future__ import annotations
 
@@ -14,10 +14,17 @@ from tools.sim_player.dynamic_source import (
 )
 
 
+ANALYZER_ROOT = Path(__file__).resolve().parents[1]
+
+
 def test_product_name_changes_without_internal_package_rename():
     assert PRODUCT_NAME == "MDX Ride Analyzer"
     assert PRODUCT_SHORT_NAME == "Ride Analyzer"
-    assert WORKSPACE_VERSION == "0.2.27"
+    changelog = (ANALYZER_ROOT / "changelog.txt").read_text(encoding="utf-8")
+    latest_workspace_release = next(
+        line for line in changelog.splitlines() if line.startswith("MDX Ride Analyzer v0.")
+    )
+    assert latest_workspace_release.split(" - ", 1)[0] == f"MDX Ride Analyzer v{WORKSPACE_VERSION}"
 
 
 def test_current_ride_plan_launches_existing_capture_module(tmp_path):
@@ -96,7 +103,7 @@ def test_completed_non_warmup_recordings_are_discovered(tmp_path):
 
 
 def test_dialog_source_uses_qprocess_and_has_no_hardware_output_dependency():
-    source = (Path(__file__).resolve().parents[1] / "dynamic_source_dialog.py").read_text()
+    source = (ANALYZER_ROOT / "dynamic_source_dialog.py").read_text(encoding="utf-8")
     assert "QProcess" in source
     assert "tools.nl2_timing_study" not in source  # command building is isolated in the Qt-free helper
     assert "Festo" not in source
@@ -134,9 +141,8 @@ def test_scenic_run_hidden_from_operator_and_analyzer():
 
 
 def test_scenic_run_not_offered_by_analyzer_browsers():
-    base = Path(__file__).resolve().parents[1]
     for name in ("candidate_browser.py", "canonical_dialog.py", "dynamic_browser.py"):
-        source = (base / name).read_text()
+        source = (ANALYZER_ROOT / name).read_text(encoding="utf-8")
         assert "ANALYZER_HIDDEN_PARKS" in source
 
     from sims.nolimits2.variant_store import VariantStore
@@ -146,7 +152,7 @@ def test_scenic_run_not_offered_by_analyzer_browsers():
 
 
 def test_dialog_source_contains_estimate_and_live_start_update():
-    source = (Path(__file__).resolve().parents[1] / "dynamic_source_dialog.py").read_text()
+    source = (ANALYZER_ROOT / "dynamic_source_dialog.py").read_text(encoding="utf-8")
     assert '"Estimated capture time"' in source
     assert "capture_start_event" in source
     assert "min remaining" in source
@@ -188,7 +194,7 @@ def test_session_scope_provenance_is_added_without_rewriting_low_level_preset(tm
 
 
 def test_dialog_prefills_hardware_conditions_and_records_scope():
-    source = (Path(__file__).resolve().parents[1] / "dynamic_source_dialog.py").read_text()
+    source = (ANALYZER_ROOT / "dynamic_source_dialog.py").read_text(encoding="utf-8")
     assert "setText(default_test_conditions())" in source
     assert "annotate_session_scope" in source
 

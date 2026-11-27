@@ -1,4 +1,4 @@
-# test_optimizer_v192.py ver 1
+# test_optimizer_v192.py ver 2
 """Numerical, export, replay and isolation checks; all recordings are synthetic."""
 from __future__ import annotations
 
@@ -281,7 +281,7 @@ def test_actual_worker_opens_candidate_with_platform_and_no_gain_reapplication(t
                          SearchOptions(evaluations=80,sample_frames=12,alternatives=0),progress=lambda s:None)
     path=Path(report["candidates"][0]["csv_files"][0])
     source=Path(__file__).resolve().parents[1]/"app.py"
-    tree=ast.parse(source.read_text())
+    tree=ast.parse(source.read_text(encoding='utf-8'))
     cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=="LoadWorker")
     method=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=="run")
     namespace={"load_recording":load_recording}
@@ -298,7 +298,7 @@ def test_actual_worker_opens_candidate_with_platform_and_no_gain_reapplication(t
 
 def test_experiment_application_forwards_archived_globals_without_live_changes():
     source=Path(__file__).resolve().parents[1]/"app.py"
-    tree=ast.parse(source.read_text())
+    tree=ast.parse(source.read_text(encoding='utf-8'))
     cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=="ReplayWindow")
     method=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=="_apply_experiment_values")
     from tools.sim_player.tuning import validate_gain_percent

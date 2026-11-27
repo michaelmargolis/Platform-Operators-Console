@@ -1,4 +1,4 @@
-# test_dynamic_session_rides_v211.py ver 2
+# test_dynamic_session_rides_v211.py ver 3
 """Session-driven dynamic ride selection and generic generation/package scope."""
 from pathlib import Path
 from types import SimpleNamespace
@@ -56,7 +56,9 @@ def test_workspace_source_contract_is_session_driven_and_buttons_are_distinct():
     assert 'rides = available_rides(session)' in source
     assert 'self.ride.clear()' in source
     assert 'RIDE_LABELS =' not in source
-    assert 'background:#2f6f9d' in source
+    assert "self.open_recording_btn.clicked.connect(self.open_recording)" in source
+    assert "self.source_next_btn.clicked.connect(self._source_next)" in source
+    assert "self.source_next_btn.setObjectName('primaryActionButton')" in source
     assert 'QPushButton#primaryActionButton' in source
     assert 'background:#147fc8' in source
     assert 'background:#182838' in source  # combo-box field, visually distinct from buttons
