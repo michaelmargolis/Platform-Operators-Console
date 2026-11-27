@@ -32,6 +32,10 @@ class FakeSim:
             pc_connected=True, sim_connected=True, data_connected=self.valid,
             ready_to_start=self.state is ExperienceState.READY,
         )
+
+    def loaded_variant_snapshot(self):
+        return {"dynamic_profile": None}
+
     def starting_transform(self, sample):
         return SimInterface.starting_transform(self, sample)
     def run(self): self.events.append("run")

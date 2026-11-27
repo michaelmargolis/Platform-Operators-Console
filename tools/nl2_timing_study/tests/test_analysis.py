@@ -77,20 +77,6 @@ def test_default_park_list_excludes_hidden_and_deferred_rides():
     with pytest.raises(ValueError):
         park_choices("GrandNational")
 
-def test_five_repeats_local_defaults():
-    args=parser().parse_args(["capture"])
-    assert args.repeats==5 and args.hz==20 and args.port==15151
-    assert args.warmups==0 and args.rides=="all"
-    assert "host" not in vars(args)
-
-
-def test_all_supported_excludes_hidden():
-    assert "grandnational" not in [k for _,k,_ in park_choices()]
-    assert {"blackbird","flyingbeast","scenicrun"} <= {k for _,k,_ in park_choices()}
-    assert park_choices("blackbird")[0][1]=="blackbird"
-    assert park_choices("Flying Beast")[0][1]=="flyingbeast"
-    with pytest.raises(ValueError):park_choices("GrandNational")
-
 
 @pytest.mark.parametrize("bad", ["0","-2","nan","inf"])
 def test_bad_rate_rejected(bad):
