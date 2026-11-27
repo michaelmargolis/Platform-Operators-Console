@@ -11,7 +11,7 @@ from tools.sim_player.task_workspace import TaskInspector
 from tools.sim_player.panels import ResponsiveBars
 from tools.sim_player.panel_state import muscle_bar_state
 from tools.sim_player.muscle_extrema import MuscleExtrema,plot_bounds
-from test_panel_parity_v023 import recording
+from .test_panel_parity_v023 import recording
 
 @pytest.fixture(scope='module')
 def application():

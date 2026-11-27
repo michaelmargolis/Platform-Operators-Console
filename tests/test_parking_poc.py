@@ -48,8 +48,10 @@ class FakeSim:
 
 class Config:
     def get(self, name, default=None):
-        return {"selected_platform": "chair_v2", "sim_host_service": {"enabled": False},
-                "digital_twin": {"address": "-"}}.get(name, default)
+        return {"selected_platform": "chair_v2",
+                "sim_host_service": {"enabled": False},
+                "digital_twin": {"address": "-"}}.get(name, default),
+                "festo_valve0_side": {"chair_v2": "left"}
 
 
 @pytest.fixture
