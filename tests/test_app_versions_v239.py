@@ -1,4 +1,4 @@
-#test_app_versions_v239.py ver 13
+#test_app_versions_v239.py ver 14
 from pathlib import Path
 
 import pytest
@@ -74,8 +74,8 @@ def test_runtime_version_cannot_exceed_global_release(tmp_path):
 
 
 def test_current_manifest_versions_and_membership_are_consistent():
-    assert app_versions.read_global_release(ROOT) == 253
-    assert app_versions.get_app_versions(ROOT) == {"analyzer": 253, "poc": 253}
+    assert app_versions.read_global_release(ROOT) == 254
+    assert app_versions.get_app_versions(ROOT) == {"analyzer": 254, "poc": 254}
 
     tracked = set()
     for raw in (ROOT / "file_versions.txt").read_text(encoding="utf-8").splitlines():
@@ -90,6 +90,8 @@ def test_current_manifest_versions_and_membership_are_consistent():
     analyzer_paths = {item.path for item in dependencies if "analyzer" in item.apps}
     assert {
         "core/digital_twin.py",
+        "core/motion_convention.py",
+        "core/platform_controller.py",
         "core/telemetry_config.py",
         "tools/sim_player/canonical_sync.py",
         "tools/sim_player/canonical_workflow.py",
@@ -104,21 +106,21 @@ def test_current_manifest_versions_and_membership_are_consistent():
     assert "core/dynamic_import.py" not in analyzer_paths
 
     dependency_releases = {item.path: item.last_runtime_release for item in dependencies}
-    assert dependency_releases["core/poc_core.py"] == 253
-    assert dependency_releases["core/config_store.py"] == 250
+    assert dependency_releases["core/poc_core.py"] == 254
+    assert dependency_releases["core/config_store.py"] == 254
     assert dependency_releases["poc.py"] == 249
     assert dependency_releases["poc_config.json"] == 250
-    assert dependency_releases["output/fstlib/pose_sender.py"] == 250
-    assert dependency_releases["output/fstlib/pose_sender_logic.py"] == 250
-    assert dependency_releases["core/platform_controller.py"] == 250
+    assert dependency_releases["output/fstlib/pose_sender.py"] == 254
+    assert dependency_releases["output/fstlib/pose_sender_logic.py"] == 254
+    assert dependency_releases["core/platform_controller.py"] == 254
     assert dependency_releases["tools/sim_player/platform_selection.py"] == 249
     assert dependency_releases["controls/physical_controls.py"] == 248
-    assert dependency_releases["sims/nolimits2/sim.py"] == 246
-    assert dependency_releases["kinematics/cfg_SuspendedChairV3.py"] == 247
+    assert dependency_releases["sims/nolimits2/sim.py"] == 254
+    assert dependency_releases["kinematics/cfg_SuspendedChairV3.py"] == 254
     assert dependency_releases["sim_host_service/server.py"] == 243
     assert dependency_releases["sim_host_service/sims/spacecoaster.bat"] == 243
     assert dependency_releases["sims/spacecoaster/config.py"] == 243
-    assert dependency_releases["sims/spacecoaster/sim.py"] == 243
+    assert dependency_releases["sims/spacecoaster/sim.py"] == 254
 
 
 def test_title_bars_use_the_derived_runtime_version():

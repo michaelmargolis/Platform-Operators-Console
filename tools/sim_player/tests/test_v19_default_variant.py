@@ -41,7 +41,7 @@ def test_standard_default_and_explicit_raw_are_reproducibly_distinct(tmp_path):
     assert standard.gain_percent == (100.0,) * 6
     assert standard.frames[0].source_axes == raw.frames[0].source_axes
     assert standard.frames[0].input_axes[2] == pytest.approx(
-        0.9 * (1.0 - 2.0*(7.5-5.9)/(41.0-5.9)))
+        0.9 * (2.0 * (7.5 - 5.9) / (41.0 - 5.9) - 1.0))
     assert raw.frames[0].input_axes[2] == 0
     assert standard.frames[0].input_axes[2] != raw.frames[0].input_axes[2]
     assert path.read_bytes() == original

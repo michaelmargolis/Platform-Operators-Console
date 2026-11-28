@@ -1,4 +1,4 @@
-#poc_core.py ver 64
+#poc_core.py ver 65
 from __future__ import annotations
 
 import configparser
@@ -912,6 +912,8 @@ class PocCore(QtCore.QObject):
             )
         return {
             "festo_ip": getattr(backend, "festo_ip", ""),
+            "geometry_id": getattr(backend, "geometry_id", ""),
+            "channel_to_pair": getattr(backend, "channel_to_pair", ()),
             "muscle_lengths": lengths,
             "pressures": pressures,
             "contractions": contractions,
@@ -941,10 +943,14 @@ class PocCore(QtCore.QObject):
             output = self.get_output_snapshot()
             self.digital_twin.send_snapshot(
                 platform=getattr(self, "platform_name", self.platform_key),
+                geometry_id=output["geometry_id"],
+                channel_to_pair=output["channel_to_pair"],
                 platform_state=self.platform.state.name,
                 parking_state=getattr(getattr(self.platform, "parking_state", None), "name", "UNKNOWN"),
-                applied_transform_real=getattr(
-                    getattr(self.platform, "backend", None), "last_applied_real_transform", None
+                # A park/unpark or prop length ramp has no solved rigid-body pose.
+                applied_transform_real=(
+                    getattr(self.platform.backend, "last_applied_real_transform", None)
+                    if transform_applied else None
                 ),
                 simulator_state=self.experience_state.name,
                 telemetry_valid=sample.telemetry_valid,

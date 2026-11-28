@@ -1,4 +1,4 @@
-# platforms.py ver 7
+# platforms.py ver 8
 """Physical-platform metadata used by the prototype selector.
 
 The module paths match the current POC kinematics configuration. The canonical
@@ -13,20 +13,14 @@ PLATFORMS = {
         # Keep the established protocol name for wire compatibility.
         "platform_name": "wheelchair_platform",
         "sop_config_module": "kinematics.cfg_SuspendedPlatformMdx",
+        "festo_valve0_side": "right",
     },
     "chair_v3": {
         "name": "V3 Chair",
         "sop_config_module": "kinematics.cfg_SuspendedChairV3",
-    },
-    "Falcon": {
-        "name": "Falcon Platform",
-        "sop_config_module": "kinematics.cfg_SuspendedChairFalcon",
-    },
-    # Legacy selector key retained so existing poc_config.json files continue
-    # to start. It intentionally uses the single suspended-chair geometry.
-    "chair_v2": {
-        "name": "V2 Chair",
-        "sop_config_module": "kinematics.cfg_SuspendedChair",
-        "festo_ip": "192.168.0.10",
+        "festo_valve0_side": "left",
     },
 }
+
+# Keep these keys readable in machine-local wiring settings for rollback.
+DEFERRED_PLATFORMS = frozenset({"chair_v2", "Falcon"})

@@ -1,4 +1,4 @@
-#cfg_SuspendedPlatformMdx.py  ver 5
+#cfg_SuspendedPlatformMdx.py  ver 6
 from math import radians
 
 
@@ -6,9 +6,6 @@ class PlatformConfig(object):
     PLATFORM_NAME = "Ground-Loading Platform"
     PLATFORM_TYPE = "Inverted Stewart Platform"
     PLATFORM_INVERTED = True
-    # MDX rider-frame transform: +roll means right side down (CAD -Y down).
-    # Preserve the original heave convention; no change to chair platforms.
-    AXIS_FLIP_MASK = (1, 1, -1, 1, 1, 1)
     # The six kinematic indices also identify physical EasyIP valve channels.
     # CAD: channel 0 is the front-right (+X, -Y) muscle.
     MUSCLE_PRESSURE_MAPPING_FILE = "output/wheelchair_DtoP.csv"

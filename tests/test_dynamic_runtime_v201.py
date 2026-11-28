@@ -1,4 +1,4 @@
-#test_dynamic_runtime_v201.py ver 2
+#test_dynamic_runtime_v201.py ver 3
 """No-hardware dynamic POC profile publication / safety policy tests.
 
 Uses an isolated fake repository for deployment and catalog writes. NEVER
@@ -18,6 +18,8 @@ import pytest
 from core.dynamic_profiles import (
     DynamicDeployment, DynamicProfileError, DynamicErrorLog, audit_dynamic_store,
     validate_bundle_relpath, DEFAULT_MAX_PROFILE_LAG_S)
+from core.motion_convention import MOTION_CONVENTION
+from core.platform_geometry import geometry_id_for_platform
 from core.telemetry_config import TelemetryConfig
 from sims.nolimits2.variant_store import VariantStore
 from sims.nolimits2 import ride_config
@@ -28,7 +30,7 @@ from tools.nl2_sync.profile import DynamicProfile, digest_json
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _fixture(tmp_path, platform, park):
+def _fixture(tmp_path, platform, park, *, canonical=True):
     root = tmp_path / "sandbox"
     for name in SOURCE_FILES:
         (root/name).parent.mkdir(parents=True, exist_ok=True)
@@ -44,6 +46,9 @@ def _fixture(tmp_path, platform, park):
     source = {"platform":platform, "base_variant":resolved, "telemetry":global_config,
               "intensity_percent":100.0, "tick_s":.05,
               "matcher":{},"source_hashes":hashes}
+    coordinates = ({"transform_convention": MOTION_CONVENTION,
+                    "geometry_id": geometry_id_for_platform(platform)} if canonical else {})
+    source.update(coordinates)
     from tools.nl2_sync.matcher import Settings
     source["matcher"] = vars(Settings()).copy()
     candidate = tmp_path / (platform+"_"+park)
@@ -58,6 +63,7 @@ def _fixture(tmp_path, platform, park):
               "processing_sha256":digest_json(source),"park_sha256":"a"*64,
               "nl2_version":"2.6.8.1","view_identity":[0,0,0,0,1],
               "departure_station":[0,0],"observed_vr":"on"}
+    identity.update(coordinates)
     meta={"name":park+" dynamic demo", "target":"strict",
           "reference_file":"reference.npz","processing":source,
           "validation": {"nominal_qualified":True,"heldout_pass":True,
@@ -90,6 +96,16 @@ def _fixture(tmp_path, platform, park):
     catalog=tmp_path/"catalog"
     VariantStore.create(platform,{"schema_version":1,"platform_key":platform,"variants":[variant]},directory=catalog)
     return root,candidate,catalog,global_config
+
+
+def test_legacy_profile_loads_for_inspection_but_requires_requalification(tmp_path):
+    root, candidate, catalog, _ = _fixture(tmp_path, "chair_v3", "blackbird", canonical=False)
+    path = candidate / "profile.json"
+    archived = path.read_bytes()
+    assert DynamicProfile.load(path).identity["platform"] == "chair_v3"
+    with pytest.raises(DynamicProfileError, match="requalification required"):
+        promote(candidate, "Blackbird [Dynamic A]", root=root, catalog_dir=catalog)
+    assert path.read_bytes() == archived
 
 
 @pytest.mark.parametrize("platform",["chair_v3","platform_v2"])

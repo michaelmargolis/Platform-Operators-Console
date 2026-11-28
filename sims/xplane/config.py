@@ -1,4 +1,4 @@
-#config.py  ver 7
+#config.py  ver 8
 """X-Plane adapter configuration.
 
 Values are derived from the current SOP X-Plane telemetry configuration.  The
@@ -35,13 +35,9 @@ TELEMETRY_KEYS = (
     "Rrad",
 )
 
-# SOP telemetry_config.ini values.
-AIR_FACTORS = (1.0, 1.20, 0.50, -2.00, 2.00, 2.00)
-GROUND_FACTORS = (4.0, 1.20, 0.50, -2.00, 2.00, 0.50)
-
-# Retained for later platform/kinematics integration.  The current prototype
-# kinematics path still owns the active mask.
-AXIS_FLIP_MASK = (1, 1, -1, -1, 1, 1)
+# Existing SOP cue gains with heave expressed as positive-up.
+AIR_FACTORS = (1.0, 1.20, -0.50, -2.00, 2.00, 2.00)
+GROUND_FACTORS = (4.0, 1.20, -0.50, -2.00, 2.00, 0.50)
 
 # Diagnostic switches. These are intentionally separate so pause/state tracing can
 # stay enabled without logging routine transport traffic.

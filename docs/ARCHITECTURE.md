@@ -1,4 +1,4 @@
-<!-- ARCHITECTURE.md ver 7 -->
+<!-- ARCHITECTURE.md ver 8 -->
 # Platform Operators Console — Architecture and Hardware Guide
 
 **Audience:**  maintainers, Engineering students and researchers extending the motion-platform system  
@@ -24,9 +24,9 @@ The muscles are arranged such that contracting combinations of actuators creates
 | POC selector | Configuration | Muscle nominal maximum | Key differences |
 | --- | --- | ---: | --- |
 | `platform_v2` | `kinematics/cfg_SuspendedPlatformMdx.py` | 1,000 mm | Ground-Loading Platform; suspended/wheelchair-oriented design; CAD-derived XYZ joint geometry; no prop piston; floor/actuator workspace limiter enabled |
-| `chair_v3` | `kinematics/cfg_SuspendedChair.py` | 800 mm | Suspended chair geometry; commanded prop piston sequence; workspace limiter currently off |
-| `chair_v2` | Same `cfg_SuspendedChair.py` | 800 mm | Legacy selection retained for configuration compatibility; not a separate current geometry model |
-| `Falcon` | `kinematics/cfg_SuspendedChairFalcon.py` | 1,000 mm | Separate Falcon geometry; no prop piston in configuration |
+| `chair_v3` | `kinematics/cfg_SuspendedChairV3.py` | 800 mm | Suspended chair geometry, prop piston sequence and workspace limiter off |
+
+Chair V2 and Falcon are deferred from the platform selectors. A saved selection for either platform fails configuration validation.
 
 Configuration is chosen using `config/platforms.py`; changes to the selected physical platform are persisted and applied **after POC restarts**, not while active. Do not assume that the configured platform is the one physically connected without commissioning checks.
 
@@ -103,16 +103,18 @@ POC should remain usable with test adapters and a receiver emulator even when th
 
 ## 4. Motion processing and coordinate conventions
 
-1. An adapter returns `SimSample(transform, state, telemetry_valid, speed)` with **six normalized, dimensionless values** in `[x, y, z, roll, pitch, yaw]` order.
+1. Each adapter converts native inputs once to dimensionless rider cues in `SimSample.transform` and the starting pose. The order is `[X, Y, Z, roll, pitch, yaw]`.
 2. `PocCore` applies the selected simulator's tuning, gain/intensity and applicable washout handling, subject to current state and valid telemetry.
 3. `PlatformController` accepts motion only when the platform is logically `ACTIVATED` and the commanded parking state is `UNPARKED`.
 4. `SopPlatformBackend` applies `Kinematics.norm_to_real()` using the selected platform's six per-axis limits; translations become millimetres and rotations radians. Platform-specific workspace limiting may further modify the **applied real** transform.
 5. Inverse kinematics produces six attachment-to-attachment distances; fixed attachment hardware is subtracted to obtain muscle lengths, which map to contraction and load-dependent commanded pressure.
 6. Festo output transmits six pressure commands; the optional seventh word controls the parking prop command on equipped platforms.
 
-Critical conventions: muscle indices **0–5 must retain the same upper/lower attachment pairing throughout**; platform-local lower coordinates move rigidly with the deck; the code's axis flips and neutral-height calculation are part of the established kinematic convention. Do not interchange CAD positions, normalized POC transforms or real-world pose without explicit conversion and regression checks.
+The rider frame is right-handed with X forward, Y left and Z up. Positive roll raises the left side, positive pitch lowers the nose and positive yaw turns left. Real poses use mm and radians. IK applies translation and the rotation `Rz(yaw) Ry(pitch) Rx(roll)` directly to the neutral-height geometry. A positive ride-neutral Z offset raises the platform. The Ground-Loading hull uses the same rotation centre as IK.
 
-Machine-local Festo wiring is described by `festo_valve0_side` in `poc_config_local.json`, keyed by platform and expressed as rider `left`/`right`. Repository geometry remains channel-indexed. At backend construction POC checks the Y sign of both valve-0 attachment points and the supported consecutive channel-side ordering. If the configured physical valve-0 side is opposite to the repository geometry, POC mirrors all channel-indexed Y coordinates while retaining channel numbers; Ground-Loading Platform underside-hull Y coordinates are mirrored at the same time so floor-strike calculations use the identical physical frame. Ambiguous geometry fails startup rather than being guessed. The canonical defaults reproduce the pre-v250 geometry/channel arrangement: Ground-Loading/Falcon valve 0 right, Chair V2/V3 valve 0 left.
+The current Festo order on both supported platforms is the paired order of their configuration arrays. `festo_valve0_side` in the machine-local configuration must be rider-right on Ground-Loading and rider-left on Chair V3. Mismatched wiring settings fail before output initialization. A future Chair right-side wiring release needs its own approved channel map. The live controller, Pose Sender and Analyzer use the shared geometry initialization.
+
+New normalized capture fields carry `rider_xyz_rpy_v1`. Known historical NL2 capture columns have their derived Z converted once at the reader. Native telemetry and original files retain their recorded values. Existing dynamic studies require requalification against the canonical convention and reference geometry before export as a new package or use by POC. The original diagnostics can be replayed in their historical checkout.
 
 The Ground-Loading Platform `WORKSPACE_LIMIT_MODE` is normally `geometry` (underside floor hull plus physical actuator envelope). `reserve` and `off` exist for specific testing/fallback, not as general alternatives to safe operation. Chair workspace limiting is currently off, which does **not** mean every theoretical pose is physically safe.
 
@@ -172,7 +174,7 @@ The full-size Qt layout includes the Transform Viewer; the 800×480 compact layo
 
 `core/digital_twin.py` publishes complete best-effort `POC_TWIN` JSON datagrams at up to 20 Hz. Runtime configuration lives in `poc_config_local.json`; the address `"-"` disables Twin output, and the Output-tab checkbox can disable or re-enable transmission for the current run.
 
-The common fields include normalized `transform`, six `muscle_length_mm`, six `contraction_pct`, six `command_pressure_mbar`, load estimate, simulator/platform state, timestamps and sequence. **v150 also adds** `parking_state` and `applied_transform_real` (`[x,y,z,roll,pitch,yaw]` in mm/radians), with `null` permitted when unavailable. The protocol version remains 1. Inspect [the serializer](../core/digital_twin.py) when implementing a receiver; [the historical Twin handover](digital_twin/POC_DIGITAL_TWIN_UDP_HANDOVER_v1.md) predates these two optional fields.
+Twin protocol v2 publishes canonical normalized and applied-real poses, a reference geometry ID and the valve-channel-to-pair map. Every length, contraction and pressure entry remains associated with its physical valve channel. During park and prop ramps, use the commanded lengths when the solved pose is absent. [Twin v2 interface](digital_twin/POC_DIGITAL_TWIN_UDP_HANDOVER_v2.md)
 
 The external MDX Platform Twin can estimate pose from commanded lengths or from a pressure-response model; its optional **Pose Diff** outline uses the applied real transform only when `UNPARKED`. **It does not prove actual physical motion.** For future instrumentation, record independent measurements of pose, length and/or pressure, preserving provenance and synchronized timestamps.
 

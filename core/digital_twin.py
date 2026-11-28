@@ -1,4 +1,4 @@
-# digital_twin.py ver 2
+# digital_twin.py ver 3
 """Best-effort UDP snapshots for an external POC digital twin."""
 from __future__ import annotations
 
@@ -6,15 +6,18 @@ import ipaddress
 import json
 import logging
 import math
+import re
 import socket
 import time
 from typing import Callable, Sequence
+
+from core.motion_convention import MOTION_CONVENTION
 
 
 log = logging.getLogger(__name__)
 
 PROTOCOL_NAME = "POC_TWIN"
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 MUSCLE_COUNT = 6
 MAX_DATAGRAM_BYTES = 1400
 
@@ -77,6 +80,8 @@ class DigitalTwinSender:
         self,
         *,
         platform: str,
+        geometry_id: str,
+        channel_to_pair: Sequence[int],
         platform_state: str,
         simulator_state: str,
         telemetry_valid: bool,
@@ -94,12 +99,21 @@ class DigitalTwinSender:
             return False
 
         try:
+            if not isinstance(geometry_id, str) or not re.fullmatch(r"[0-9a-f]{64}", geometry_id):
+                raise ValueError("geometry_id must be a lowercase SHA-256 hex digest")
+            order = tuple(channel_to_pair)
+            if (len(order) != MUSCLE_COUNT or any(type(index) is not int for index in order)
+                    or set(order) != set(range(MUSCLE_COUNT))):
+                raise ValueError("channel_to_pair must be a permutation of attachment pairs 0 through 5")
             packet = {
                 "protocol": PROTOCOL_NAME,
                 "version": PROTOCOL_VERSION,
                 "sequence": self._sequence,
                 "timestamp_ms": int(self._time() * 1000.0),
                 "platform": str(platform),
+                "transform_convention": MOTION_CONVENTION,
+                "geometry_id": geometry_id,
+                "channel_to_pair": order,
                 "platform_state": str(platform_state),
                 "parking_state": str(parking_state),
                 "applied_transform_real": (None if applied_transform_real is None

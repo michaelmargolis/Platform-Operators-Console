@@ -1,13 +1,13 @@
-# test_transform_bars_v160.py ver 2
+# test_transform_bars_v160.py ver 3
 """Regression checks for display-only heave sign and Debug-tab bypass."""
 
 from ui import main_window
 
 
-def test_heave_is_inverted_only_for_display():
+def test_positive_heave_is_displayed_directly():
     original = (0.2, -0.3, 0.4, -0.5, 0.6, -0.7)
     result = main_window.transform_bar_values(original)
-    assert result == (0.2, -0.3, -0.4, -0.5, 0.6, -0.7)
+    assert result == (0.2, -0.3, 0.4, -0.5, 0.6, -0.7)
     assert original[2] == 0.4  # Input/telemetry remains unchanged.
 
 
@@ -48,5 +48,5 @@ def test_sample_callback_switch_keeps_other_work():
     assert obj.transform_bars.calls == []
     obj.tabWidget.active = other
     main_window.MainWindow._on_sample(obj, sample)
-    assert obj.transform_bars.calls == [(0, 0, -0.5, 0, 0, 0)]
+    assert obj.transform_bars.calls == [(0, 0, 0.5, 0, 0, 0)]
     assert updates == ["profile", "profile"]

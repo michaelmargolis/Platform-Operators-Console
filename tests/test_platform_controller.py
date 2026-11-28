@@ -1,4 +1,4 @@
-#test_platform_controller.py  ver 12
+#test_platform_controller.py  ver 13
 from core.platform_controller import PlatformController
 from core.types import PlatformState, PlatformMotionState
 from unittest.mock import patch
@@ -69,7 +69,7 @@ def make_chair_backend():
 
     with patch("output.muscle_output.MuscleOutput", RecordingMuscleOutput):
         return SopPlatformBackend(
-            "kinematics.cfg_SuspendedChair",
+            "kinematics.cfg_SuspendedChairV3",
             festo_ip="192.0.2.1",
         )
 
@@ -152,7 +152,7 @@ def test_mdx_backend_uses_latest_cad_xyz_and_reserve_neutral_height():
 
 def test_mdx_geometry_limiter_raises_heave_to_protect_floor_without_fixed_reserve():
     backend = make_sop_backend()
-    requested = backend.k.norm_to_real([0, 0, 1, 1, 1, 0])
+    requested = backend.k.norm_to_real([0, 0, -1, 1, 1, 0])
     raw_clearance = backend._floor_clearance_for_real_transform(requested)
     assert raw_clearance < 0.0
 
@@ -166,7 +166,7 @@ def test_mdx_geometry_limiter_raises_heave_to_protect_floor_without_fixed_reserv
     )
     assert applied[3] == requested[3]
     assert applied[4] == requested[4]
-    assert applied[2] < requested[2]
+    assert applied[2] > requested[2]
     assert min(actuator_lengths) >= backend.cfg.MIN_ACTUATOR_LENGTH
     assert max(actuator_lengths) <= backend.cfg.MAX_ACTUATOR_LENGTH
     # Geometry mode may safely use extension beyond the simple 60 mm reserve.
@@ -175,7 +175,7 @@ def test_mdx_geometry_limiter_raises_heave_to_protect_floor_without_fixed_reserv
 
 def test_mdx_geometry_limiter_scales_only_when_actuator_limits_require_it():
     backend = make_sop_backend()
-    requested = backend.k.norm_to_real([1, 1, 1, 1, 1, 1])
+    requested = backend.k.norm_to_real([1, 1, -1, 1, 1, 1])
 
     applied, actuator_lengths = backend._limit_workspace(requested)
 
@@ -191,7 +191,7 @@ def test_mdx_geometry_limiter_scales_only_when_actuator_limits_require_it():
 def test_mdx_reserve_mode_is_single_config_fallback():
     backend = make_sop_backend()
     backend.workspace_limit_mode = "reserve"
-    requested = backend.k.norm_to_real([1, 1, 1, 1, 1, 1])
+    requested = backend.k.norm_to_real([1, 1, -1, 1, 1, 1])
 
     _applied, actuator_lengths = backend._limit_workspace(requested)
 

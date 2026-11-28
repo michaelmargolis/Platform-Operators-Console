@@ -1,4 +1,4 @@
-#test_xplane_adapter.py  ver 7
+#test_xplane_adapter.py  ver 8
 import json
 
 import pytest
@@ -97,7 +97,7 @@ def test_xplane_initial_connection_loads_default_predefined_flight():
     sample = complete_initial_load(sim, transport)
     assert sample.telemetry_valid is True
     assert sample.speed == 20.0
-    assert sample.transform == pytest.approx((0.10, 0.24, 0.15, -0.80, 1.00, 1.20))
+    assert sample.transform == pytest.approx((0.10, 0.24, -0.15, -0.80, 1.00, 1.20))
     assert sim.get_status().entity_name == "calm straight and level"
 
 

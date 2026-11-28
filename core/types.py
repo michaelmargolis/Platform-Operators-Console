@@ -1,4 +1,4 @@
-#types.py  ver 9
+#types.py  ver 10
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -121,6 +121,12 @@ def compose_operator_status_text(
 
 @dataclass(frozen=True)
 class SimSample:
+    """Dimensionless rider cues in X/Y/Z/Roll/Pitch/Yaw order.
+
+    X is forward, Y left and Z up. Roll raises the left side, pitch lowers
+    the nose and yaw turns left. Adapters convert native signals at input.
+    """
+
     transform: Sequence[float] = field(default_factory=lambda: (0.0,) * 6)
     state: ExperienceState = ExperienceState.DISCONNECTED
     telemetry_valid: bool = False

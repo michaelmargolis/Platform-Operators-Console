@@ -1,4 +1,4 @@
-# test_pose_sender_v163.py ver 3
+# test_pose_sender_v163.py ver 4
 """Pure tests for Pose Sender, without Qt, sockets or actual actuator output."""
 from pathlib import Path
 
@@ -81,14 +81,15 @@ def test_capture_has_no_network_side_effects(monkeypatch):
 
 def test_pose_sender_can_apply_machine_local_valve0_side():
     right = PoseMotion("platform_v2", ROOT, festo_valve0_side="right")
-    left = PoseMotion("platform_v2", ROOT, festo_valve0_side="left")
-
-    assert right.backend.geometry_valve0_source_side == "right"
-    assert right.backend.geometry_y_mirrored is False
-    assert left.backend.geometry_valve0_source_side == "right"
-    assert left.backend.geometry_y_mirrored is True
-    assert left.backend.k.base_coords[0, 0] == pytest.approx(right.backend.k.base_coords[0, 0])
-    assert left.backend.k.base_coords[0, 1] == pytest.approx(-right.backend.k.base_coords[0, 1])
+    assert right.backend.festo_valve0_side == "right"
+    assert right.backend.channel_to_pair == tuple(range(6))
+    assert tuple(right.backend.k.base_coords[0]) == (413, -566, 1083)
+    with pytest.raises(ValueError, match="valve 0"):
+        PoseMotion("platform_v2", ROOT, festo_valve0_side="left")
+    chair = PoseMotion("chair_v3", ROOT, festo_valve0_side="left")
+    assert tuple(chair.backend.k.base_coords[0]) == (380, 518, 1048)
+    with pytest.raises(ValueError, match="valve 0"):
+        PoseMotion("chair_v3", ROOT, festo_valve0_side="right")
 
 
 def test_mdx_unpark_move_park_reuses_backend_and_floor_limiter():
@@ -103,7 +104,7 @@ def test_mdx_unpark_move_park_reuses_backend_and_floor_limiter():
     assert i < 240
     assert len(pressure) == 6
     assert any(v > 0 for v in pressure)
-    motion.set_normalized([0.3, 0.0, -1.0, 0.5, -0.5, 0.0])
+    motion.set_normalized([0.3, 0.0, 1.0, 0.5, -0.5, 0.0])
     requested, applied = motion.preview()
     assert requested[0] == pytest.approx(0.3 * motion.backend.cfg.LIMITS_1DOF_TRANFORM[0])
     assert applied != requested  # geometry limits an intentionally extreme pose

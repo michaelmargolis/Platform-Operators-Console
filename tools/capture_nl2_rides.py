@@ -1,4 +1,4 @@
-# capture_nl2_rides.py  ver 10
+# capture_nl2_rides.py  ver 11
 """Capture repeatable NoLimits2 rides without launching POC or platform outputs.
 
 Run ``python tools/capture_nl2_rides.py --list`` to see configured rides.
@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 
 from core.telemetry_config import TelemetryConfig
 from core.types import ExperienceState
+from core.motion_convention import MOTION_CONVENTION
 from sims.nolimits2 import config, ride_config
 from sims.nolimits2.sim import Sim
 
@@ -43,7 +44,7 @@ class ParkLoadBusyError(RuntimeError):
 
 COLUMNS = (
     "ride", "repeat", "wall_time", "elapsed_s", "nl2_frame", "source_dt_s",
-    "nl2_receive_monotonic_s", "sim_state", "valid", "heave_mode",
+    "nl2_receive_monotonic_s", "sim_state", "valid", "heave_mode", "transform_convention",
     *RAW_FIELDS, *("norm_" + x for x in AXES),
     "legacy_height_heave", "vertical_g_heave",
 )
@@ -377,9 +378,7 @@ def capture_one(sim: Sim, ride_index: int, repeat: int, args, rides):
                                          else tm.received_at - last_source_time)
                             last_source_time = tm.received_at
                             legacy = sim._legacy_height_z(float(tm.pos_y))
-                            vertical = max(-1.0, min(1.0,
-                                (float(tm.g_force_y) - 1.0)
-                                * config.TELEMETRY_INTENSITY_FACTOR))
+                            vertical = config.vertical_g_heave(tm.g_force_y)
                             row = dict(
                                 ride=ride_name, repeat=repeat,
                                 wall_time=datetime.now().isoformat(timespec="milliseconds"),
@@ -388,7 +387,8 @@ def capture_one(sim: Sim, ride_index: int, repeat: int, args, rides):
                                 nl2_receive_monotonic_s=tm.received_at,
                                 sim_state=sample.state.name,
                                 valid=int(sample.telemetry_valid),
-                                heave_mode="legacy_height" if sim._legacy_heave_enabled else "vertical_g",
+                                heave_mode=sim.heave_mode,
+                                transform_convention=MOTION_CONVENTION,
                             )
                             row.update({key: getattr(tm, key) for key in RAW_FIELDS})
                             row.update({f"norm_{axis}": float(value)

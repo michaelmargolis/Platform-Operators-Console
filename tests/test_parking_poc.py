@@ -1,4 +1,4 @@
-#test_parking_poc.py  ver 2
+#test_parking_poc.py  ver 3
 """PocCore lifecycle tests, with physical output replaced by a recording backend."""
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -53,10 +53,10 @@ class FakeSim:
 class Config:
     def get(self, name, default=None):
         return {
-            "selected_platform": "chair_v2",
+            "selected_platform": "chair_v3",
             "sim_host_service": {"enabled": False},
             "digital_twin": {"address": "-"},
-            "festo_valve0_side": {"chair_v2": "left"},
+            "festo_valve0_side": {"chair_v3": "left"},
         }.get(name, default)
 
 @pytest.fixture

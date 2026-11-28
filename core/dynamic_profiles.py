@@ -1,4 +1,4 @@
-#dynamic_profiles.py ver 2
+#dynamic_profiles.py ver 3
 """Fail-closed NoLimits dynamic-ride bundle loading and 20 Hz runtime matching.
 
 No imports of Qt, NL2 transport, Festo, or hardware. All disk I/O and SHA256
@@ -102,6 +102,34 @@ def _same_scalar(a, b) -> bool:
     return a == b
 
 
+class DynamicRequalificationRequired(DynamicProfileError):
+    """The motion convention or geometry differs from the current runtime."""
+
+
+def require_canonical_identity(identity, platform: str) -> None:
+    """Validate the convention and geometry on a profile or a package manifest."""
+    from core.motion_convention import MOTION_CONVENTION
+    from core.platform_geometry import geometry_id_for_platform
+
+    if not isinstance(identity, dict) or identity.get("transform_convention") != MOTION_CONVENTION:
+        raise DynamicRequalificationRequired(
+            "Profile predates canonical motion or uses another convention; requalification required"
+        )
+    try:
+        expected = geometry_id_for_platform(platform)
+    except KeyError as exc:
+        raise DynamicProfileError("Profile platform is unsupported in this release") from exc
+    if identity.get("geometry_id") != expected:
+        raise DynamicRequalificationRequired("Profile geometry identity differs; requalification required")
+
+
+def require_canonical_profile(profile: DynamicProfile) -> None:
+    """Require both profile identity and processing snapshot to match the new model."""
+    platform = profile.identity["platform"]
+    require_canonical_identity(profile.identity, platform)
+    require_canonical_identity(profile.metadata.get("processing"), platform)
+
+
 def _check_frozen_settings(profile: DynamicProfile, live_variant: dict,
                            global_settings: dict, root: Path, platform: str, park: str):
     """Check processing schema, report meaningful differences as warnings.
@@ -188,6 +216,7 @@ class DynamicDeployment:
             raise DynamicProfileError(f"Invalid dynamic profile/reference: {exc}") from exc
         if profile.identity.get("platform") != platform or profile.identity.get("park") != park:
             raise DynamicProfileError("Profile identity is for a different park or platform")
+        require_canonical_profile(profile)
         if not math.isclose(float(profile.time[-1]), float(reference.time[-1]), abs_tol=1.0):
             raise DynamicProfileError("Profile and reference trajectory durations disagree")
         if d.get("profile_identity") != profile.identity:

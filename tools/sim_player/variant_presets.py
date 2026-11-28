@@ -1,4 +1,4 @@
-# variant_presets.py ver 3
+# variant_presets.py ver 4
 """Pure helpers for loading shared NL2 ride variants in offline sim_player.
 
 Shared presets are resolved from the selected platform JSON; raw captures remain immutable.  An explicit
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 
-from sims.nolimits2 import ride_config
+from sims.nolimits2 import config, ride_config
 
 HEAVE_RECORDED = "recorded"
 
@@ -113,24 +113,15 @@ def apply_heave(rows, snapshot, *, intensity_factor=0.4, initial_lift_m=32.0):
         if not math.isfinite(height):
             raise ValueError("Invalid captured height")
         if mode == "normalized_height":
-            fraction = max(0.0, min(1.0, (height - low) / (high - low)))
-            heave = max(-1.0, min(1.0, amplitude * (1.0 - 2.0*fraction)))
+            heave = config.normalized_height_heave(height, low, high, amplitude)
         elif mode == "vertical_g":
             heave = row[3] if len(row) >= 4 else None
             if heave is None or not math.isfinite(float(heave)):
                 raise ValueError("Vertical G variant requires valid recorded vertical_g_heave")
             heave = float(heave)
         elif mode == "legacy_height":
-            profile = park.get("legacy_height")
-            if profile:
-                fraction = (height - float(profile["bottom_height_m"])) / (
-                    float(profile["lift_top_height_m"]) - float(profile["bottom_height_m"]))
-                fraction = max(0.0, min(1.0, fraction))
-                heave = float(profile["z_at_bottom"]) + fraction * (
-                    float(profile["z_at_lift_top"]) - float(profile["z_at_bottom"]))
-            else:
-                lift_height = max(lift_height, height)
-                heave = max(-1.0, min(1.0, (2.0 * height / lift_height - 1.0) * float(intensity_factor)))
+            heave, lift_height = config.legacy_height_heave(
+                height, park.get("legacy_height"), lift_height, float(intensity_factor))
         else:
             raise ValueError(f"Unknown heave mode: {mode!r}")
         axes = list(values)

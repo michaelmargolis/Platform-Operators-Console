@@ -1,4 +1,4 @@
-# test_nl2_normalized_height_v157.py ver 3
+# test_nl2_normalized_height_v157.py ver 4
 """Phase 2 NL2 heave mapping: calibrated ride height, per-ride amplitudes, safety."""
 import math
 
@@ -30,18 +30,18 @@ def _at_ride(sim, name):
     sim._apply_loaded_variant(sim._selected)
 
 
-def test_initial_heave_mode_and_unchanged_legacy_and_vertical_g():
+def test_initial_heave_mode_and_canonical_legacy_and_vertical_g():
     sim = Sim(client=FakeNL2Client())
     assert sim.heave_mode == config.HEAVE_MODE_NORMALIZED_HEIGHT  # v175 default
     sim.set_heave_mode(config.HEAVE_MODE_LEGACY_HEIGHT)
     assert sim._legacy_heave_enabled is True  # v156 recorder compatibility
-    assert sim._transform_from_telemetry(telemetry(pos_y=7.4, gy=1.5))[2] == -0.5
+    assert sim._transform_from_telemetry(telemetry(pos_y=7.4, gy=1.5))[2] == 0.5
     sim.set_heave_mode(config.HEAVE_MODE_VERTICAL_G)
     assert sim._legacy_heave_enabled is False
-    assert math.isclose(sim._transform_from_telemetry(telemetry(pos_y=7.4, gy=1.5))[2], .2)
+    assert math.isclose(sim._transform_from_telemetry(telemetry(pos_y=7.4, gy=1.5))[2], -.2)
     sim.set_legacy_heave_enabled(True)  # older clients still supported
     assert sim.heave_mode == config.HEAVE_MODE_LEGACY_HEIGHT
-    assert sim._transform_from_telemetry(telemetry(pos_y=7.4, gy=1.5))[2] == -0.5
+    assert sim._transform_from_telemetry(telemetry(pos_y=7.4, gy=1.5))[2] == 0.5
 
 
 @pytest.mark.parametrize("ride,amplitude", EXPECTED_AMPLITUDES.items())
@@ -54,11 +54,10 @@ def test_per_ride_amplitude_endpoints_midpoint_and_clamping(ride, amplitude):
     high = profile['max_height_m']
     assert low < high
     sim.set_heave_mode(config.HEAVE_MODE_NORMALIZED_HEIGHT)
-    # Inverted Stewart platform: rising coaster height means NEGATIVE heave
-    # and increasing muscle contraction, not extension.
-    for height, expected in ((low, amplitude), (high, -amplitude),
-                             ((low + high) / 2, 0.0), (low - 100, amplitude),
-                             (high + 100, -amplitude)):
+    # Rising coaster height gives an upward cue and shorter suspended muscles.
+    for height, expected in ((low, -amplitude), (high, amplitude),
+                             ((low + high) / 2, 0.0), (low - 100, -amplitude),
+                             (high + 100, amplitude)):
         result = sim._transform_from_telemetry(telemetry(pos_y=height, gy=2.0))
         assert math.isclose(result[2], expected, abs_tol=1.0e-10)
         assert len(result) == 6
@@ -87,7 +86,7 @@ def test_ride_switch_retains_normalized_mode_with_profile_and_reverts_when_missi
     client.complete_request(sim._ride_load_request_id, ok=True)
     sim._service_ride_load_result()
     assert sim.heave_mode == config.HEAVE_MODE_NORMALIZED_HEIGHT
-    assert sim._transform_from_telemetry(telemetry(pos_y=41.0))[2] == -.90
+    assert sim._transform_from_telemetry(telemetry(pos_y=41.0))[2] == .90
     sim.select_experience(sim.get_experiences().index('Flying Beast'))
     client.complete_request(sim._ride_load_request_id, ok=True)
     sim._service_ride_load_result()

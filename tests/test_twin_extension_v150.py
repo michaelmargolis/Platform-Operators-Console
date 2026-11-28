@@ -1,4 +1,4 @@
-# test_twin_extension_v150.py ver 1
+# test_twin_extension_v150.py ver 2
 """Twin v1 optional extension, independent of Qt availability."""
 import json
 
@@ -17,7 +17,8 @@ class DummySocket:
 
 
 def snapshot(**kwargs):
-    fields = dict(platform="platform_v2", platform_state="ACTIVATED", parking_state="UNPARKED",
+    fields = dict(platform="platform_v2", geometry_id="2" * 64, channel_to_pair=tuple(range(6)),
+                  platform_state="ACTIVATED", parking_state="UNPARKED",
                   simulator_state="RUNNING", telemetry_valid=True, transform_applied=True,
                   dtop_load_kg_per_muscle=10., transform=[0.]*6,
                   applied_transform_real=[10., 0., -30., 0., .05, 0.],
@@ -32,7 +33,7 @@ def test_packet_real_pose_and_park_state():
     sender = DigitalTwinSender("127.0.0.1", socket_factory=lambda *_: sock)
     assert sender.send_snapshot(**snapshot())
     packet = sock.packets[0]
-    assert packet["version"] == 1
+    assert packet["version"] == 2
     assert packet["parking_state"] == "UNPARKED"
     assert packet["applied_transform_real"] == [10., 0., -30., 0., .05, 0.]
     assert packet["transform"] == [0.] * 6

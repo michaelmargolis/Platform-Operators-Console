@@ -1,4 +1,4 @@
-# test_neutral_v182.py ver 2
+# test_neutral_v182.py ver 3
 """Offline/POC matching, replay cache and variant/experiment persistence."""
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def test_recorded_chair_variant_offset_changes_lengths_not_processed_axes(tmp_pa
     assert shifted.frames[0].processed_axes==pytest.approx(current.frames[0].processed_axes)
     assert shifted.frames[0].input_axes==pytest.approx(current.frames[0].input_axes)
     assert shifted.frames[0].analysis['requested_real'][2]==pytest.approx(
-        current.frames[0].analysis['requested_real'][2]+15)
+        current.frames[0].analysis['requested_real'][2]-15)
     assert min(shifted.frames[0].muscle_lengths_mm)>min(current.frames[0].muscle_lengths_mm)
     assert shifted.frames[0].modeled_clearance_mm is None
     assert path.read_bytes()==make_capture(tmp_path,video=False).read_bytes()

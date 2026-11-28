@@ -1,4 +1,4 @@
-# analyze_nl2_csv.py ver 17
+# analyze_nl2_csv.py ver 18
 """Standalone NL2 CSV playback / muscle-length study; no POC outputs are created.
 
 Place in POC/tools; run: python tools/analyze_nl2_csv.py PATH_TO_CAPTURE.csv
@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import importlib
 import math
 import os
 import shutil
@@ -28,7 +27,8 @@ from config.platforms import PLATFORMS
 from core.telemetry_config import TelemetryConfig
 from sims.nolimits2 import config as nl2_config
 from core.platform_controller import SopPlatformBackend
-from kinematics.kinematics_V3 import Kinematics, PlatformParams
+from core.motion_convention import MOTION_CONVENTION
+from core.platform_geometry import configure_platform_geometry
 
 AXES = ("surge", "sway", "heave", "roll", "pitch", "yaw")
 
@@ -40,15 +40,20 @@ def read_capture(path):
         required = ["pos_y", "elapsed_s", *(f"norm_{axis}" for axis in AXES)]
         if not reader.fieldnames or any(name not in reader.fieldnames for name in required):
             raise ValueError("CSV lacks required NL2 ride-study fields: " + ", ".join(required))
+        tagged = "transform_convention" in reader.fieldnames
+        heave_sign = 1.0 if tagged else -1.0  # The legacy NL2 capture columns used positive-down.
         data = []
         prior_time = None
         for lineno, row in enumerate(reader, start=2):
             try:
+                if tagged and row["transform_convention"] != MOTION_CONVENTION:
+                    raise ValueError(f"Unknown motion convention {row['transform_convention']!r}")
                 height = float(row["pos_y"])
                 elapsed = float(row["elapsed_s"])
                 values = tuple(float(row[f"norm_{axis}"]) for axis in AXES)
+                values = (*values[:2], values[2] * heave_sign, *values[3:])
                 extra = row.get("vertical_g_heave")
-                vertical_g = float(extra) if extra not in (None, "") else None
+                vertical_g = float(extra) * heave_sign if extra not in (None, "") else None
                 if not all(math.isfinite(v) for v in (height, elapsed, *values)):
                     raise ValueError("nonfinite mandatory value")
                 if vertical_g is not None and not math.isfinite(vertical_g):
@@ -74,27 +79,8 @@ def capture_ride_name(path):
 
 def make_backend(platform_key):
     """Use POC workspace implementation, without constructing MuscleOutput/Festo."""
-    cfg = importlib.import_module(PLATFORMS[platform_key]["sop_config_module"]).PlatformConfig()
-    k = Kinematics()
-    # Offline replay must use the same per-platform axis convention as the
-    # production backend. Otherwise MDX Roll and actuator indices disagree.
-    axis_flip_mask = getattr(cfg, "AXIS_FLIP_MASK", None)
-    if axis_flip_mask is not None:
-        k.set_axis_flip_mask(axis_flip_mask)
-    params = PlatformParams(cfg.MUSCLE_MIN_LENGTH, cfg.MUSCLE_MAX_LENGTH,
-                            cfg.FIXED_HARDWARE_LENGTH, cfg.LIMITS_1DOF_TRANFORM)
-    platform_coords = getattr(cfg, "platform_coords", None)
-    if platform_coords is None:
-        platform_coords = cfg.platform_coords_xy
-    from core.platform_geometry import clearance_settings, configure_workspace
-    offset, reserve = clearance_settings(cfg)
-    k.set_geometry(
-        cfg.base_coords, platform_coords, params, offset, reserve,
-        neutral_height_offset_mm=getattr(cfg, "NEUTRAL_HEIGHT_OFFSET_MM", 0.0),
-    )
     backend = SopPlatformBackend.__new__(SopPlatformBackend)
-    backend.cfg, backend.k = cfg, k
-    configure_workspace(backend)
+    configure_platform_geometry(backend, PLATFORMS[platform_key]["sop_config_module"])
     return backend
 
 
@@ -147,12 +133,7 @@ def analyze(data, platform_key, mode, amplitude, intensity, process_telemetry, r
         elapsed, height, values = row[:3]
         norm = list(values)
         if mode == "Normalized height":
-            # Inverted suspended platform: Kinematics.FLIP_TRANSLATION[2] is -1.
-            # Negative POC heave raises the platform and shortens its muscles.
-            # Map the coaster's highest point to negative heave so the platform
-            # rises (and contracts) with the coaster instead of descending.
-            height_fraction = 2 * (height - lo) / (hi - lo) - 1
-            norm[2] = max(-1.0, min(1.0, -amplitude * height_fraction))
+            norm[2] = nl2_config.normalized_height_heave(height, lo, hi, amplitude)
         elif mode == "Recorded heave":
             norm[2] = values[2]
         elif mode == "Vertical G":
@@ -232,7 +213,8 @@ def analyze(data, platform_key, mode, amplitude, intensity, process_telemetry, r
                            applied_floor=applied_floor,
                            below_floor=(requested_floor < required_floor - 1.0e-7
                                         if has_floor else False)))
-    return frames, dict(lo=lo, hi=hi,
+    return frames, dict(lo=lo, hi=hi, transform_convention=MOTION_CONVENTION,
+                        geometry_id=backend.geometry_id, channel_to_pair=backend.channel_to_pair,
                         platform_neutral_height_mm=float(backend.k.PLATFORM_MID_HEIGHT),
                         neutral_height_delta_mm=float(backend.ride_neutral_height_delta_mm),
                         min_length=float(cfg.MUSCLE_MIN_LENGTH),
@@ -459,6 +441,8 @@ def batch_export(paths, platform_key, mode, amplitude, intensity, process_teleme
             used_names.add(name.lower())
             metadata = dict(source_csv=str(path.resolve()), platform=platform_key,
                             ride_name=ride_name,
+                            transform_convention=stats["transform_convention"],
+                            geometry_id=stats["geometry_id"], channel_to_pair=stats["channel_to_pair"],
                             heave_mode=mode, amplitude_percent=100*amplitude,
                             intensity_percent=intensity, saved_gains_washout=process_telemetry,
                             washout_type=stats["washout_type"],

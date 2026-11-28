@@ -1,4 +1,4 @@
-<!-- README.md ver 25 -->
+<!-- README.md ver 26 -->
 # Platform Operators Console
 
 The Platform Operators Console (POC) is the Raspberry Pi operator console for
@@ -210,12 +210,10 @@ physical actuator envelope remains 950..1200 mm. This avoids imposing the 60 mm
 reserve on safe poses. `"reserve"` is the simple fallback mode (950..1140 mm),
 and `"off"` disables workspace limiting for diagnostics.
 
-The `Falcon` selection uses `kinematics/cfg_SuspendedChairFalcon.py`; it is a
-separate 1000 mm-muscle geometry. The 800 mm chair uses the single
-`kinematics/cfg_SuspendedChair.py` geometry. The legacy `chair_v2` selector key
-is retained for saved-config compatibility but maps to this same chair config;
-there is no separate 1094 geometry file. Chair coordinates remain provisional
-until the forthcoming CAD update.
+This release offers Ground-Loading and Chair V3. The active Chair V3 has valve 0
+on the rider's left. Ground-Loading has valve 0 on the rider's right. The cfg
+files supply the attachment coordinates and the DXFs show their placement.
+Chair V2, Falcon and the future right-side Chair V3 routing are deferred.
 
 The digital twin protocol includes platform/simulator state, the processed normalized
 transform, fractional D-to-P load per muscle, muscle lengths, contractions,

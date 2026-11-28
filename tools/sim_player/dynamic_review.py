@@ -1,4 +1,4 @@
-# dynamic_review.py ver 1
+# dynamic_review.py ver 2
 """Profile-aware, offline review of Phase 1 output. No Qt or hardware I/O.
 
 Saved-study mode consumes *post-washout* diagnostics, not telemetry. It never
@@ -20,6 +20,7 @@ from typing import Callable
 
 import numpy as np
 
+from core.dynamic_profiles import require_canonical_profile
 from tools.nl2_sync.profile import AXES, DynamicProfile, load_reference
 from tools.analyze_nl2_csv import make_backend, lengths_for_real
 from .recording import PlaybackFrame, RideRecording, RideEvent
@@ -343,6 +344,7 @@ def build_recording(spec, *, root=ROOT, cancel=None, progress=None):
     check_cancel(cancel)
     profile = DynamicProfile.load(spec.profile_path)
     reference = load_reference(spec.profile_path, profile)
+    require_canonical_profile(profile)
     differences = processing_mismatches(profile, root)
     # Saved studies carry the original post-washout request and resulting six
     # lengths for every tick. A source-file hash can change without changing
@@ -418,6 +420,7 @@ def build_recording(spec, *, root=ROOT, cancel=None, progress=None):
         diagnostics=note,platform_key=profile.identity['platform'],cue_mode=base['angular_cue'],
         gain_percent=(100.,)*6,variant_label=base['label'],variant_snapshot=base,
         platform_config_module=metadata['platform_config_module'],platform_config_sha256=metadata['platform_config_sha256'],
+        geometry_id=backend.geometry_id, channel_to_pair=backend.channel_to_pair,
         platform_neutral_height_mm=float(backend.k.PLATFORM_MID_HEIGHT),
         global_settings_snapshot=deepcopy(profile.metadata['processing']['telemetry']),dynamic_profile=details)
 

@@ -1,4 +1,4 @@
-<!-- README.md ver 9 -->
+<!-- README.md ver 10 -->
 # Kinematics
 
 `kinematics_V3.py` implements the suspended-platform geometry used by the POC
@@ -21,9 +21,15 @@ The intended configuration modules are:
   height bias (+100 mm for v181 tests). This changes **only** chair_v3, not
   chair_v2 or any 1000 mm platform.
 
-`cfg_SuspendedChair1094.py` and `cfg_SuspendedPlatform.py` are obsolete names and
-are no longer selected by POC. Existing `chair_v2` saved selector values are
-kept compatible by mapping that selector to `cfg_SuspendedChair.py`.
+POC selects Ground-Loading and Chair V3. Chair V2 and Falcon definitions
+are historical geometry for this release. The active configuration arrays
+preserve the existing Festo channel order, with right-side valve 0 on
+Ground-Loading and left-side valve 0 on Chair V3. The drawing labels show
+placement, while the cfg files supply the exact paired attachment coordinates.
+
+All applied poses use the rider frame with X forward, Y left and Z up.
+Rotations use `Rz(yaw) Ry(pitch) Rx(roll)` with angles in radians. The
+existing neutral height is included in the moving points before rotation.
 
 The neutral reference-plane height is calculated automatically. Legacy configs
 retain their clearance-offset sweep. The Ground-Loading Platform instead uses

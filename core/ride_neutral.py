@@ -1,4 +1,4 @@
-# ride_neutral.py ver 1
+# ride_neutral.py ver 2
 """Validated, ride-only physical-Z offset shared by POC and offline analysis.
 
 Positive height raises the suspended platform; negative lowers it. These are
@@ -21,11 +21,3 @@ def validated_ride_neutral_delta(value):
             f"neutral_height_delta_mm must be finite within "
             f"+/-{MAX_RIDE_NEUTRAL_DELTA_MM:g} mm")
     return result
-
-
-def real_heave_for_physical_height(delta_mm, flip_z):
-    """Return the real-transform Z component for a physical height change."""
-    flip = float(flip_z)
-    if not math.isfinite(flip) or abs(flip) < 1.0e-12:
-        raise ValueError("Invalid kinematics Heave axis convention")
-    return validated_ride_neutral_delta(delta_mm) / flip

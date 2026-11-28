@@ -1,4 +1,4 @@
-# twin_output.py ver 2
+# twin_output.py ver 3
 """Optional headless replay -> MDX Platform Twin output.
 
 Uses POC's existing DigitalTwinSender and its versioned JSON/UDP protocol,
@@ -83,7 +83,9 @@ class ReplayTwinOutput:
             # pose. The Twin can still render the lengths without Pose Diff.
             applied = None
         sent = self._sender.send_snapshot(
-            platform=getattr(recording, "platform_key", "platform_v2"),
+            platform=recording.platform_key,
+            geometry_id=recording.geometry_id,
+            channel_to_pair=recording.channel_to_pair,
             platform_state="ACTIVE",
             parking_state="UNPARKED",
             simulator_state=str(state),

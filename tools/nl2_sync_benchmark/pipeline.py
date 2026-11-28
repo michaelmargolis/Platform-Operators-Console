@@ -1,4 +1,4 @@
-# pipeline.py ver 1
+# pipeline.py ver 2
 """Run production hot-path implementations with in-memory IO substitutes.
 
 No POC QObject/GUI or hardware constructor is created. Setup, load/reset,
@@ -190,12 +190,14 @@ class Pipeline:
             cfg=self.backend.cfg
             lengths=self.backend.muscle_lengths
             self.twin.send_snapshot(platform=self.sim.platform_key,platform_state='ACTIVATED',
+                geometry_id=self.backend.geometry_id,channel_to_pair=self.backend.channel_to_pair,
                 simulator_state=sample.state.name,telemetry_valid=sample.telemetry_valid,
                 transform_applied=applied,dtop_load_kg_per_muscle=self.backend.dto_p.selected_load,
                 transform=transform,muscle_length_mm=lengths,
                 contraction_pct=[100.*(cfg.MUSCLE_MAX_LENGTH-x)/cfg.MUSCLE_LENGTH_RANGE for x in lengths],
                 command_pressure_mbar=self.backend.sent_pressures,piston_disengaged=None,
-                parking_state='UNPARKED',applied_transform_real=getattr(self.backend,'last_applied_real_transform',None))
+                parking_state='UNPARKED',
+                applied_transform_real=self.backend.last_applied_real_transform if applied else None)
         t6=real_time.perf_counter_ns()
         if self.twin.last_error:raise RuntimeError(self.twin.last_error)
         return dict(elapsed_s=elapsed_s,total_ms=(t6-t0)/1e6,service_ms=(t1-t0)/1e6,

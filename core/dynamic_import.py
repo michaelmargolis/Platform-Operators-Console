@@ -1,4 +1,4 @@
-#dynamic_import.py ver 4
+#dynamic_import.py ver 5
 """Atomic import of an Analyzer-prepared dynamic candidate onto POC.
 
 No Qt or hardware. Intended to be called from POC Profile tab only while
@@ -15,7 +15,10 @@ import stat
 import tempfile
 from zipfile import ZipFile, BadZipFile
 
-from core.dynamic_profiles import DynamicDeployment, DynamicProfileError, ROOT, sha256_file
+from core.dynamic_profiles import (
+    DynamicDeployment, DynamicProfileError, DynamicRequalificationRequired, ROOT,
+    require_canonical_identity, sha256_file,
+)
 from core.telemetry_config import TelemetryConfig
 from sims.nolimits2.variant_store import VariantStore
 from sims.nolimits2 import ride_config
@@ -66,10 +69,17 @@ def _read_candidate_zip(archive: Path):
                 folder + f for f in ('profile.json', 'reference.npz', 'qualification.json', 'deployment.json')}
             if set(names) != expected:
                 raise DynamicProfileError('Unexpected or missing runtime package files')
-            if sha256_file_bytes(z.read(folder + 'deployment.json')) != payload.get('deployment_sha256'):
+            deployment_raw = z.read(folder + 'deployment.json')
+            if sha256_file_bytes(deployment_raw) != payload.get('deployment_sha256'):
                 raise DynamicProfileError('Package deployment manifest checksum mismatch')
+            deployment = json.loads(deployment_raw)
+            if not isinstance(deployment, dict) or deployment.get('platform') != platform:
+                raise DynamicProfileError('Package deployment platform mismatch')
+            require_canonical_identity(deployment.get('profile_identity'), platform)
             ride_config.validate(variants=[entry], show_variant_modifiers=True)
             return payload, folder
+    except DynamicRequalificationRequired:
+        raise
     except (BadZipFile, OSError, ValueError, KeyError, UnicodeError) as exc:
         raise DynamicProfileError(f'Invalid dynamic candidate ZIP: {exc}') from exc
 
@@ -109,7 +119,7 @@ def discover_candidate_packages(directory, *, platform_key: str, catalog_dir=Non
     directory = Path(directory).expanduser().resolve()
     counts = {
         'total': 0, 'available': 0, 'already_imported': 0,
-        'other_platform': 0, 'invalid': 0,
+        'other_platform': 0, 'invalid': 0, 'requalification_required': 0,
     }
     if not directory.is_dir():
         return (), counts
@@ -127,6 +137,9 @@ def discover_candidate_packages(directory, *, platform_key: str, catalog_dir=Non
         counts['total'] += 1
         try:
             payload, _folder = _read_candidate_zip(archive)
+        except DynamicRequalificationRequired:
+            counts['requalification_required'] += 1
+            continue
         except DynamicProfileError:
             counts['invalid'] += 1
             continue

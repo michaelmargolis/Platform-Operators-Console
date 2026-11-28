@@ -1,4 +1,4 @@
-# study_bundle.py ver 3
+# study_bundle.py ver 4
 """Read-only, self-describing optimiser studies for normal Ride Analyzer opening.
 
 The CSV keeps ORIGINAL telemetry columns. The sidecar specifies the processing
@@ -16,6 +16,7 @@ import math
 from pathlib import Path
 
 from config.platforms import PLATFORMS
+from core.motion_convention import MOTION_CONVENTION
 from core.ride_neutral import validated_ride_neutral_delta
 from core.telemetry_config import TelemetryConfig
 from sims.nolimits2 import ride_config
@@ -96,6 +97,8 @@ def read_candidate_bundle(csv_path: Path) -> dict | None:
                           parse_constant=lambda v: (_ for _ in ()).throw(ValueError(v)))
         if not isinstance(data, dict) or data.get("schema") != SCHEMA:
             raise ValueError("Unsupported optimiser study schema")
+        if "transform_convention" in data and data["transform_convention"] != MOTION_CONVENTION:
+            raise ValueError("Unknown optimiser motion convention")
         if data["csv_name"] != csv_path.name:
             raise ValueError("Optimiser sidecar names a different CSV")
         if sha256_file(csv_path) != data["csv_sha256"]:

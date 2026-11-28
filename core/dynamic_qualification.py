@@ -1,4 +1,4 @@
-#dynamic_qualification.py ver 1
+#dynamic_qualification.py ver 2
 """Versioned, portable engineering qualification for dynamic ride imports.
 
 The qualification is evidence of offline *recorded* kinematic validation, not
@@ -151,6 +151,9 @@ def load_qualification(path: Path, profile):
 
 
 def make_qualification(profile, validation_path):
+    from core.dynamic_profiles import require_canonical_profile
+
+    require_canonical_profile(profile)
     path = Path(validation_path)
     try:
         evidence = json.loads(path.read_text(encoding='utf-8'), parse_constant=lambda val: (_ for _ in ()).throw(ValueError(val)))

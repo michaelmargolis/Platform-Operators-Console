@@ -1,4 +1,4 @@
-# test_twin_output_v6.py ver 1
+# test_twin_output_v6.py ver 2
 """Twin UDP playback contract and best-effort rate limiting, without Qt."""
 from __future__ import annotations
 from dataclasses import dataclass
@@ -42,6 +42,7 @@ def make_recording():
         ),
     )
     return SimpleNamespace(frames=frames, platform_key="platform_v2",
+                           geometry_id="b" * 64, channel_to_pair=tuple(range(6)),
                            min_length_mm=750., max_length_mm=1000.)
 
 
@@ -93,7 +94,10 @@ def test_actual_production_json_protocol_on_local_udp_socket():
             assert output.send_frame(make_recording(), 0, force=True)
             data = json.loads(receiver.recvfrom(4096)[0])
             assert data["protocol"] == "POC_TWIN"
-            assert data["version"] == 1
+            assert data["version"] == 2
+            assert data["transform_convention"] == "rider_xyz_rpy_v1"
+            assert data["channel_to_pair"] == list(range(6))
+            assert data["geometry_id"] == "b" * 64
             assert data["platform"] == "platform_v2"
             assert data["command_pressure_mbar"] == [0.0] * 6
             assert data["contraction_pct"] == [100., 80., 60., 40., 20., 0.]

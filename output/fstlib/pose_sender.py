@@ -1,4 +1,4 @@
-# pose_sender.py ver 5
+# pose_sender.py ver 6
 """POC standalone six-DOF EasyIP pose sender.
 
 Run from the POC project root (or from any directory):
@@ -32,8 +32,7 @@ from core.config_store import ConfigStore
 from output.fstlib import easyip
 from output.fstlib.pose_sender_logic import (
     DOF_NAMES, DEFAULT_TARGET_IP, FRAME_PERIOD_S, MAX_PRESSURE_MBAR,
-    PoseMotion, PressureMonitor, internal_to_user_real, slew_pressures,
-    user_to_internal_normalized,
+    PoseMotion, PressureMonitor, slew_pressures,
 )
 
 INTERVAL_MS = int(FRAME_PERIOD_S * 1000)
@@ -222,7 +221,7 @@ class PoseSenderWindow(QtWidgets.QMainWindow):
 
     def _slider_changed(self, *_args):
         user_values = [s.value() / 100.0 for s in self.sliders]
-        self.model.set_normalized(user_to_internal_normalized(user_values))
+        self.model.set_normalized(user_values)
         self._preview_dirty = True
         for label, v in zip(self.norm_labels, user_values):
             label.setText(f"{v:+.2f}")
@@ -308,8 +307,6 @@ class PoseSenderWindow(QtWidgets.QMainWindow):
                 self._preview_values = self.model.preview()
                 self._preview_dirty = False
             requested, applied = self._preview_values
-            requested = internal_to_user_real(requested)
-            applied = internal_to_user_real(applied)
             for i, (req, out) in enumerate(zip(requested, applied)):
                 if i >= 3:
                     req, out = (req * 180.0 / 3.141592653589793, out * 180.0 / 3.141592653589793)

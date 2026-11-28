@@ -1,7 +1,8 @@
-#main_window.py  ver 84
+#main_window.py  ver 85
 from __future__ import annotations
 
 import csv
+import json
 from datetime import datetime
 import logging
 import os
@@ -12,6 +13,7 @@ import time
 from PyQt5 import QtCore, QtGui, QtWidgets, uic
 
 from config.platforms import PLATFORMS
+from core.motion_convention import MOTION_CONVENTION
 from core.sim_registry import OPERATOR_SIMS
 from core.types import ActivationControlMode, ExperienceState, PlatformState, PlatformMotionState
 from ui.sim_tabs import SimTabManager
@@ -51,10 +53,10 @@ def _poc_runtime_version_label():
 
 
 def transform_bar_values(values):
-    """Map six raw sample DOFs to display values (invert heave only)."""
+    """Display the six rider-frame values directly."""
     if len(values) != 6:
         raise ValueError("Expected six transform values")
-    return (values[0], values[1], -values[2], values[3], values[4], values[5])
+    return tuple(values)
 
 
 def readiness_indicator_key(platform_state, experience_state, sim_status, parking_state=None):
@@ -178,6 +180,8 @@ class _DynamicCandidateImportDialog(QtWidgets.QDialog):
             hidden.append(f"{counts['other_platform']} for the other platform")
         if counts['invalid']:
             hidden.append(f"{counts['invalid']} invalid/non-candidate")
+        if counts.get('requalification_required'):
+            hidden.append(f"{counts['requalification_required']} need requalification")
         text = f"{counts['available']} package(s) available"
         if hidden:
             text += '. Hidden: ' + ', '.join(hidden) + '.'
@@ -413,6 +417,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 hidden.append(f"{counts['other_platform']} for the other platform")
             if counts.get('invalid'):
                 hidden.append(f"{counts['invalid']} invalid/non-candidate")
+            if counts.get('requalification_required'):
+                hidden.append(f"{counts['requalification_required']} need requalification")
             self.lbl_dynamic_import_status.setToolTip(
                 'Hidden: ' + ', '.join(hidden) if hidden else str(default_import_directory()))
             self.btn_dynamic_import.setEnabled(False)
@@ -1638,7 +1644,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_sample(self, sample):
         values = tuple(float(value) for value in sample.transform)
         current_tab = self.tabWidget.currentWidget()
-        # Keep raw telemetry unchanged; only the heave bar uses inverted sign.
         # The Debug-tab switch isolates the painter overhead at the full 20 Hz.
         if UPDATE_TRANSFORM_BARS_ON_DEBUG_TAB or current_tab is not self.tab_debug:
             self.transform_bars.set_values(transform_bar_values(values))
@@ -1874,7 +1879,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def _csv_columns():
         axes = ("x", "y", "z", "roll", "pitch", "yaw")
         columns = [
-            "wall_time", "elapsed_s", "sim", "experience", "experience_state",
+            "wall_time", "elapsed_s", "transform_convention", "platform", "geometry_id", "channel_to_pair",
+            "sim", "experience", "experience_state",
             "telemetry_valid", "frame", "speed",
             "pos_x", "pos_y", "pos_z",
             "quat_x", "quat_y", "quat_z", "quat_w",
@@ -1971,6 +1977,10 @@ class MainWindow(QtWidgets.QMainWindow):
         row = {
             "wall_time": datetime.now().isoformat(timespec="milliseconds"),
             "elapsed_s": f"{time.monotonic() - self._csv_started_at:.3f}",
+            "transform_convention": MOTION_CONVENTION,
+            "platform": self.core.platform_key,
+            "geometry_id": output["geometry_id"],
+            "channel_to_pair": json.dumps(output["channel_to_pair"], separators=(",", ":")),
             "sim": self.core.sim_key or "",
             "experience": recorded_experience,
             "experience_state": sample.state.name,

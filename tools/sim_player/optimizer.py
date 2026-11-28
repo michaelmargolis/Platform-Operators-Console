@@ -1,4 +1,4 @@
-# optimizer.py ver 3
+# optimizer.py ver 4
 """Batch offline NL2 ride optimisation; no Qt, simulator or hardware output.
 
 From the POC root:
@@ -28,6 +28,7 @@ import time
 import numpy as np
 
 from config.platforms import PLATFORMS
+from core.motion_convention import MOTION_CONVENTION
 from sims.nolimits2 import ride_config
 from sims.nolimits2.angular_cues import normalize_quaternion
 from sims.nolimits2.variant_store import VariantStore
@@ -247,6 +248,7 @@ def export_candidate(folder: Path, capture: Capture, recording, target: str,
     for frame in recording.frames:
         info = frame.analysis
         row = {"opt_schema": SCHEMA, "opt_platform": recording.platform_key,
+               "opt_transform_convention": MOTION_CONVENTION, "opt_geometry_id": recording.geometry_id,
                "opt_target": target, "opt_label": recording.variant_label,
                "opt_neutral_delta_mm": recording.variant_snapshot["neutral_height_delta_mm"],
                "opt_raw_oob": int(info["raw_out"]), "opt_raw_excess_mm": info["raw_exceed_mm"],
@@ -295,6 +297,7 @@ def export_candidate(folder: Path, capture: Capture, recording, target: str,
     data = {"schema": SCHEMA, "csv_name": path.name, "csv_sha256": sha256_file(path),
             "source_csv": str(capture.path), "source_sha256": capture.sha256,
             "target": target, "platform_key": recording.platform_key,
+            "transform_convention": MOTION_CONVENTION, "geometry_id": recording.geometry_id,
             "angular_cue": recording.cue_mode, "relative_gains_percent": list(recording.gain_percent),
             "variant_snapshot": recording.variant_snapshot,
             "poc_global_settings_snapshot": recording.global_settings_snapshot,

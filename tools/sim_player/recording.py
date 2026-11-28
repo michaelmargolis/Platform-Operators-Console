@@ -1,4 +1,4 @@
-# recording.py ver 5
+# recording.py ver 6
 """Recording and analysis adapter for sim_player.
 
 No Qt, network, SHS or Festo dependencies. Reuses the existing POC offline
@@ -84,6 +84,8 @@ class RideRecording:
     variant_snapshot: dict[str, Any] | None = None
     platform_config_module: str = ""
     platform_config_sha256: str = ""
+    geometry_id: str = ""
+    channel_to_pair: tuple[int, ...] = ()
     platform_neutral_height_mm: float | None = None
     global_settings_snapshot: dict[str, Any] | None = None
 
@@ -416,6 +418,7 @@ def load_recording(csv_path, *, platform="platform_v2", heave="Recorded heave",
         platform_key=platform,
         platform_config_module=metadata["platform_config_module"],
         platform_config_sha256=metadata["platform_config_sha256"],
+        geometry_id=stats["geometry_id"], channel_to_pair=stats["channel_to_pair"],
         platform_neutral_height_mm=stats["platform_neutral_height_mm"],
         cue_mode=cue_mode, gain_percent=gain_percent,
         variant_label=variant_label, variant_snapshot=variant_snapshot,

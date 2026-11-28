@@ -1,4 +1,4 @@
-# platform_selection.py ver 3
+# platform_selection.py ver 4
 """Read-only platform identity/provenance for offline replay (no hardware I/O)."""
 from importlib import import_module
 import hashlib
@@ -23,13 +23,7 @@ def platform_metadata(key):
 
 
 def platform_choices():
-    """Distinct operator labels for every configured platform key.
-
-    Legacy chair_v2 and chair_v3 use the same kinematics module, so its
-    PLATFORM_NAME cannot distinguish their independent variant catalogs.
-    Prefer that name unless it repeats; then use the platform registry's
-    distinct display name. Keep the underlying key and geometry unchanged.
-    """
+    """Distinct operator labels for platforms supported by this release."""
     choices = []
     used_labels = set()
     for key, config in PLATFORMS.items():

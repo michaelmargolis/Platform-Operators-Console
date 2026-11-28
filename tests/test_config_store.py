@@ -1,4 +1,4 @@
-#test_config_store.py  ver 10
+#test_config_store.py  ver 11
 import json
 
 import pytest
@@ -250,4 +250,26 @@ def test_invalid_local_network_endpoint_fails_closed(tmp_path):
     write_config(local, local_data)
 
     with pytest.raises(RuntimeError, match="sim_host_service IPv4 address"):
+        ConfigStore(canonical)
+
+
+@pytest.mark.parametrize("platform", ["chair_v2", "Falcon"])
+def test_deferred_saved_platform_fails_without_changing_local_settings(tmp_path, platform):
+    canonical = tmp_path / "poc_config.json"
+    local = tmp_path / "poc_config_local.json"
+    write_config(canonical, CANONICAL)
+    write_config(local, dict(CANONICAL, selected_platform=platform))
+    saved = local.read_bytes()
+    with pytest.raises(RuntimeError, match="deferred in this release"):
+        ConfigStore(canonical)
+    assert local.read_bytes() == saved
+
+
+def test_right_side_chair_configuration_fails_until_supported(tmp_path):
+    canonical = tmp_path / "poc_config.json"
+    local = tmp_path / "poc_config_local.json"
+    write_config(canonical, CANONICAL)
+    sides = dict(CANONICAL["festo_valve0_side"], chair_v3="right")
+    write_config(local, dict(CANONICAL, selected_platform="chair_v3", festo_valve0_side=sides))
+    with pytest.raises(RuntimeError, match="requires rider-left Festo valve 0"):
         ConfigStore(canonical)

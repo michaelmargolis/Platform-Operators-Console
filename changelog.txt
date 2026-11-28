@@ -1,4 +1,11 @@
-# changelog.txt ver 95
+# changelog.txt ver 96
+
+
+Global release v254 - POC runtime v254 / MDX Ride Analyzer runtime v254 - Canonical rider coordinates (candidate) - 2026-11-27
+- Use X forward, Y left and Z up in the simulator adapters, POC, Pose Sender and Ride Analyzer. Preserve the current fixed/moving pairs, rotation centre, load mapping and ride-neutral geometry. Chair V3 uses direct rider roll and yaw.
+- Enable the verified left-side Chair V3 and right-side Ground-Loading valve schedules. Reject unapproved wiring before output initialization. Defer Chair V2, Falcon and the future right-side Chair V3 arrangement.
+- Emit Twin v2 with rider-frame poses and geometry/channel identity. Tag new derived capture and study values. Convert known legacy NL2 heave at the capture reader and require canonical geometry qualification for dynamic import and dispatch.
+- Preserve the v253 stroke and workspace policies for this convention change. Chair V3 below-minimum requests require their separate baseline safety change.
 
 
 Global release v253 - POC runtime v253 / MDX Ride Analyzer runtime v253 - Global/Local telemetry settings - 2026-11-26

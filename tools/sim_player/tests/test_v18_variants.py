@@ -1,4 +1,4 @@
-# test_v18_variants.py ver 1
+# test_v18_variants.py ver 2
 """Standalone v18 variant processing tests without Qt/POC platform backend."""
 import json
 import pytest
@@ -26,18 +26,18 @@ def test_calibrated_height_endpoints_and_original_unchanged():
             (0.1,41.0,(0,0,0.77,0,0,0),None)]
     snapshot=ride_config.variant('Blackbird')
     mapped=apply_heave(rows,snapshot)
-    assert [row[2][2] for row in mapped] == pytest.approx([0.9,0,-0.9])
+    assert [row[2][2] for row in mapped] == pytest.approx([-0.9,0,0.9])
     assert all(row[2][2] == .77 for row in rows)
     assert rows[0][2] != mapped[0][2]
     snapshot['normalized_height_amplitude'] = .70
-    assert apply_heave(rows,snapshot)[0][2][2] == pytest.approx(.70)
+    assert apply_heave(rows,snapshot)[0][2][2] == pytest.approx(-.70)
 
 
 def test_legacy_height_profile_and_vertical_g_requires_data():
     snap=ride_config.variant('Mdx Logo Coaster')
     snap['heave_mode']='legacy_height'
     rows=[(0,7.4,(0,0,1,0,0,0),None),(1,32.6,(0,0,1,0,0,0),None)]
-    assert [v[2][2] for v in apply_heave(rows,snap)] == pytest.approx([-.5,-.18])
+    assert [v[2][2] for v in apply_heave(rows,snap)] == pytest.approx([.5,.18])
     snap['heave_mode']='vertical_g'
     with pytest.raises(ValueError,match='vertical_g_heave'):
         apply_heave(rows,snap)

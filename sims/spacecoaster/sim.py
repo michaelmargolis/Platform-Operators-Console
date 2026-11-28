@@ -1,4 +1,4 @@
-#sim.py  ver 20
+#sim.py  ver 21
 from __future__ import annotations
 
 import csv
@@ -729,6 +729,8 @@ class Sim(SimInterface):
                     if not row or row[0].lstrip().startswith("#") or len(row) < 6:
                         continue
                     data = [float(value) for value in row[:6]]
+                    # The recorded motion uses legacy positive-down heave.
+                    data[2] = -data[2]
                     normalized = [
                         self._scale(
                             value,

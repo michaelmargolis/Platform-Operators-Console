@@ -1,4 +1,4 @@
-#sim_interface.py  ver 6
+#sim_interface.py  ver 7
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -63,7 +63,8 @@ class SimInterface(ABC):
         """Current live normalized transform; None if not safely available.
 
         Recorded simulators may override to return their first recorded frame.
-        This is the raw simulator pose BEFORE POC intensity/gain scaling.
+        The normalized starting cues use the same rider frame as SimSample.
+        POC intensity and gain scaling are applied after this boundary.
         """
         if sample.telemetry_valid and sample.state.name == "READY":
             return tuple(float(v) for v in sample.transform)

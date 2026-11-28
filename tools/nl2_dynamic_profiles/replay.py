@@ -1,4 +1,4 @@
-# replay.py ver 1
+# replay.py ver 2
 """Replay real production code at 20Hz with the benchmark's null interfaces.
 
 Search arrays are measured at the actual post-washout boundary. Final verification
@@ -12,6 +12,8 @@ from pathlib import Path
 import hashlib
 import inspect
 import numpy as np
+from core.motion_convention import MOTION_CONVENTION
+from core.platform_geometry import geometry_id_for_platform
 from tools.nl2_sync.matcher import Reference, Settings
 from tools.nl2_sync.profile import AXES, ProfilePlayback, digest_json
 from tools.nl2_sync_benchmark.pipeline import Pipeline
@@ -19,7 +21,8 @@ from tools.nl2_sync_benchmark.runner import packets
 from tools.analyze_nl2_csv import lengths_for_real
 
 # These define motion and profile identity, not unrelated UI source.
-SOURCE_FILES = ('core/platform_controller.py','core/telemetry_config.py','core/platform_geometry.py',
+SOURCE_FILES = ('config/platforms.py','core/motion_convention.py','sims/nolimits2/config.py',
+    'core/platform_controller.py','core/telemetry_config.py','core/platform_geometry.py',
     'core/ride_neutral.py','kinematics/kinematics_V3.py','kinematics/cfg_SuspendedChairV3.py',
     'kinematics/cfg_SuspendedChair.py','kinematics/cfg_SuspendedPlatformMdx.py',
     'sims/nolimits2/sim.py','sims/nolimits2/nl2_protocol.py','sims/nolimits2/angular_cues.py',
@@ -104,10 +107,13 @@ def prepare(root, trace, reference, platform, cue, *, variant=None):
 def processing_identity(root, series, platform, neutral, reference_hash):
     hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in SOURCE_FILES}
     snapshot=deepcopy(series.snapshot);snapshot['neutral_height_delta_mm']=float(neutral)
+    geometry_id=geometry_id_for_platform(platform)
     context={'platform':platform,'base_variant':snapshot,'telemetry':series.globals,
+             'transform_convention':MOTION_CONVENTION,'geometry_id':geometry_id,
              'intensity_percent':100.,'tick_s':.05,'matcher':series.matcher_settings,'source_hashes':hashes}
     m=series.trace.meta
     identity={'park':m['park_key'],'platform':platform,'reference_sha256':reference_hash,
+              'transform_convention':MOTION_CONVENTION,'geometry_id':geometry_id,
               'processing_sha256':digest_json(context), 'park_sha256':m.get('park_sha256',''),
               'nl2_version':str(m.get('nl2_version','unknown')),
               'view_identity':m.get('view_identity'),'departure_station':m.get('departure_station'),

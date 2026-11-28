@@ -1,4 +1,4 @@
-# pose_sender_logic.py ver 3
+# pose_sender_logic.py ver 4
 """Non-GUI pose-to-pressure logic and EasyIP pressure-read validation.
 
 This module intentionally has no socket or GUI dependencies. In particular,
@@ -18,22 +18,7 @@ from output.fstlib import easyip
 DOF_NAMES = ("Surge", "Sway", "Heave", "Roll", "Pitch", "Yaw")
 # Operator-facing conventions follow ROS axes from the rider perspective:
 # +X forward, +Y left, +Z up, +roll right side down, +pitch nose down, +yaw CCW.
-# POC internal heave uses the opposite sign, so convert at the UI boundary.
-USER_TO_INTERNAL_SIGN = (1.0, 1.0, -1.0, 1.0, 1.0, 1.0)
 
-
-def user_to_internal_normalized(values):
-    values = tuple(float(v) for v in values)
-    if len(values) != 6:
-        raise ValueError("Expected six normalized DOF values")
-    return tuple(v * s for v, s in zip(values, USER_TO_INTERNAL_SIGN))
-
-
-def internal_to_user_real(values):
-    values = tuple(float(v) for v in values)
-    if len(values) != 6:
-        raise ValueError("Expected six real DOF values")
-    return tuple(v * s for v, s in zip(values, USER_TO_INTERNAL_SIGN))
 PRESSURE_CHANNELS = 6
 MAX_PRESSURE_MBAR = 6000
 FRAME_PERIOD_S = 0.05

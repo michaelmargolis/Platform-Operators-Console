@@ -1,4 +1,4 @@
-# test_chair_v3_neutral_v181.py ver 3
+# test_chair_v3_neutral_v181.py ver 4
 """Chair V3 neutral-height test and offline/live module parity."""
 import math
 from pathlib import Path
@@ -8,80 +8,56 @@ import numpy as np
 import pytest
 
 from config.platforms import PLATFORMS
+from kinematics.cfg_SuspendedChair import PlatformConfig as BaseChairConfig
 from kinematics.kinematics_V3 import Kinematics, PlatformParams
 from tools.analyze_nl2_csv import make_backend
 from tools.sim_player.platform_selection import platform_choices, platform_metadata
 
 
 def test_chair_v3_isolated_from_legacy_v2_and_mdx():
-    assert PLATFORMS['chair_v3']['sop_config_module'] == 'kinematics.cfg_SuspendedChairV3'
-    assert PLATFORMS['chair_v2']['sop_config_module'] == 'kinematics.cfg_SuspendedChair'
-    a, b, mdx = (make_backend(key) for key in ('chair_v3', 'chair_v2', 'platform_v2'))
-    assert a.k.NEUTRAL_HEIGHT_OFFSET_MM == 100
-    assert b.k.NEUTRAL_HEIGHT_OFFSET_MM == 0
+    assert PLATFORMS["chair_v3"]["sop_config_module"] == "kinematics.cfg_SuspendedChairV3"
+    chair = make_backend("chair_v3")
+    mdx = make_backend("platform_v2")
+    base = BaseChairConfig()
+    old_neutral = Kinematics()
+    params = PlatformParams(base.MUSCLE_MIN_LENGTH, base.MUSCLE_MAX_LENGTH,
+                            base.FIXED_HARDWARE_LENGTH, base.LIMITS_1DOF_TRANFORM)
+    old_neutral.set_geometry(base.base_coords, base.platform_coords, params, 0, None)
+    assert chair.k.NEUTRAL_HEIGHT_OFFSET_MM == 100
+    assert old_neutral.NEUTRAL_HEIGHT_OFFSET_MM == 0
     assert mdx.k.NEUTRAL_HEIGHT_OFFSET_MM == 0
-    assert a.k.PLATFORM_MID_HEIGHT == pytest.approx(b.k.PLATFORM_MID_HEIGHT + 100)
-    assert b.k.PLATFORM_MID_HEIGHT == pytest.approx(216.5)
+    assert chair.k.PLATFORM_MID_HEIGHT == pytest.approx(old_neutral.PLATFORM_MID_HEIGHT + 100)
+    assert old_neutral.PLATFORM_MID_HEIGHT == pytest.approx(216.5)
     assert mdx.k.PLATFORM_MID_HEIGHT == pytest.approx(177.26466075505908)
-    assert np.allclose(a.k.base_coords, b.k.base_coords)
-    assert np.allclose(a.k.platform_local_coords, b.k.platform_local_coords)
-    assert a.cfg.MUSCLE_MIN_LENGTH == b.cfg.MUSCLE_MIN_LENGTH == 600
-    assert a.cfg.MUSCLE_MAX_LENGTH == b.cfg.MUSCLE_MAX_LENGTH == 800
-    assert a.cfg.PLATFORM_CLEARANCE_OFFSET == 0
-    assert not a._workspace_hull_xy
+    np.testing.assert_array_equal(chair.k.base_coords, old_neutral.base_coords)
+    np.testing.assert_array_equal(chair.k.platform_local_coords, old_neutral.platform_local_coords)
+    assert chair.cfg.MUSCLE_MIN_LENGTH == base.MUSCLE_MIN_LENGTH == 600
+    assert chair.cfg.MUSCLE_MAX_LENGTH == base.MUSCLE_MAX_LENGTH == 800
+    assert chair.cfg.PLATFORM_CLEARANCE_OFFSET == 0
+    assert not chair._workspace_hull_xy
 
 
-def test_chair_v3_yaw_only_mask_preserves_other_dofs():
-    current = make_backend('chair_v3')
-    cfg = current.cfg
-
-    # Build an otherwise identical Chair V3 kinematics instance with the
-    # pre-v247 legacy mask. This isolates the commissioning patch from neutral
-    # height, geometry, travel limits and every other platform difference.
-    legacy = Kinematics()
-    legacy.set_axis_flip_mask((1, 1, -1, -1, 1, 1))
-    params = PlatformParams(
-        cfg.MUSCLE_MIN_LENGTH,
-        cfg.MUSCLE_MAX_LENGTH,
-        cfg.FIXED_HARDWARE_LENGTH,
-        cfg.LIMITS_1DOF_TRANFORM,
-    )
-    legacy.set_geometry(
-        cfg.base_coords,
-        cfg.platform_coords,
-        params,
-        cfg.PLATFORM_CLEARANCE_OFFSET,
-        getattr(cfg, 'MUSCLE_EXTENSION_RESERVE', None),
-        neutral_height_offset_mm=cfg.NEUTRAL_HEIGHT_OFFSET_MM,
-    )
-
-    assert tuple(current.k.AXIS_FLIP_MASK.tolist()) == (1.0, 1.0, -1.0, -1.0, 1.0, -1.0)
-    assert tuple(legacy.AXIS_FLIP_MASK.tolist()) == (1.0, 1.0, -1.0, -1.0, 1.0, 1.0)
-
-    for axis in range(6):
-        request = [0.0] * 6
-        request[axis] = float(cfg.LIMITS_1DOF_TRANFORM[axis]) * 0.25
-
-        current_lengths = np.asarray(
-            current.k.inverse_kinematics(request, return_lengths=True)[1]
-        )
-        legacy_request = list(request)
-        if axis == 5:
-            legacy_request[axis] *= -1.0
-        legacy_lengths = np.asarray(
-            legacy.inverse_kinematics(legacy_request, return_lengths=True)[1]
-        )
-
-        # X/Y/Z/Roll/Pitch are bit-for-bit equivalent apart from floating point
-        # arithmetic; positive current Yaw intentionally equals legacy negative Yaw.
-        assert np.allclose(current_lengths, legacy_lengths, atol=1e-9)
+@pytest.mark.parametrize("axis", range(6))
+def test_chair_v3_canonical_pose_moves_geometry_in_the_commanded_direction(axis):
+    chair = make_backend("chair_v3")
+    k = chair.k
+    request = [0.0] * 6
+    angle_or_distance = chair.cfg.LIMITS_1DOF_TRANFORM[axis] * 0.25
+    request[axis] = angle_or_distance
+    x, y, z = k.platform_coords.T
+    c, s = math.cos(angle_or_distance), math.sin(angle_or_distance)
+    rotations = ((x, c*y-s*z, s*y+c*z), (c*x+s*z, y, -s*x+c*z), (c*x-s*y, s*x+c*y, z))
+    expected = k.platform_coords + request[:3] if axis < 3 else np.column_stack(rotations[axis-3])
+    pose, lengths = k.inverse_kinematics(request, return_lengths=True)
+    np.testing.assert_allclose(pose, expected, rtol=0, atol=1e-6)
+    np.testing.assert_allclose(lengths, np.linalg.norm(expected-k.base_coords, axis=1), rtol=0, atol=1e-6)
 
 
 def test_initial_blackbird_like_heave_near_one_fifth_above_lowest_level():
     b = make_backend('chair_v3')
     k = b.k
     # Typical low-station input observed in the recorded Blackbird captures.
-    heave_norm = .819
+    heave_norm = -.819
     request = k.norm_to_real([0, 0, heave_norm, 0, 0, 0])
     _, actuator = k.inverse_kinematics(request, return_lengths=True)
     muscle = actuator - b.cfg.FIXED_HARDWARE_LENGTH
@@ -97,22 +73,21 @@ def test_initial_blackbird_like_heave_near_one_fifth_above_lowest_level():
         return out
     lower = max(plane_z(max_act))
     upper = min(plane_z(min_act))
-    # Kinematic input +Heave is physically downward (FLIP_TRANSLATION[2]=-1).
-    height = k.PLATFORM_MID_HEIGHT + request[2]*k.FLIP_TRANSLATION[2]
+    height = k.PLATFORM_MID_HEIGHT + request[2]
     assert .15 < (height-lower)/(upper-lower) < .22
 
 
 def test_platform_labels_remain_distinct_and_v3_reports_real_source_module():
     choices = dict(platform_choices())
     assert choices['chair_v3'] == 'Chair V3'
-    assert choices['chair_v2'] == 'V2 Chair'
+    assert set(choices) == {'chair_v3', 'platform_v2'}
     metadata = platform_metadata('chair_v3')
     assert metadata['platform_config_module'] == PLATFORMS['chair_v3']['sop_config_module']
     assert len(metadata['platform_config_sha256']) == 64
 
 
 def test_neutral_height_override_rejects_invalid_or_excessive_values():
-    cfg = make_backend('chair_v2').cfg
+    cfg = BaseChairConfig()
     params = PlatformParams(cfg.MUSCLE_MIN_LENGTH,cfg.MUSCLE_MAX_LENGTH,
                             cfg.FIXED_HARDWARE_LENGTH,cfg.LIMITS_1DOF_TRANFORM)
     for value in (float('nan'), float('inf'), 1000.,-1000.):
@@ -132,7 +107,7 @@ def test_live_backend_and_offline_use_same_midpoint():
         live=SopPlatformBackend(PLATFORMS['chair_v3']['sop_config_module'],festo_ip='192.0.2.1')
     offline=make_backend('chair_v3')
     assert live.k.PLATFORM_MID_HEIGHT == pytest.approx(offline.k.PLATFORM_MID_HEIGHT)
-    for norm in ([0]*6, [0,0,.82,0,0,0], [.1,0,-.1,.1,.1,.1]):
+    for norm in ([0]*6, [0,0,-.82,0,0,0], [.1,0,-.1,.1,.1,.1]):
         real=offline.k.norm_to_real(norm)
         assert np.allclose(live.k.inverse_kinematics(real,return_lengths=True)[1],
                            offline.k.inverse_kinematics(real,return_lengths=True)[1])

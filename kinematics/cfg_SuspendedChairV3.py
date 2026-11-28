@@ -1,4 +1,4 @@
-# cfg_SuspendedChairV3.py ver 3
+# cfg_SuspendedChairV3.py ver 4
 """Chair V3 geometry/tuning, distinct from the legacy chair_v2 selector.
 
 For this test only, raise the original geometry-derived midpoint by 100 mm.
@@ -11,15 +11,6 @@ from kinematics.cfg_SuspendedChair import PlatformConfig as BaseChairConfig
 
 class PlatformConfig(BaseChairConfig):
     PLATFORM_NAME = "Chair V3"
-
-    # Temporary Chair V3 commissioning correction. Keep the established
-    # legacy chair convention for X/Y/Z/Roll/Pitch and reverse Yaw only.
-    # Pose Sender physical testing confirmed +Yaw was opposite the documented
-    # rider-frame convention (+Yaw = CCW viewed from above). This local mask
-    # is intentionally narrow; the post-test refactor will move simulator
-    # coordinate conversion out of kinematics and make rider-frame signs
-    # canonical throughout.
-    AXIS_FLIP_MASK = (1, 1, -1, -1, 1, -1)
 
     # Positive raises the moving platform and shortens all six muscles at
     # zero rotation/translation. Candidate based on 19 recorded captures:

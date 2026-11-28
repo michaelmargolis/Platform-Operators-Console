@@ -1,4 +1,4 @@
-#test_nolimits2_adapter.py  ver 36
+#test_nolimits2_adapter.py  ver 37
 from __future__ import annotations
 
 import logging
@@ -292,12 +292,12 @@ def test_nl2_heave_mode_is_session_selectable():
     # selected legacy fallback rather than assuming an obsolete startup mode.
     sim.set_heave_mode(config.HEAVE_MODE_LEGACY_HEIGHT)
     legacy = sim._transform_from_telemetry(telemetry(pos_y=7.4, gy=1.5))
-    assert math.isclose(legacy[2], -0.50, abs_tol=1.0e-9)
+    assert math.isclose(legacy[2], 0.50, abs_tol=1.0e-9)
 
     sim.set_legacy_heave_enabled(False)
     conventional = sim._transform_from_telemetry(telemetry(pos_y=7.4, gy=1.5))
     assert math.isclose(
-        conventional[2], 0.5 * config.TELEMETRY_INTENSITY_FACTOR, abs_tol=1.0e-9
+        conventional[2], -0.5 * config.TELEMETRY_INTENSITY_FACTOR, abs_tol=1.0e-9
     )
 
 
@@ -307,17 +307,17 @@ def test_mdx_logo_legacy_height_profile_clamps_to_configured_endpoints():
 
     assert math.isclose(
         sim._transform_from_telemetry(telemetry(pos_y=0.0))[2],
-        -0.50,
+        0.50,
         abs_tol=1.0e-9,
     )
     assert math.isclose(
         sim._transform_from_telemetry(telemetry(pos_y=20.0))[2],
-        -0.34,
+        0.34,
         abs_tol=1.0e-9,
     )
     assert math.isclose(
         sim._transform_from_telemetry(telemetry(pos_y=40.0))[2],
-        -0.18,
+        0.18,
         abs_tol=1.0e-9,
     )
 

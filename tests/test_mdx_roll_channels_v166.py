@@ -1,4 +1,4 @@
-# test_mdx_roll_channels_v166.py ver 2
+# test_mdx_roll_channels_v166.py ver 3
 """MDX rider-frame +Roll and CAD-indexed Festo valve assignments."""
 
 import math
@@ -28,7 +28,6 @@ def backend(monkeypatch):
 
 def test_physical_channel_order_matches_cad():
     cfg = PlatformConfig()
-    assert cfg.AXIS_FLIP_MASK == (1, 1, -1, 1, 1, 1)
     assert [p[1] for p in cfg.platform_coords[:3]] == [-166.0, -608.0, -536.0]
     assert all(pt[1] < 0 for pt in cfg.platform_coords[:3])
     assert all(pt[1] > 0 for pt in cfg.platform_coords[3:])
@@ -38,7 +37,6 @@ def test_physical_channel_order_matches_cad():
 
 def test_positive_roll_moves_right_side_down_and_left_side_up(monkeypatch):
     b = backend(monkeypatch)
-    assert b.k.FLIP_ROTATION.tolist() == [1.0, 1.0, 1.0]
     half_limit = b.cfg.LIMITS_1DOF_TRANFORM[3] / 2.0
     neutral = np.asarray(b.k.inverse_kinematics([0.0]*6), dtype=float)
     roll_pose, roll_actuator = b.k.inverse_kinematics(
@@ -81,8 +79,7 @@ def test_nl2_right_bank_becomes_positive_platform_roll():
     )
 
 
-def test_offline_nl2_analyzer_uses_mdx_axis_mask():
+def test_offline_nl2_analyzer_uses_shared_canonical_mdx_geometry():
     # Avoid importing this optional GUI/Tkinter analysis tool on Pi OS Lite.
     source = (ROOT / "tools/analyze_nl2_csv.py").read_text(encoding="utf-8")
-    assert 'axis_flip_mask = getattr(cfg, "AXIS_FLIP_MASK", None)' in source
-    assert 'k.set_axis_flip_mask(axis_flip_mask)' in source
+    assert 'configure_platform_geometry(backend, PLATFORMS[platform_key]["sop_config_module"])' in source

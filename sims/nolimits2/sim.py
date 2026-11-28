@@ -1,4 +1,4 @@
-#sim.py  ver 54
+#sim.py  ver 55
 from __future__ import annotations
 
 import logging
@@ -1956,8 +1956,7 @@ class Sim(SimInterface):
         # NL2's signed bank angle is opposite the platform rider-frame Roll:
         # a right-side-down NL2 bank must become positive platform Roll.
         # The angular scales restore the legacy NL2 gain=0.6 response once
-        # TELEMETRY_INTENSITY_FACTOR is applied below. Do not change the
-        # physical Roll sign or the MDX-specific kinematic axis convention.
+        # TELEMETRY_INTENSITY_FACTOR is applied below.
         roll = -roll / math.pi * config.ROLL_SCALE
         pitch = -pitch * 0.6 * config.PITCH_SCALE
 
@@ -1969,14 +1968,7 @@ class Sim(SimInterface):
         elif self._heave_mode == config.HEAVE_MODE_NORMALIZED_HEIGHT:
             heave = self._normalized_height_z(float(tm.pos_y))
         else:
-            heave = max(
-                -1.0,
-                min(
-                    1.0,
-                    (float(tm.g_force_y) - 1.0)
-                    * config.TELEMETRY_INTENSITY_FACTOR,
-                ),
-            )
+            heave = config.vertical_g_heave(tm.g_force_y)
         surge = math.copysign(math.sqrt(abs(float(tm.g_force_z))), float(tm.g_force_z)) if tm.g_force_z else 0.0
         sway = math.copysign(math.sqrt(abs(float(tm.g_force_x))), float(tm.g_force_x)) if tm.g_force_x else 0.0
 
@@ -2039,35 +2031,22 @@ class Sim(SimInterface):
                             else config.HEAVE_MODE_VERTICAL_G)
 
     def _normalized_height_z(self, height_m: float) -> float:
-        """Invert ride-height fraction for the suspended-platform Z convention."""
+        """Map a calibrated height range to the positive-up rider cue."""
         if not self.has_normalized_height_profile():
             raise ValueError(f"No calibrated height profile for {self._experiences[self._selected]}")
         profile = config.NORMALIZED_HEIGHT_PROFILES[self._park_name_for_index(self._selected)]
         low, high = float(profile["min_height_m"]), float(profile["max_height_m"])
         amplitude = float(self._normalized_height_amplitude if self._normalized_height_amplitude is not None
                           else profile.get("amplitude", config.NORMALIZED_HEIGHT_DEFAULT_AMPLITUDE))
-        fraction = max(0.0, min(1.0, (height_m - low) / (high - low)))
-        return max(-1.0, min(1.0, amplitude * (1.0 - 2.0 * fraction)))
+        return config.normalized_height_heave(height_m, low, high, amplitude)
 
     def _legacy_height_z(self, height_m: float) -> float:
         ride_name = self._park_name_for_index(self._selected)
         profile = config.LEGACY_HEIGHT_PROFILES.get(ride_name)
-        if profile:
-            bottom = float(profile["bottom_height_m"])
-            top = float(profile["lift_top_height_m"])
-            fraction = (float(height_m) - bottom) / max(0.001, top - bottom)
-            fraction = max(0.0, min(1.0, fraction))
-            z_bottom = float(profile["z_at_bottom"])
-            z_top = float(profile["z_at_lift_top"])
-            return z_bottom + fraction * (z_top - z_bottom)
-
-        # Preserve the established dynamic mapping for rides without a profile.
-        self._lift_height = max(self._lift_height, float(height_m))
-        heave = ((float(height_m) * 2.0) / self._lift_height) - 1.0
-        return max(
-            -1.0,
-            min(1.0, heave * config.TELEMETRY_INTENSITY_FACTOR),
+        heave, self._lift_height = config.legacy_height_heave(
+            float(height_m), profile, self._lift_height, config.TELEMETRY_INTENSITY_FACTOR
         )
+        return heave
 
     @staticmethod
     def _quaternion_to_rpy(x: float, y: float, z: float, w: float):

@@ -1,4 +1,4 @@
-# kinematics_V3.py ver 4
+# kinematics_V3.py ver 5
 """ kinematics_V3
 This module provides inverse kinematics for the Mdx motion platforms.
 The core method, named inverse_kinematics, is passed the desired orientation as: [surge, sway, heave, roll, pitch, yaw]
@@ -28,8 +28,6 @@ class Kinematics(object):
     def __init__(self):
         np.set_printoptions(precision=3, suppress=True)
         self.intensity = 1.0
-        self.set_axis_flip_mask([1,1,-1,-1,1,1]) # defualt, the sim will set the mask if necessary
-
 
     def clamp(self, n, minn, maxn):
         return max(min(maxn, n), minn)
@@ -220,12 +218,6 @@ class Kinematics(object):
         platform_coords, lengths = self.inverse_kinematics(final_pose, return_lengths=True)
         return platform_coords, lengths
    
-    def set_axis_flip_mask(self, axis_flip_mask):
-        assert len(axis_flip_mask) == 6, "Axis flip mask must be 6 elements"
-        self.AXIS_FLIP_MASK = np.asarray(axis_flip_mask, dtype=float)
-        self.FLIP_TRANSLATION = self.AXIS_FLIP_MASK[:3]
-        self.FLIP_ROTATION = self.AXIS_FLIP_MASK[3:]
-
     def calc_rotation(self, rpy):
         roll, pitch, yaw = rpy
         cos_roll, sin_roll = math.cos(roll), math.sin(roll)
@@ -245,16 +237,11 @@ class Kinematics(object):
         ])
 
     def inverse_kinematics(self, request, return_lengths=False):
+        """Apply rider-frame XYZ (mm) and Rz Ry Rx angles (rad) directly."""
         assert len(request) == 6, "Transform must be 6-element sequence"
-
         a = np.asarray(request, dtype=float)
-
-        translation = a[:3] * self.FLIP_TRANSLATION
-        rpy = a[3:6] * self.FLIP_ROTATION
-
-        Rxyz = self.calc_rotation(rpy)
-
-        pose = (Rxyz @ self.platform_coords.T).T + translation
+        rotation = self.calc_rotation(a[3:])
+        pose = (rotation @ self.platform_coords.T).T + a[:3]
         self.cached_pose = pose
         # print("lengths = ", np.linalg.norm(pose - self.base_coords, axis=1)  )      
         
@@ -349,12 +336,6 @@ if __name__ == "__main__":
     print(f"PLATFORM_MID_HEIGHT = {k.PLATFORM_MID_HEIGHT:.2f}")
     print(f"NEUTRAL_MUSCLE_LENGTHS = {[int(l) for l in k.get_cached_muscle_lengths()]}")
     print(f"NEUTRAL_MUSCLE_LENGTHS = {k.PLATFORM_NEUTRAL_MUSCLE_LENGTHS}\n")
-
-    # Axis flip and motion intensity setup
-    axis_flip_mask = [1, 1, 1, 1, 1, -1]
-    k.set_axis_flip_mask(axis_flip_mask)
-    
-    ##swap_roll_pitch = cfg.SWAP_ROLL_PITCH
 
     """
     # Heave-only test

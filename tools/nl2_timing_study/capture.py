@@ -1,4 +1,4 @@
-# capture.py ver 1
+# capture.py ver 2
 """Batch capture using the existing POC recorder and NL2 adapter.
 
 No core platform controller, Festo, SHS, Qt, video recorder or Twin sender is
@@ -15,6 +15,7 @@ import time
 
 from tools import capture_nl2_rides as existing
 from core.types import ExperienceState
+from core.motion_convention import MOTION_CONVENTION
 from sims.nolimits2 import ride_config
 from sims.nolimits2.sim import Sim
 from .common import ROOT, SCHEMA, machine_info, sha256, source_hashes, stamp, unique_id, write_json
@@ -291,13 +292,12 @@ class TrialRecorder:
                    elapsed_s=self.clock()-self.zero, nl2_frame=tm.frame,
                    source_dt_s="" if self.last_source is None else tm.received_at-self.last_source,
                    nl2_receive_monotonic_s=tm.received_at, sim_state=sim.state.name,
-                   valid=1, heave_mode=sim.heave_mode)
+                   valid=1, heave_mode=sim.heave_mode, transform_convention=MOTION_CONVENTION)
         self.last_source = tm.received_at
         row.update({k: getattr(tm, k) for k in existing.RAW_FIELDS})
         row.update({"norm_"+a: float(v) for a, v in zip(existing.AXES, sim._last_transform)})
         row.update(legacy_height_heave=sim._legacy_height_z(float(tm.pos_y)),
-                   vertical_g_heave=max(-1.0, min(1.0, (tm.g_force_y-1.0)
-                                       *existing.config.TELEMETRY_INTENSITY_FACTOR)))
+                   vertical_g_heave=existing.config.vertical_g_heave(tm.g_force_y))
         self.writer.writerow(row)
         self.samples += 1
 
@@ -316,6 +316,7 @@ class TrialRecorder:
 def record_trial(sim, index, park_key, park, repeat, warmup, folder, args, machine, hashes, park_hash):
     stem = f"{existing.safe_name(park['name'])}_repeat{repeat:02d}_{unique_id('timing')}"
     meta = dict(ride=park["name"], park_key=park_key, repeat=repeat, warmup=warmup,
+                transform_convention=MOTION_CONVENTION,
                 machine=machine, source_hashes=hashes, park_sha256=park_hash,
                 park_path=park["path"], hz=args.hz, conditions=args.conditions,
                 reset_each_run=True, protocol_port=args.port,
@@ -424,6 +425,7 @@ def capture(args):
     hashes = source_hashes()
     parks_hash = {k: sha256(p["path"]) for _, k, p in choices}
     session = dict(schema=SCHEMA, started_utc=stamp(), machine=machine, source_hashes=hashes,
+                   transform_convention=MOTION_CONVENTION,
                    observed_vr=vr_summary(0, 0), selected_parks=[k for _, k, _ in choices], repeats=args.repeats,
                    warmups=args.warmups, hz=args.hz, trials=[], status="running",
                    reset_each_run=True, video_recording=False, tool_version="2.1.0", preset=args.preset, attempt_errors=[], skipped=[], extensions=[], arguments=vars(args).copy())

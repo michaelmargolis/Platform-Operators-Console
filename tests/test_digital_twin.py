@@ -1,4 +1,4 @@
-# test_digital_twin.py ver 4
+# test_digital_twin.py ver 5
 import json
 import socket
 from types import SimpleNamespace
@@ -32,10 +32,12 @@ class FakeSocket:
 
 def snapshot_values():
     return {
-        "platform": "chair_v2",
+        "platform": "chair_v3",
+        "geometry_id": "a" * 64,
+        "channel_to_pair": tuple(range(6)),
         "platform_state": "ACTIVATED",
         "parking_state": "UNPARKED",
-        "applied_transform_real": [12, 3, -5, 0, 0, .1],
+        "applied_transform_real": [12, 3, 5, 0, 0, .1],
         "simulator_state": "RUNNING",
         "telemetry_valid": True,
         "transform_applied": True,
@@ -79,15 +81,18 @@ def test_snapshot_is_complete_versioned_compact_json():
     second = json.loads(second_data)
     assert destination == ("192.168.0.20", 10020)
     assert first["protocol"] == "POC_TWIN"
-    assert first["version"] == 1
+    assert first["version"] == 2
+    assert first["transform_convention"] == "rider_xyz_rpy_v1"
+    assert first["geometry_id"] == "a" * 64
+    assert first["channel_to_pair"] == list(range(6))
     assert first["sequence"] == 0
     assert second["sequence"] == 1
     assert first["timestamp_ms"] == 1234567
-    assert first["platform"] == "chair_v2"
+    assert first["platform"] == "chair_v3"
     assert first["dtop_load_kg_per_muscle"] == 85.0 / 6.0
     assert first["transform"] == snapshot_values()["transform"]
     assert first["parking_state"] == "UNPARKED"
-    assert first["applied_transform_real"] == [12, 3, -5, 0, 0, .1]
+    assert first["applied_transform_real"] == [12, 3, 5, 0, 0, .1]
     assert first["muscle_length_mm"] == [700.0, 701.0, 702.0, 703.0, 704.0, 705.0]
     assert first["command_pressure_mbar"] == [1000.0, 1100.0, 1200.0, 1300.0, 1400.0, 1500.0]
     assert len(first_data) < MAX_DATAGRAM_BYTES
@@ -126,6 +131,16 @@ def test_malformed_or_nonfinite_snapshot_is_rejected_without_sending():
     assert sock.sent == []
 
 
+def test_unidentified_geometry_or_duplicate_channel_map_rejected():
+    sock = FakeSocket()
+    sender = make_sender(sock)
+    assert not sender.send_snapshot(**dict(snapshot_values(), geometry_id="unknown"))
+    assert "geometry_id" in sender.last_error
+    assert not sender.send_snapshot(**dict(snapshot_values(), channel_to_pair=[0, 0, 2, 3, 4, 5]))
+    assert "channel_to_pair" in sender.last_error
+    assert not sock.sent
+
+
 def test_core_maps_current_output_and_state_to_sender_fields():
     calls = []
     fake_sender = SimpleNamespace(
@@ -134,14 +149,16 @@ def test_core_maps_current_output_and_state_to_sender_fields():
     )
     core = SimpleNamespace(
         digital_twin=fake_sender,
-        platform_key="chair_v2",
-        platform_name="chair_v2",
+        platform_key="chair_v3",
+        platform_name="chair_v3",
         platform=SimpleNamespace(state=PlatformState.ACTIVATED,
                                  parking_state=SimpleNamespace(name="UNPARKED"),
-                                 backend=SimpleNamespace(last_applied_real_transform=[12, 3, -5, 0, 0, .1])),
+                                 backend=SimpleNamespace(last_applied_real_transform=[12, 3, 5, 0, 0, .1])),
         experience_state=ExperienceState.RUNNING,
         _motion_transform=(0.1, 0.2, 0.3, 0.01, 0.02, 0.03),
         get_output_snapshot=lambda: {
+            "geometry_id": "a" * 64,
+            "channel_to_pair": tuple(range(6)),
             "dtop_load_kg_per_muscle": 14.25,
             "muscle_lengths": (700, 701, 702, 703, 704, 705),
             "contractions": (50, 49, 48, 47, 46, 45),
@@ -153,10 +170,12 @@ def test_core_maps_current_output_and_state_to_sender_fields():
     PocCore._send_digital_twin_snapshot(core, SimSample(telemetry_valid=True), True)
 
     assert calls == [{
-        "platform": "chair_v2",
+        "platform": "chair_v3",
+        "geometry_id": "a" * 64,
+        "channel_to_pair": tuple(range(6)),
         "platform_state": "ACTIVATED",
         "parking_state": "UNPARKED",
-        "applied_transform_real": [12, 3, -5, 0, 0, .1],
+        "applied_transform_real": [12, 3, 5, 0, 0, .1],
         "simulator_state": "RUNNING",
         "telemetry_valid": True,
         "transform_applied": True,
@@ -182,6 +201,8 @@ def test_core_uses_configured_platform_protocol_name():
         experience_state=ExperienceState.READY,
         _motion_transform=(0.0,) * 6,
         get_output_snapshot=lambda: {
+            "geometry_id": "a" * 64,
+            "channel_to_pair": tuple(range(6)),
             "dtop_load_kg_per_muscle": 0.0,
             "muscle_lengths": (1000.0,) * 6,
             "contractions": (0.0,) * 6,
@@ -206,7 +227,7 @@ def test_real_udp_loopback_receives_one_decodable_snapshot():
         packet = json.loads(data)
         assert source[0] == "127.0.0.1"
         assert packet["protocol"] == "POC_TWIN"
-        assert packet["platform"] == "chair_v2"
+        assert packet["platform"] == "chair_v3"
     finally:
         sender.close()
         receiver.close()

@@ -1,4 +1,4 @@
-#config_store.py  ver 12
+#config_store.py  ver 13
 from __future__ import annotations
 
 import ipaddress
@@ -162,10 +162,12 @@ class ConfigStore:
         return local
 
     def _validate(self, data: dict, source_path: Path) -> None:
-        from config.platforms import PLATFORMS
+        from config.platforms import DEFERRED_PLATFORMS, PLATFORMS
         from core.sim_registry import SIMS
 
         platform = data.get("selected_platform")
+        if platform in DEFERRED_PLATFORMS:
+            raise RuntimeError(f"Platform {platform!r} is deferred in this release: {source_path}")
         if platform not in PLATFORMS:
             raise RuntimeError(
                 f"Invalid selected_platform {platform!r} in {source_path}; "
@@ -190,7 +192,7 @@ class ConfigStore:
                 f"Invalid festo_valve0_side {valve0_sides!r} in {source_path}; "
                 "expected an object keyed by platform"
             )
-        expected_platforms = set(PLATFORMS)
+        expected_platforms = set(PLATFORMS) | DEFERRED_PLATFORMS
         if set(valve0_sides) != expected_platforms:
             raise RuntimeError(
                 f"Invalid festo_valve0_side keys in {source_path}; expected exactly: "
@@ -202,6 +204,10 @@ class ConfigStore:
                     f"Invalid festo_valve0_side[{platform_key!r}]={side!r} in "
                     f"{source_path}; expected 'left' or 'right'"
                 )
+        approved_side = PLATFORMS[platform]["festo_valve0_side"]
+        if valve0_sides[platform] != approved_side:
+            raise RuntimeError(f"{platform} requires rider-{approved_side} Festo valve 0 in this release: "
+                               f"{source_path}")
         from core.platform_geometry import validate_operating_floor_clearance
         try:
             validate_operating_floor_clearance(

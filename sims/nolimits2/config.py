@@ -1,4 +1,4 @@
-#config.py  ver 18
+#config.py  ver 19
 # Simple NoLimits2 prototype configuration.
 
 PORT = 15151
@@ -59,6 +59,31 @@ LEGACY_HEIGHT_PROFILES = {
     park["name"]: dict(park["legacy_height"])
     for park in ride_config.PARKS.values() if "legacy_height" in park
 }
+
+def normalized_height_heave(height, low, high, amplitude):
+    fraction = max(0.0, min(1.0, (height - low) / (high - low)))
+    return max(-1.0, min(1.0, amplitude * (2.0 * fraction - 1.0)))
+
+
+def legacy_height_heave(height, profile, lift_height, intensity_factor):
+    """Return the existing ride cue in positive-up coordinates and updated lift reference."""
+    if profile:
+        bottom = float(profile["bottom_height_m"])
+        top = float(profile["lift_top_height_m"])
+        fraction = max(0.0, min(1.0, (height - bottom) / max(0.001, top - bottom)))
+        z_bottom = -float(profile["z_at_bottom"])
+        z_top = -float(profile["z_at_lift_top"])
+        return z_bottom + fraction * (z_top - z_bottom), lift_height
+
+    lift_height = max(lift_height, height)
+    heave = (1.0 - 2.0 * height / lift_height) * intensity_factor
+    return max(-1.0, min(1.0, heave)), lift_height
+
+
+def vertical_g_heave(g_force_y):
+    """Preserve the existing physical cue for signed vertical specific force."""
+    return max(-1.0, min(1.0, (1.0 - float(g_force_y)) * TELEMETRY_INTENSITY_FACTOR))
+
 
 # SOC supplies yaw angular velocity directly. NL2 supplies orientation only,
 # so the adapter derives the equivalent local vertical-axis angular velocity
